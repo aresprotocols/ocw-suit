@@ -1,6 +1,6 @@
 [package]
 name = "pallet-ocw"
-version = "3.0.1"
+version = "3.0.2"
 authors = ["Ares Technologies <linhai@cancanyou.com>"]
 edition = "2018"
 license = "Unlicense"
@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 frame-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 frame-system = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-core = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
-sp-keystore = { version = "0.10.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08", optional = true }
+sp-keystore = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08", optional = true }
 sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
