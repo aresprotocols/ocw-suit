@@ -76,7 +76,7 @@ frame_support::construct_runtime!(
         Historical: pallet_session_historical::{Pallet},
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+		// Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 	}
 );
 
@@ -87,70 +87,74 @@ impl crate::historical::Config for Test {
     type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
 
-const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
-pub struct AuthorGiven;
-impl FindAuthor<Public> for AuthorGiven {
-    fn find_author<'a, I>(digests: I) -> Option<Public>
-        where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
-    {
-        for (id, data) in digests {
-            if id == TEST_ID {
-                return Public::decode(&mut &data[..]).ok();
-            }
-        }
-        None
-    }
-}
+// const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
+// pub struct AuthorGiven;
+// impl FindAuthor<Public> for AuthorGiven {
+//     fn find_author<'a, I>(digests: I) -> Option<Public>
+//         where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+//     {
+//         for (id, data) in digests {
+//             if id == TEST_ID {
+//                 return Public::decode(&mut &data[..]).ok();
+//             }
+//         }
+//         None
+//     }
+// }
 
+const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
 pub struct TestFindAuthor;
 impl FindAuthor<AccountId> for TestFindAuthor {
     fn find_author<'a, I>(digests: I) -> Option<AccountId> where
         I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
     {
-        for (id, data) in digests {
-            if id == TEST_ID {
-                Public::decode(&mut &data[..]).ok();
-            }
-        }
-        None
+        Some(Default::default())
+        // println!("----->> ");
+        // for (id, data) in digests {
+        //     println!("digests = id = {:?}, data = {:?}", &id, &data);
+        //     if id == TEST_ID {
+        //         Public::decode(&mut &data[..]).ok();
+        //     }
+        // }
+        // None
     }
 }
 
-pub struct VerifyBlock;
-impl VerifySeal<Header, Public> for VerifyBlock {
-    fn verify_seal(header: &Header) -> Result<Option<Public>, &'static str> {
-        let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-        let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
-
-        let author = AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
-
-        for (id, seal) in seals {
-            if id == TEST_ID {
-                match Public::decode(&mut &seal[..]) {
-                    Err(_) => return Err("wrong seal"),
-                    Ok(a) => {
-                        if a != author {
-                            return Err("wrong author in seal");
-                        }
-                        break
-                    }
-                }
-            }
-        }
-        Ok(Some(author))
-    }
-}
+// pub struct VerifyBlock;
+// impl VerifySeal<Header, Public> for VerifyBlock {
+//     fn verify_seal(header: &Header) -> Result<Option<Public>, &'static str> {
+//         let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+//         let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
+//
+//         let author = AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
+//
+//         for (id, seal) in seals {
+//             if id == TEST_ID {
+//                 match Public::decode(&mut &seal[..]) {
+//                     Err(_) => return Err("wrong seal"),
+//                     Ok(a) => {
+//                         if a != author {
+//                             return Err("wrong author in seal");
+//                         }
+//                         break
+//                     }
+//                 }
+//             }
+//         }
+//         Ok(Some(author))
+//     }
+// }
 
 parameter_types! {
 	pub const UncleGenerations: u32 = 5;
 }
 
-impl pallet_authorship::Config for Test {
-    type FindAuthor = AuthorGiven;
-    type UncleGenerations = UncleGenerations;
-    type FilterUncle = SealVerify<VerifyBlock>;
-    type EventHandler = ();
-}
+// impl pallet_authorship::Config for Test {
+//     type FindAuthor = AuthorGiven;
+//     type UncleGenerations = UncleGenerations;
+//     type FilterUncle = SealVerify<VerifyBlock>;
+//     type EventHandler = ();
+// }
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -219,7 +223,7 @@ parameter_types! {
     // pub const PriceVecMaxSize: u32 = 3;
     pub const MaxCountOfPerRequest: u8 = 3;
     pub const NeedVerifierCheck: bool = false;
-    pub const UseOnChainPriceRequest: bool = true;
+    // pub const UseOnChainPriceRequest: bool = true;
     pub const FractionLengthNum: u32 = 2;
     pub const CalculationKind: u8 = 2;
 }
@@ -246,7 +250,7 @@ impl Config for Test {
     // type PriceVecMaxSize = PriceVecMaxSize;
     // type MaxCountOfPerRequest = MaxCountOfPerRequest;
     type NeedVerifierCheck = NeedVerifierCheck;
-    type UseOnChainPriceRequest = UseOnChainPriceRequest;
+    // type UseOnChainPriceRequest = UseOnChainPriceRequest;
     type FractionLengthNum = FractionLengthNum;
     type CalculationKind = CalculationKind;
 
@@ -864,7 +868,7 @@ fn test_get_raw_price_source_list () {
     let (offchain, state) = testing::TestOffchainExt::new();
     t.register_extension(OffchainWorkerExt::new(offchain));
     t.execute_with(|| {
-        let raw_price_source_list = AresOcw::get_raw_price_source_list(true);
+        let raw_price_source_list = AresOcw::get_raw_price_source_list();
         println!("raw_price_source_list = {:?}", raw_price_source_list);
     });
 }
@@ -989,6 +993,24 @@ fn test_make_bulk_price_format_data () {
         assert_eq!(expect_format, price_format);
     });
 
+}
+
+// This BUG will cause the AURA authority block producer to fix pricer all the time.
+#[test]
+fn fix_bug_make_bulk_price_format_data () {
+    let mut t = new_test_ext();
+
+    let (offchain, state) = testing::TestOffchainExt::new();
+    t.register_extension(OffchainWorkerExt::new(offchain));
+
+    // Exists
+    // btcusdt -> 1u8 , 1,2,3,4
+    // ethusdt -> 2u8 , 2,4,
+    // dotusdt -> 3u8 , 3,
+    // xrpusdt -> 4u8 , 4
+    t.execute_with(|| {
+
+    });
 }
 
 #[test]
@@ -1211,10 +1233,12 @@ fn test_self ( ) {
     let signature = Signature::try_from(test_signature);
     let signature = signature.unwrap();
     println!(" signature = {:?}", signature);
-    let account_result =  AccountId::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
 
-    let account_id = account_result.unwrap();
-    println!(" account_id = {:?} ", account_id);
+    // let account_result =  AccountId::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
+    //
+    // let account_id = account_result.unwrap();
+    // println!(" account_id = {:?} ", account_id);
+
     let public_id = Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
     let public_id = public_id.unwrap();
     println!(" public_id = {:?} ", public_id);

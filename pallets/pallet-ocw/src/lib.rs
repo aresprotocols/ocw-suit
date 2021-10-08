@@ -165,8 +165,8 @@ pub mod pallet {
         #[pallet::constant]
         type NeedVerifierCheck: Get<bool>;
 
-        #[pallet::constant]
-        type UseOnChainPriceRequest: Get<bool>;
+        // #[pallet::constant]
+        // type UseOnChainPriceRequest: Get<bool>;
 
         // Used to confirm RequestPropose.
         type RequestOrigin: EnsureOrigin<Self::Origin>;
@@ -761,44 +761,56 @@ impl<T: Config> Pallet<T>
         Ok(())
     }
 
+    // TODO:: will be delete.
     // get uri key raw of ARES price
-    fn get_price_source_list (read_chain_data: bool) ->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
-        // Use the on chain storage data mode.
-        if read_chain_data {
-            let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
-                (
-                    price_key,
-                    // sp_std::str::from_utf8(&request_url).unwrap().clone(),
-                    Self::make_local_storage_request_uri_by_vec_u8(request_url),
-                    parse_version,
-                    fraction_length,
-                    request_interval,
-                )
-            }).collect() ;
-            return result;
-        }
-
-        Vec::new()
-    }
+    // fn get_price_source_list (read_chain_data: bool) ->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
+    //     // Use the on chain storage data mode.
+    //     if read_chain_data {
+    //         let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+    //             (
+    //                 price_key,
+    //                 // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+    //                 Self::make_local_storage_request_uri_by_vec_u8(request_url),
+    //                 parse_version,
+    //                 fraction_length,
+    //                 request_interval,
+    //             )
+    //         }).collect() ;
+    //         return result;
+    //     }
+    //
+    //     Vec::new()
+    // }
 
     // get uri key raw of ARES price
-    fn get_raw_price_source_list (read_chain_data: bool)->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>{
+    fn get_raw_price_source_list ()->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>{
         // Use the on chain storage data mode.
-        if read_chain_data {
-            let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
-                (
-                    price_key,
-                    // sp_std::str::from_utf8(&request_url).unwrap().clone(),
-                    request_url,
-                    parse_version,
-                    fraction_length,
-                    request_interval,
-                )
-            }).collect() ;
-            return result;
-        }
-
-        Vec::new()
+        // if read_chain_data {
+        //     let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+        //         (
+        //             price_key,
+        //             // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+        //             request_url,
+        //             parse_version,
+        //             fraction_length,
+        //             request_interval,
+        //         )
+        //     }).collect() ;
+        //     return result;
+        // }
+        //
+        // Vec::new()
+        let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+            (
+                price_key,
+                // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+                request_url,
+                parse_version,
+                fraction_length,
+                request_interval,
+            )
+        }).collect() ;
+        result
     }
 
     // Get request domain, include TCP protocol, example: http://www.xxxx.com
@@ -1036,7 +1048,7 @@ impl<T: Config> Pallet<T>
         let mut format = Vec::new();
         // let mut debug_arr: Vec<(&str,&str,u32)> = Vec::new();
         // price_key, request_url, parse_version, fraction_length
-        let source_list = Self::get_raw_price_source_list(T::UseOnChainPriceRequest::get());
+        let source_list = Self::get_raw_price_source_list();
         // if request is '/api/getBulkPrices'
         // source_list.into_iter().map(|(price_key, request_url, parse_version, fraction_length)| {
         //
