@@ -165,8 +165,8 @@ pub mod pallet {
         #[pallet::constant]
         type NeedVerifierCheck: Get<bool>;
 
-        #[pallet::constant]
-        type UseOnChainPriceRequest: Get<bool>;
+        // #[pallet::constant]
+        // type UseOnChainPriceRequest: Get<bool>;
 
         // Used to confirm RequestPropose.
         type RequestOrigin: EnsureOrigin<Self::Origin>;
@@ -711,8 +711,8 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
 impl<T: Config> Pallet<T>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           u64: From<<T as frame_system::Config>::BlockNumber>,
-          // <T as frame_system::Config>::AccountId: From<<<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId>,
-                                    // <<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId`
+// <T as frame_system::Config>::AccountId: From<<<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId>,
+// <<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId`
 
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
@@ -761,44 +761,56 @@ impl<T: Config> Pallet<T>
         Ok(())
     }
 
+    // TODO:: will be delete.
     // get uri key raw of ARES price
-    fn get_price_source_list (read_chain_data: bool) ->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
-        // Use the on chain storage data mode.
-        if read_chain_data {
-            let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
-                (
-                    price_key,
-                    // sp_std::str::from_utf8(&request_url).unwrap().clone(),
-                    Self::make_local_storage_request_uri_by_vec_u8(request_url),
-                    parse_version,
-                    fraction_length,
-                    request_interval,
-                )
-            }).collect() ;
-            return result;
-        }
-
-        Vec::new()
-    }
+    // fn get_price_source_list (read_chain_data: bool) ->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
+    //     // Use the on chain storage data mode.
+    //     if read_chain_data {
+    //         let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+    //             (
+    //                 price_key,
+    //                 // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+    //                 Self::make_local_storage_request_uri_by_vec_u8(request_url),
+    //                 parse_version,
+    //                 fraction_length,
+    //                 request_interval,
+    //             )
+    //         }).collect() ;
+    //         return result;
+    //     }
+    //
+    //     Vec::new()
+    // }
 
     // get uri key raw of ARES price
-    fn get_raw_price_source_list (read_chain_data: bool)->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>{
+    fn get_raw_price_source_list ()->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>{
         // Use the on chain storage data mode.
-        if read_chain_data {
-            let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
-                (
-                    price_key,
-                    // sp_std::str::from_utf8(&request_url).unwrap().clone(),
-                    request_url,
-                    parse_version,
-                    fraction_length,
-                    request_interval,
-                )
-            }).collect() ;
-            return result;
-        }
-
-        Vec::new()
+        // if read_chain_data {
+        //     let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+        //         (
+        //             price_key,
+        //             // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+        //             request_url,
+        //             parse_version,
+        //             fraction_length,
+        //             request_interval,
+        //         )
+        //     }).collect() ;
+        //     return result;
+        // }
+        //
+        // Vec::new()
+        let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
+            (
+                price_key,
+                // sp_std::str::from_utf8(&request_url).unwrap().clone(),
+                request_url,
+                parse_version,
+                fraction_length,
+                request_interval,
+            )
+        }).collect() ;
+        result
     }
 
     // Get request domain, include TCP protocol, example: http://www.xxxx.com
@@ -1036,7 +1048,7 @@ impl<T: Config> Pallet<T>
         let mut format = Vec::new();
         // let mut debug_arr: Vec<(&str,&str,u32)> = Vec::new();
         // price_key, request_url, parse_version, fraction_length
-        let source_list = Self::get_raw_price_source_list(T::UseOnChainPriceRequest::get());
+        let source_list = Self::get_raw_price_source_list();
         // if request is '/api/getBulkPrices'
         // source_list.into_iter().map(|(price_key, request_url, parse_version, fraction_length)| {
         //
@@ -1411,61 +1423,61 @@ impl<T: Config> Pallet<T>
         // Check price pool deep reaches the maximum value, and if so, calculated the average.
         // if  <AresPrice<T>>::get(key_str.clone()).len() >= max_len as usize {
 
-            let (average,fraction_length) = Self::average_price(key_str.clone(), T::CalculationKind::get())
-                .expect("The average is not empty.");
-            log::info!("Calculate current average price average price is: ({},{}) , {:?}", average, fraction_length, &key_str);
+        let (average,fraction_length) = Self::average_price(key_str.clone(), T::CalculationKind::get())
+            .expect("The average is not empty.");
+        log::info!("Calculate current average price average price is: ({},{}) , {:?}", average, fraction_length, &key_str);
 
-            let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
-            // Abnormal price index list
-            let mut abnormal_price_index_list = Vec::new();
-            // Pick abnormal price.
-            if 0 < price_list_of_pool.len() {
-                for (index, check_price) in price_list_of_pool.iter().enumerate() {
+        let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
+        // Abnormal price index list
+        let mut abnormal_price_index_list = Vec::new();
+        // Pick abnormal price.
+        if 0 < price_list_of_pool.len() {
+            for (index, check_price) in price_list_of_pool.iter().enumerate() {
 
-                    let offset_percent = match check_price.0 {
-                        x if &x >  &average => {
-                            // println!("A:: &x >  &average  = {:?} > {:?}", &x, &average);
-                            // println!("&x /  &average  = {:?} / {:?}", ((x - average)*100), (average ));
-                            ((x - average)*100) / average
-                        },
-                        x if &x <  &average => {
-                            // println!("B:: &x <  &average  = {:?} > {:?}", &x, &average);
-                            // println!("&x /  &average  = {:?} / {:?}", ((average - x)*100), (average ));
-                            ((average - x)*100) / average
-                        },
-                        _ => { 0 }
-                    };
-                    // println!("offset_percent = {:?}", &offset_percent);
-                    if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
-                        // Set price to abnormal list and pick out check_price
-                        <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
-                        // abnormal_price_index_list
-                        abnormal_price_index_list.push(index);
-                    }
+                let offset_percent = match check_price.0 {
+                    x if &x >  &average => {
+                        // println!("A:: &x >  &average  = {:?} > {:?}", &x, &average);
+                        // println!("&x /  &average  = {:?} / {:?}", ((x - average)*100), (average ));
+                        ((x - average)*100) / average
+                    },
+                    x if &x <  &average => {
+                        // println!("B:: &x <  &average  = {:?} > {:?}", &x, &average);
+                        // println!("&x /  &average  = {:?} / {:?}", ((average - x)*100), (average ));
+                        ((average - x)*100) / average
+                    },
+                    _ => { 0 }
+                };
+                // println!("offset_percent = {:?}", &offset_percent);
+                if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
+                    // Set price to abnormal list and pick out check_price
+                    <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
+                    // abnormal_price_index_list
+                    abnormal_price_index_list.push(index);
                 }
-
-                // println!("All abnormal_price_index_list = {:?}", abnormal_price_index_list);
-
-                let mut remove_count = 0;
-                // has abnormal price.
-                if abnormal_price_index_list.len() > 0 {
-                    // pick out abnormal
-                    abnormal_price_index_list.iter().any(|remove_index| {
-                        price_list_of_pool.remove((*remove_index - remove_count));
-                        remove_count+=1;
-                        false
-                    });
-                    // println!("Update price_list = {:?}", &price_list_of_pool);
-                    // reset price pool
-                    <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
-                    return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
-                }
-
-                // Update avg price
-                <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
-                // Clear price pool.
-                <AresPrice<T>>::remove(key_str.clone());
             }
+
+            // println!("All abnormal_price_index_list = {:?}", abnormal_price_index_list);
+
+            let mut remove_count = 0;
+            // has abnormal price.
+            if abnormal_price_index_list.len() > 0 {
+                // pick out abnormal
+                abnormal_price_index_list.iter().any(|remove_index| {
+                    price_list_of_pool.remove((*remove_index - remove_count));
+                    remove_count+=1;
+                    false
+                });
+                // println!("Update price_list = {:?}", &price_list_of_pool);
+                // reset price pool
+                <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
+                return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
+            }
+
+            // Update avg price
+            <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
+            // Clear price pool.
+            <AresPrice<T>>::remove(key_str.clone());
+        }
     }
 
     // fn get_block_author() -> Option<<<T as pallet::Config>::ValidatorSet as frame_support::traits::ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>

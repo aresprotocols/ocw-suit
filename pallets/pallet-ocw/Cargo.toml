@@ -1,6 +1,6 @@
 [package]
 name = "pallet-ocw"
-version = "3.0.1"
+version = "3.0.4"
 authors = ["Ares Technologies <linhai@cancanyou.com>"]
 edition = "2018"
 license = "Unlicense"
@@ -51,5 +51,7 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"hex/std",
+	"serde/std",
+	"serde_json/std"
 ]
 try-runtime = ["frame-support/try-runtime"]
