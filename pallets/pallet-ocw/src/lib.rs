@@ -1369,17 +1369,17 @@ impl<T: Config> Pallet<T>
         // Get current block number for test.
         // let current_block = <system::Pallet<T>>::block_number();
 
-        <PricesTrace<T>>::mutate(|prices_trace| {
-            // let author = <pallet_authorship::Pallet<T>>::author();
-            let author = Self::get_block_author().unwrap();
-            let MAX_LEN: usize = max_len.clone() as usize;
-            let price_trace_len = prices_trace.len();
-            if price_trace_len < MAX_LEN {
-                prices_trace.push((price.clone(), author.clone(), who.clone()));
-            } else {
-                prices_trace[price_trace_len % MAX_LEN] = (price.clone(), author.clone(), who.clone());
-            }
-        });
+        // <PricesTrace<T>>::mutate(|prices_trace| {
+        //     // let author = <pallet_authorship::Pallet<T>>::author();
+        //     let author = Self::get_block_author().unwrap();
+        //     let MAX_LEN: usize = max_len.clone() as usize;
+        //     let price_trace_len = prices_trace.len();
+        //     if price_trace_len < MAX_LEN {
+        //         prices_trace.push((price.clone(), author.clone(), who.clone()));
+        //     } else {
+        //         prices_trace[price_trace_len % MAX_LEN] = (price.clone(), author.clone(), who.clone());
+        //     }
+        // });
 
         // // Check price pool deep reaches the maximum value, and if so, calculated the average.
         // if  <AresPrice<T>>::get(key_str.clone()).len() >= max_len as usize {
