@@ -49,55 +49,76 @@ pub mod crypto {
         MultiSignature, MultiSigner,
     };
     use sp_core::sr25519::Signature as Sr25519Signature;
+    use crate::pallet;
+    use frame_support::pallet_prelude::PhantomData;
 
     app_crypto!(sr25519, KEY_TYPE);
 
     // struct fro production
-    pub struct OcwAuthId;
+    pub struct OcwAuthId<T>(PhantomData<T>);
 
-    impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId {
+    impl <T:pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId<T>
+        where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId> ,
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+    {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
         type GenericPublic = sp_core::sr25519::Public;
+        // type GenericSignature = Sr25519Signature;
+        // type GenericPublic = super::Public;
     }
 
-    impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for OcwAuthId {
+    impl <T:pallet::Config> frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for OcwAuthId<T>
+        where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId> ,
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+    {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
         type GenericPublic = sp_core::sr25519::Public;
+        // type GenericSignature = Sr25519Signature;
+        // type GenericPublic = super::Public;
     }
-}
-
-pub mod sr25519 {
-    use super::KEY_TYPE;
-
-    mod app_sr25519 {
-        use super::KEY_TYPE;
-        use sp_application_crypto::{app_crypto, sr25519};
-        app_crypto!(sr25519, KEY_TYPE);
-    }
-
-    sp_application_crypto::with_pair! {
-		/// An i'm online keypair using sr25519 as its crypto.
-		pub type AuthorityPair = app_sr25519::Pair;
-	}
-
-    /// An i'm online signature using sr25519 as its crypto.
-    pub type AuthoritySignature = app_sr25519::Signature;
 
     /// An i'm online identifier using sr25519 as its crypto.
-    pub type AuthorityId = app_sr25519::Public;
+    pub type AuthorityId = self::Public;
 }
+
+// pub mod sr25519 {
+//     use super::KEY_TYPE;
+//
+//     mod app_sr25519 {
+//         use super::KEY_TYPE;
+//         use sp_application_crypto::{app_crypto, sr25519};
+//         app_crypto!(sr25519, KEY_TYPE);
+//     }
+//
+//     sp_application_crypto::with_pair! {
+// 		/// An i'm online keypair using sr25519 as its crypto.
+// 		pub type AuthorityPair = app_sr25519::Pair;
+// 	}
+//
+//     /// An i'm online signature using sr25519 as its crypto.
+//     pub type AuthoritySignature = app_sr25519::Signature;
+//
+//     /// An i'm online identifier using sr25519 as its crypto.
+//     pub type AuthorityId = app_sr25519::Public;
+// }
 
 pub use pallet::*;
 use frame_system::offchain::{Signer, SendUnsignedTransaction};
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 use lite_json::NumberValue;
+use crate::crypto::OcwAuthId;
+use frame_support::sp_runtime::app_crypto::{TryFrom, Public};
+use sp_application_crypto::sp_core::crypto::UncheckedFrom;
+use frame_support::sp_runtime::sp_std::convert::TryInto;
+use frame_support::sp_runtime::traits::AccountIdConversion;
 
 
 type FractionLength = u32;
 type RequestInterval = u8;
+
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -118,10 +139,11 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config
         where sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
-              u64: From<<Self as frame_system::Config>::BlockNumber>
+              u64: From<<Self as frame_system::Config>::BlockNumber>,
+              // <Self as frame_system::offchain::SigningTypes>::Public: From<<Self as pallet::Config>::AuthorityAres>,
     {
         /// The identifier type for an offchain worker.
-        type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+        type AuthorityId: AppCrypto<Self::Public, Self::Signature> ;
 
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -186,10 +208,13 @@ pub mod pallet {
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         /// You can use `Local Storage` API to coordinate runs of the worker.
-        fn offchain_worker(block_number: T::BlockNumber) {
+        fn offchain_worker(block_number: T::BlockNumber)
+        {
 
             let block_author = Self::get_block_author();
 
@@ -231,9 +256,9 @@ pub mod pallet {
                 Some(author) => {
                     log::info!("Ares price worker author {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
-                    if Self::are_block_author_and_sotre_key_the_same(author) {
+                    if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
                         // Try to get ares price.
-                        match Self::ares_price_worker(block_number) {
+                        match Self::ares_price_worker(block_number, author) {
                             Ok(v) => log::info!("Ares price at work : {:?} ", v),
                             Err(e) => log::warn!("ERROR:: Ares price has a problem : {:?}", e),
                         }
@@ -256,7 +281,8 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
 
         #[pallet::weight(0)]
@@ -283,7 +309,7 @@ pub mod pallet {
             // // TODO:: will be remove.
             // log::info!("Call try to send Event {:?}", &event_result);
             // Self::deposit_event(Event::KittyCreate(who, kitty_id));
-            Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
+            // Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
             // Self::deposit_event(Event::NewPrice(price_list , price_payload.public.clone().into_account()));
 
             // now increment the block number at which we expect next unsigned transaction.
@@ -429,7 +455,8 @@ pub mod pallet {
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, T::AccountId),
@@ -447,7 +474,7 @@ pub mod pallet {
     impl<T: Config> ValidateUnsigned for Pallet<T>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::Config>::AccountId: From<<<T as pallet::Config>::ValidatorSet as frame_support::traits::ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         type Call = Call<T>;
 
@@ -599,7 +626,8 @@ pub mod pallet {
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         pub _phantom: sp_std::marker::PhantomData<T>,
         pub request_base: Vec<u8>,
@@ -611,7 +639,8 @@ pub mod pallet {
     #[cfg(feature = "std")]
     impl<T: Config> Default for GenesisConfig<T>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn default() -> Self {
             GenesisConfig {
@@ -627,7 +656,8 @@ pub mod pallet {
     #[pallet::genesis_build]
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
-              u64: From<<T as frame_system::Config>::BlockNumber>
+              u64: From<<T as frame_system::Config>::BlockNumber>,
+              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn build(&self) {
             if !self.price_requests.is_empty() {
@@ -711,8 +741,7 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
 impl<T: Config> Pallet<T>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           u64: From<<T as frame_system::Config>::BlockNumber>,
-          // <T as frame_system::Config>::AccountId: From<<<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId>,
-                                    // <<T as pallet::Config>::ValidatorSet as Trait>::ValidatorId`
+          // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
 
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
@@ -749,12 +778,16 @@ impl<T: Config> Pallet<T>
     // }
 
     /// Obtain ares price and submit it.
-    fn ares_price_worker(block_number: T::BlockNumber) -> Result<(), &'static str> {
+    fn ares_price_worker(block_number: T::BlockNumber, account_id: T::AccountId) -> Result<(), &'static str>
+        where
+            // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres> ,
+            <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
         // if !Self::is_submittable_block_now(block_number) {
         //     return Err("It's too early.");
         // }
         // let res = Self::fetch_ares_price_and_send_raw_unsigned(block_number); // PriceKey::PRICE_KEY_IS_ETH
-        let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number); // PriceKey::PRICE_KEY_IS_ETH
+        let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number, account_id); // PriceKey::PRICE_KEY_IS_ETH
         if let Err(e) = res {
             log::error!("ERROR:: fetch_ares_price_and_send_raw_unsigned on offchain 2: {:?}", e);
         }
@@ -973,7 +1006,10 @@ impl<T: Config> Pallet<T>
     //     source_list[begin_index as usize .. end_index as usize].to_vec()
     // }
 
-    fn save_fetch_ares_price_and_send_payload_signed(block_number: T::BlockNumber) -> Result<(), &'static str> {
+    fn save_fetch_ares_price_and_send_payload_signed(block_number: T::BlockNumber, account_id: T::AccountId) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
 
 
         // let price_source_list = Self::get_delimited_price_source_list(Self::get_price_source_list(T::UseOnChainPriceRequest::get()), block_number.into(), max_request_count);
@@ -999,7 +1035,39 @@ impl<T: Config> Pallet<T>
 
         if price_list.len() > 0 {
             // -- Sign using any account
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
+            let mut sign_public_keys = Vec::new();
+            // sign_public_keys.push(account_id.clone().into());
+            // OcwAuthId::try_from::(account_id);
+            // T::Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
+            // let account_id: T::AccountId;
+            // let author_id: T::AuthorityId;
+            // let a = sr25519::AuthorityId::from_slice("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty".as_bytes());
+
+            // T::AuthorityAres::from_slice("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty".as_bytes());
+            // T::AuthorityAres::unchecked_from();
+            // let b = <T::AuthorityId as>::from_slice("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty".as_bytes());
+            // println!("account_id= {:?}", &account_id);
+            let encode_data: Vec<u8> = account_id.encode();
+            assert!(32 == encode_data.len());
+            let raw_data = encode_data.try_into();
+            let raw_data = raw_data.unwrap();
+            // <T as SigningTypes>::Public::
+            let new_account = T::AuthorityAres::unchecked_from(raw_data);
+            // <T as SigningTypes>::Public::unchecked_from(raw_data);
+            // new_account.into_account();
+            // sign_public_keys.push(new_account);
+
+            // <T as frame_system::offchain::SigningTypes>::Public;
+            // ca
+
+            // -----
+            let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+            sign_public_keys.push(new_account.into());
+
+            // .with_filter(sign_public_keys)
+            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+                .with_filter(sign_public_keys)
+                .send_unsigned_transaction(
                 |account| PricePayload {
                     price: price_list.clone(),
                     block_number,

@@ -56,7 +56,7 @@ use std::convert::TryInto;
 use sp_core::hexdisplay::HexDisplay;
 use lite_json::JsonValue::Null;
 use frame_support::sp_runtime::traits::IsMember;
-use crate::sr25519::AuthorityId;
+// use crate::sr25519::AuthorityId;
 use sp_application_crypto::Pair;
 use frame_support::sp_std::convert::TryFrom;
 use frame_support::sp_runtime::app_crypto::Ss58Codec;
@@ -239,8 +239,8 @@ ord_parameter_types! {
 
 impl Config for Test {
     type Event = Event;
-    type AuthorityId = crypto::OcwAuthId;
-    type AuthorityAres = sr25519::AuthorityId;
+    type AuthorityId = crypto::OcwAuthId<Self>;
+    type AuthorityAres = crypto::AuthorityId;
     type Call = Call;
     // type ValidatorSet = Historical;
     type RequestOrigin = frame_system::EnsureRoot<AccountId>;
@@ -1100,7 +1100,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
 
         // when execute blocknumber = 1
         // <Test as crate::Config>::MaxCountOfPerRequest::get() will be del.
-        AresOcw::save_fetch_ares_price_and_send_payload_signed(1).unwrap();
+        AresOcw::save_fetch_ares_price_and_send_payload_signed(1, public_key.into_account()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -1111,7 +1111,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
             let signature_valid = <PricePayload<
                 <Test as SigningTypes>::Public,
                 <Test as frame_system::Config>::BlockNumber
-            > as SignedPayload<Test>>::verify::<crypto::OcwAuthId>(&price_payload_b1, signature.clone());
+            > as SignedPayload<Test>>::verify::<crypto::OcwAuthId<Test>>(&price_payload_b1, signature.clone());
             assert!(signature_valid);
         }
     });
