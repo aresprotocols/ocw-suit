@@ -30,7 +30,6 @@ serde_json = { version = '1.0.67', default-features = false, features = ['alloc'
 pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-08' }
-pallet-ares-challenge = {default-features = false,path = '../challenge', version = '3.0.1'}
 
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
@@ -56,6 +55,5 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"sp-consensus-aura/std",
-	"pallet-ares-challenge/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
