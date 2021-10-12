@@ -24,11 +24,13 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, git = "https://g
 sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
-pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
+pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+pallet-ares-challenge = {default-features = false,path = '../challenge', version = '3.0.1'}
 
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
@@ -48,10 +50,12 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"log/std",
-	"pallet-authorship/std",
-	"pallet-session/std",
 	"hex/std",
 	"serde/std",
-	"serde_json/std"
+	"serde_json/std",
+	"pallet-authorship/std",
+	"pallet-session/std",
+	"sp-consensus-aura/std",
+	"pallet-ares-challenge/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
