@@ -15,7 +15,7 @@ use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use lite_json::json::JsonValue;
 
-use frame_support::traits::{ Get, ValidatorSet, FindAuthor};
+use frame_support::traits::{Get, ValidatorSet, FindAuthor, UnixTime};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str, };
 use frame_support::sp_std::str::FromStr;
@@ -114,6 +114,7 @@ use frame_support::sp_runtime::app_crypto::{TryFrom, Public};
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use frame_support::sp_runtime::sp_std::convert::TryInto;
 use frame_support::sp_runtime::traits::AccountIdConversion;
+use frame_support::sp_runtime::SaturatedConversion;
 
 
 type FractionLength = u32;
@@ -128,6 +129,8 @@ pub mod pallet {
     use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
     use sp_core::crypto::UncheckedFrom;
     use frame_support::sp_std::convert::TryInto;
+    use frame_support::traits::UnixTime;
+    use frame_support::sp_runtime::SaturatedConversion;
 
     #[pallet::error]
     pub enum Error<T> {
@@ -140,8 +143,11 @@ pub mod pallet {
     pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config
         where sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
               u64: From<<Self as frame_system::Config>::BlockNumber>,
-              // <Self as frame_system::offchain::SigningTypes>::Public: From<<Self as pallet::Config>::AuthorityAres>,
+    // <Self as frame_system::offchain::SigningTypes>::Public: From<<Self as pallet::Config>::AuthorityAres>,
     {
+
+        type UnixTime: UnixTime;
+
         /// The identifier type for an offchain worker.
         type AuthorityId: AppCrypto<Self::Public, Self::Signature> ;
 
@@ -210,7 +216,7 @@ pub mod pallet {
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
               <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber)
@@ -257,6 +263,9 @@ pub mod pallet {
                     log::info!("Ares price worker author {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                     if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
+                        let offchain_worker_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
+                        log::info!("------------ offchain_worker_time = {:?}", offchain_worker_time);
+
                         // Try to get ares price.
                         match Self::ares_price_worker(block_number, author) {
                             Ok(v) => log::info!("Ares price at work : {:?} ", v),
@@ -282,7 +291,7 @@ pub mod pallet {
     impl<T: Config> Pallet<T>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
 
         #[pallet::weight(0)]
@@ -306,15 +315,7 @@ pub mod pallet {
                 event_result.push((price_key, price, fraction_length));
             }
 
-            // // TODO:: will be remove.
-            // log::info!("Call try to send Event {:?}", &event_result);
-            // Self::deposit_event(Event::KittyCreate(who, kitty_id));
-            // Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
-            // Self::deposit_event(Event::NewPrice(price_list , price_payload.public.clone().into_account()));
-
-            // now increment the block number at which we expect next unsigned transaction.
-            // let current_block = <system::Pallet<T>>::block_number();
-            // <NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
+            Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
 
             Ok(().into())
         }
@@ -456,7 +457,7 @@ pub mod pallet {
     pub enum Event<T: Config>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, T::AccountId),
@@ -474,7 +475,7 @@ pub mod pallet {
     impl<T: Config> ValidateUnsigned for Pallet<T>
         where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         type Call = Call<T>;
 
@@ -627,7 +628,7 @@ pub mod pallet {
     pub struct GenesisConfig<T: Config>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         pub _phantom: sp_std::marker::PhantomData<T>,
         pub request_base: Vec<u8>,
@@ -640,7 +641,7 @@ pub mod pallet {
     impl<T: Config> Default for GenesisConfig<T>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn default() -> Self {
             GenesisConfig {
@@ -657,7 +658,7 @@ pub mod pallet {
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
         where AccountId32: From<<T as frame_system::Config>::AccountId>,
               u64: From<<T as frame_system::Config>::BlockNumber>,
-              // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn build(&self) {
             if !self.price_requests.is_empty() {
@@ -741,7 +742,7 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
 impl<T: Config> Pallet<T>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           u64: From<<T as frame_system::Config>::BlockNumber>,
-          // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+// <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
 
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
@@ -780,7 +781,7 @@ impl<T: Config> Pallet<T>
     /// Obtain ares price and submit it.
     fn ares_price_worker(block_number: T::BlockNumber, account_id: T::AccountId) -> Result<(), &'static str>
         where
-            // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres> ,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres> ,
             <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
     {
         // if !Self::is_submittable_block_now(block_number) {
@@ -1031,7 +1032,10 @@ impl<T: Config> Pallet<T>
             }
         }
 
-        log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
+        // log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
+
+        let fetch_price_begin_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
+        log::info!("------------ fetch_price_begin_time = {:?}", fetch_price_begin_time);
 
         if price_list.len() > 0 {
             // -- Sign using any account
@@ -1068,17 +1072,21 @@ impl<T: Config> Pallet<T>
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
-                |account| PricePayload {
-                    price: price_list.clone(),
-                    block_number,
-                    public: account.public.clone()
-                },
-                |payload, signature| {
-                    Call::submit_price_unsigned_with_signed_payload(payload, signature)
-                }
-            ).ok_or("+++++++++ No local accounts accounts available, storekey needs to be set.")?;
+                    |account| PricePayload {
+                        price: price_list.clone(),
+                        block_number,
+                        public: account.public.clone()
+                    },
+                    |payload, signature| {
+                        Call::submit_price_unsigned_with_signed_payload(payload, signature)
+                    }
+                ).ok_or("+++++++++ No local accounts accounts available, storekey needs to be set.")?;
             result.map_err(|()| "+++++++++ Unable to submit transaction")?;
         }
+
+        let fetch_price_end_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
+        log::info!("------------ fetch_price_end_time = {:?}", fetch_price_end_time);
+
         Ok(())
     }
 
@@ -1099,19 +1107,6 @@ impl<T: Config> Pallet<T>
 
     // Make bulk request format array.
     fn make_bulk_price_format_data(block_number: T::BlockNumber) -> Vec<(Vec<u8>, Vec<u8>, FractionLength)> {
-        // let FRACTION_NUM_2:u32 = 2 ;
-        // let FRACTION_NUM_3:u32 = 3 ;
-        // let FRACTION_NUM_4:u32 = 4 ;
-        // let FRACTION_NUM_5:u32 = 5 ;
-        // // Bulk parse
-        // // defined parse format
-        // let mut format = Vec::new();
-        // format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), FRACTION_NUM_2));
-        // format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), FRACTION_NUM_3));
-        // format.push(("dot_price".as_bytes().to_vec(), "dotusdt".as_bytes().to_vec(), FRACTION_NUM_4));
-        // format.push(("xrp_price".as_bytes().to_vec(), "xrpusdt".as_bytes().to_vec(), FRACTION_NUM_5));
-        //
-        // format
 
         let mut format = Vec::new();
         // let mut debug_arr: Vec<(&str,&str,u32)> = Vec::new();
@@ -1122,7 +1117,7 @@ impl<T: Config> Pallet<T>
         //
         // })
 
-        log::info!("LIN::DEBUG A::source_list length = {:?}", source_list.len());
+        // log::info!("LIN::DEBUG A::source_list length = {:?}", source_list.len());
 
         // In the new version, it is more important to control the request interval here.
         for (price_key, extract_key, parse_version, fraction_length, request_interval) in source_list {
@@ -1133,7 +1128,7 @@ impl<T: Config> Pallet<T>
                     let debug_price_key = price_key.clone();
                     // let debug_extract_key = price_key.clone();
                     // debug_arr.push((sp_std::str::from_utf8(&debug_price_key), sp_std::str::from_utf8(&debug_extract_key), fraction_length.clone()));
-                    log::info!(" LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}", request_interval, block_number, sp_std::str::from_utf8(&debug_price_key));
+                    // log::info!(" LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}", request_interval, block_number, sp_std::str::from_utf8(&debug_price_key));
                     format.push((price_key, extract_key, fraction_length));
 
                 }
@@ -1278,7 +1273,7 @@ impl<T: Config> Pallet<T>
 
         // Make u64 with fraction length
         // let result_price = Self::format_price_fraction_to_u64(price_value.clone(), param_length);
-        log::info!(" TO=DEBUG:: price::");
+        // log::info!(" TO=DEBUG:: price::");
         let result_price = JsonNumberValue::new(price_value.clone()).toPrice(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.
@@ -1491,61 +1486,61 @@ impl<T: Config> Pallet<T>
         // Check price pool deep reaches the maximum value, and if so, calculated the average.
         // if  <AresPrice<T>>::get(key_str.clone()).len() >= max_len as usize {
 
-            let (average,fraction_length) = Self::average_price(key_str.clone(), T::CalculationKind::get())
-                .expect("The average is not empty.");
-            log::info!("Calculate current average price average price is: ({},{}) , {:?}", average, fraction_length, &key_str);
+        let (average,fraction_length) = Self::average_price(key_str.clone(), T::CalculationKind::get())
+            .expect("The average is not empty.");
+        log::info!("Calculate current average price average price is: ({},{}) , {:?}", average, fraction_length, &key_str);
 
-            let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
-            // Abnormal price index list
-            let mut abnormal_price_index_list = Vec::new();
-            // Pick abnormal price.
-            if 0 < price_list_of_pool.len() {
-                for (index, check_price) in price_list_of_pool.iter().enumerate() {
+        let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
+        // Abnormal price index list
+        let mut abnormal_price_index_list = Vec::new();
+        // Pick abnormal price.
+        if 0 < price_list_of_pool.len() {
+            for (index, check_price) in price_list_of_pool.iter().enumerate() {
 
-                    let offset_percent = match check_price.0 {
-                        x if &x >  &average => {
-                            // println!("A:: &x >  &average  = {:?} > {:?}", &x, &average);
-                            // println!("&x /  &average  = {:?} / {:?}", ((x - average)*100), (average ));
-                            ((x - average)*100) / average
-                        },
-                        x if &x <  &average => {
-                            // println!("B:: &x <  &average  = {:?} > {:?}", &x, &average);
-                            // println!("&x /  &average  = {:?} / {:?}", ((average - x)*100), (average ));
-                            ((average - x)*100) / average
-                        },
-                        _ => { 0 }
-                    };
-                    // println!("offset_percent = {:?}", &offset_percent);
-                    if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
-                        // Set price to abnormal list and pick out check_price
-                        <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
-                        // abnormal_price_index_list
-                        abnormal_price_index_list.push(index);
-                    }
+                let offset_percent = match check_price.0 {
+                    x if &x >  &average => {
+                        // println!("A:: &x >  &average  = {:?} > {:?}", &x, &average);
+                        // println!("&x /  &average  = {:?} / {:?}", ((x - average)*100), (average ));
+                        ((x - average)*100) / average
+                    },
+                    x if &x <  &average => {
+                        // println!("B:: &x <  &average  = {:?} > {:?}", &x, &average);
+                        // println!("&x /  &average  = {:?} / {:?}", ((average - x)*100), (average ));
+                        ((average - x)*100) / average
+                    },
+                    _ => { 0 }
+                };
+                // println!("offset_percent = {:?}", &offset_percent);
+                if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
+                    // Set price to abnormal list and pick out check_price
+                    <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
+                    // abnormal_price_index_list
+                    abnormal_price_index_list.push(index);
                 }
-
-                // println!("All abnormal_price_index_list = {:?}", abnormal_price_index_list);
-
-                let mut remove_count = 0;
-                // has abnormal price.
-                if abnormal_price_index_list.len() > 0 {
-                    // pick out abnormal
-                    abnormal_price_index_list.iter().any(|remove_index| {
-                        price_list_of_pool.remove((*remove_index - remove_count));
-                        remove_count+=1;
-                        false
-                    });
-                    // println!("Update price_list = {:?}", &price_list_of_pool);
-                    // reset price pool
-                    <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
-                    return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
-                }
-
-                // Update avg price
-                <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
-                // Clear price pool.
-                <AresPrice<T>>::remove(key_str.clone());
             }
+
+            // println!("All abnormal_price_index_list = {:?}", abnormal_price_index_list);
+
+            let mut remove_count = 0;
+            // has abnormal price.
+            if abnormal_price_index_list.len() > 0 {
+                // pick out abnormal
+                abnormal_price_index_list.iter().any(|remove_index| {
+                    price_list_of_pool.remove((*remove_index - remove_count));
+                    remove_count+=1;
+                    false
+                });
+                // println!("Update price_list = {:?}", &price_list_of_pool);
+                // reset price pool
+                <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
+                return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
+            }
+
+            // Update avg price
+            <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
+            // Clear price pool.
+            <AresPrice<T>>::remove(key_str.clone());
+        }
     }
 
     // fn get_block_author() -> Option<<<T as pallet::Config>::ValidatorSet as frame_support::traits::ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>
