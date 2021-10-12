@@ -58,8 +58,7 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
-use pallet_ares_demo;
-use pallet_ares_demo::CheckFlow;
+use pallet_ares_challenge::CheckFlow;
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{
@@ -131,14 +130,14 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	}
 }
 
-type BalanceOf<T> = <<T as pallet_ares_demo::Config>::Currency as Currency<
+type BalanceOf<T> = <<T as pallet_ares_challenge::Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::Balance;
 
 // type BalanceOf<T, I = ()> = pallet_template::BalanceOf<T,I>;
 
 pub trait Config<I: Instance = DefaultInstance>:
-	frame_system::Config + pallet_ares_demo::Config
+	frame_system::Config + pallet_ares_challenge::Config
 {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
@@ -148,7 +147,7 @@ pub trait Config<I: Instance = DefaultInstance>:
 		+ Dispatchable<Origin = <Self as Config<I>>::Origin, PostInfo = PostDispatchInfo>
 		+ From<frame_system::Call<Self>>
 		+ GetDispatchInfo
-		+ IsSubType<pallet_ares_demo::Call<Self>>;
+		+ IsSubType<pallet_ares_challenge::Call<Self>>;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
@@ -887,7 +886,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	{
 		match proposal.is_sub_type() {
 			Some(call) => match *call {
-				pallet_ares_demo::Call::check(ref dest, ref price, ref deposit) => {
+				pallet_ares_challenge::Call::check(ref dest, ref price, ref deposit) => {
 					info!("call func:{:?}", deposit);
 					match_func(dest, proposal_hash, *deposit)
 				}
@@ -900,7 +899,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	fn is_ares_call(proposal: <T as Config<I>>::Proposal) -> bool {
 		match proposal.is_sub_type() {
 			Some(call) => match *call {
-				pallet_ares_demo::Call::check(ref dest, ref price, ref deposit) => return true,
+				pallet_ares_challenge::Call::check(ref dest, ref price, ref deposit) => return true,
 				_ => false,
 			},
 			None => false,

@@ -117,7 +117,7 @@ use frame_support::sp_runtime::traits::AccountIdConversion;
 use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
-use pallet_ares_challenge;
+use pallet_ares_challenge::CheckDeposit;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
@@ -170,7 +170,7 @@ pub mod pallet {
 
         type FindAuthor: FindAuthor<Self::AccountId>;
 
-        type CheckDeposit: pallet_ares_challenge::CheckDeposit<Self::AccountId>;
+        type CheckDeposit: CheckDeposit<Self::AccountId>;
 
         // type MemberAuthority: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize + UncheckedFrom<[u8; 32]>;
         // type Member: IsMember<Self::MemberAuthority>;
