@@ -56,7 +56,6 @@ std = [
 	"hex/std",
 	"serde/std",
 	"serde_json/std",
-	"pallet-timestamp/std",
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"sp-consensus-aura/std",
