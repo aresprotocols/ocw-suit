@@ -250,7 +250,6 @@ ord_parameter_types! {
 }
 
 impl Config for Test {
-    type UnixTime = pallet_timestamp::Pallet<Self>;
     type Event = Event;
     type AuthorityId = crypto::OcwAuthId<Self>;
     type AuthorityAres = crypto::AuthorityId;
