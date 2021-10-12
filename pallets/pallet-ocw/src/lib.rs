@@ -15,7 +15,7 @@ use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use lite_json::json::JsonValue;
 
-use frame_support::traits::{Get, ValidatorSet, FindAuthor, UnixTime};
+use frame_support::traits::{ Get, ValidatorSet, FindAuthor};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str, };
 use frame_support::sp_std::str::FromStr;
@@ -114,7 +114,6 @@ use frame_support::sp_runtime::app_crypto::{TryFrom, Public};
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use frame_support::sp_runtime::sp_std::convert::TryInto;
 use frame_support::sp_runtime::traits::AccountIdConversion;
-use frame_support::sp_runtime::SaturatedConversion;
 
 
 type FractionLength = u32;
@@ -129,8 +128,6 @@ pub mod pallet {
     use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
     use sp_core::crypto::UncheckedFrom;
     use frame_support::sp_std::convert::TryInto;
-    use frame_support::traits::UnixTime;
-    use frame_support::sp_runtime::SaturatedConversion;
 
     #[pallet::error]
     pub enum Error<T> {
@@ -145,9 +142,6 @@ pub mod pallet {
               u64: From<<Self as frame_system::Config>::BlockNumber>,
     // <Self as frame_system::offchain::SigningTypes>::Public: From<<Self as pallet::Config>::AuthorityAres>,
     {
-
-        type UnixTime: UnixTime;
-
         /// The identifier type for an offchain worker.
         type AuthorityId: AppCrypto<Self::Public, Self::Signature> ;
 
@@ -263,9 +257,6 @@ pub mod pallet {
                     log::info!("Ares price worker author {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                     if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
-                        let offchain_worker_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
-                        log::info!("------------ offchain_worker_time = {:?}", offchain_worker_time);
-
                         // Try to get ares price.
                         match Self::ares_price_worker(block_number, author) {
                             Ok(v) => log::info!("Ares price at work : {:?} ", v),
@@ -315,7 +306,15 @@ pub mod pallet {
                 event_result.push((price_key, price, fraction_length));
             }
 
-            Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
+            // // TODO:: will be remove.
+            // log::info!("Call try to send Event {:?}", &event_result);
+            // Self::deposit_event(Event::KittyCreate(who, kitty_id));
+            // Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
+            // Self::deposit_event(Event::NewPrice(price_list , price_payload.public.clone().into_account()));
+
+            // now increment the block number at which we expect next unsigned transaction.
+            // let current_block = <system::Pallet<T>>::block_number();
+            // <NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
 
             Ok(().into())
         }
@@ -1032,10 +1031,7 @@ impl<T: Config> Pallet<T>
             }
         }
 
-        // log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
-
-        let fetch_price_begin_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
-        log::info!("------------ fetch_price_begin_time = {:?}", fetch_price_begin_time);
+        log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
 
         if price_list.len() > 0 {
             // -- Sign using any account
@@ -1083,10 +1079,6 @@ impl<T: Config> Pallet<T>
                 ).ok_or("+++++++++ No local accounts accounts available, storekey needs to be set.")?;
             result.map_err(|()| "+++++++++ Unable to submit transaction")?;
         }
-
-        let fetch_price_end_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
-        log::info!("------------ fetch_price_end_time = {:?}", fetch_price_end_time);
-
         Ok(())
     }
 
@@ -1107,6 +1099,19 @@ impl<T: Config> Pallet<T>
 
     // Make bulk request format array.
     fn make_bulk_price_format_data(block_number: T::BlockNumber) -> Vec<(Vec<u8>, Vec<u8>, FractionLength)> {
+        // let FRACTION_NUM_2:u32 = 2 ;
+        // let FRACTION_NUM_3:u32 = 3 ;
+        // let FRACTION_NUM_4:u32 = 4 ;
+        // let FRACTION_NUM_5:u32 = 5 ;
+        // // Bulk parse
+        // // defined parse format
+        // let mut format = Vec::new();
+        // format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), FRACTION_NUM_2));
+        // format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), FRACTION_NUM_3));
+        // format.push(("dot_price".as_bytes().to_vec(), "dotusdt".as_bytes().to_vec(), FRACTION_NUM_4));
+        // format.push(("xrp_price".as_bytes().to_vec(), "xrpusdt".as_bytes().to_vec(), FRACTION_NUM_5));
+        //
+        // format
 
         let mut format = Vec::new();
         // let mut debug_arr: Vec<(&str,&str,u32)> = Vec::new();
@@ -1117,7 +1122,7 @@ impl<T: Config> Pallet<T>
         //
         // })
 
-        // log::info!("LIN::DEBUG A::source_list length = {:?}", source_list.len());
+        log::info!("LIN::DEBUG A::source_list length = {:?}", source_list.len());
 
         // In the new version, it is more important to control the request interval here.
         for (price_key, extract_key, parse_version, fraction_length, request_interval) in source_list {
@@ -1128,7 +1133,7 @@ impl<T: Config> Pallet<T>
                     let debug_price_key = price_key.clone();
                     // let debug_extract_key = price_key.clone();
                     // debug_arr.push((sp_std::str::from_utf8(&debug_price_key), sp_std::str::from_utf8(&debug_extract_key), fraction_length.clone()));
-                    // log::info!(" LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}", request_interval, block_number, sp_std::str::from_utf8(&debug_price_key));
+                    log::info!(" LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}", request_interval, block_number, sp_std::str::from_utf8(&debug_price_key));
                     format.push((price_key, extract_key, fraction_length));
 
                 }
@@ -1273,7 +1278,7 @@ impl<T: Config> Pallet<T>
 
         // Make u64 with fraction length
         // let result_price = Self::format_price_fraction_to_u64(price_value.clone(), param_length);
-        // log::info!(" TO=DEBUG:: price::");
+        log::info!(" TO=DEBUG:: price::");
         let result_price = JsonNumberValue::new(price_value.clone()).toPrice(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.

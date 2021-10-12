@@ -1,6 +1,6 @@
 [package]
 name = "pallet-ocw"
-version = "3.0.7"
+version = "3.0.8"
 authors = ["Ares Technologies <linhai@cancanyou.com>"]
 edition = "2018"
 license = "Unlicense"
@@ -30,12 +30,10 @@ serde_json = { version = '1.0.67', default-features = false, features = ['alloc'
 pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
-pallet-ares-challenge = {default-features = false, path = '../challenge', version = '3.0.1'}
 
 
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 
 [features]
 default = ["std"]
@@ -59,6 +57,5 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"sp-consensus-aura/std",
-	"pallet-ares-challenge/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
