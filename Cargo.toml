@@ -3,7 +3,9 @@ panic = 'unwind'
 
 [workspace]
 members = [
-    'pallets/member-extend',
-    'pallets/staking-extend',
-    'pallets/pallet-ocw',
+    "pallets/pallet-ocw",
+    "pallets/staking-extend",
+    "pallets/member-extend",
+    "pallets/challenge",
+    "pallets/collective"
 ]
