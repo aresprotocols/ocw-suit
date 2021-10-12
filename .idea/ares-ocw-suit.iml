@@ -5,6 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/pallet-ocw/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/staking-extend/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/challenge/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/collective/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
