@@ -29,6 +29,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::k
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
+pub const LOCAL_STORAGE_LAST_REQUEST_BLOCK: &[u8] = b"are-ocw::last_request_block";
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
@@ -1229,8 +1230,15 @@ where
         {
             if 2 == parse_version {
                 let round_number: u64 = block_number.into();
-                let remainder: u64 = (round_number % request_interval as u64).into();
+                let last_request_block = Self::get_last_request_block().unwrap();
+                let mut remainder = 1;
+                //let remainder: u64 = (round_number % request_interval as u64).into();
+                if round_number >= last_request_block + request_interval as u64 {
+                    remainder = 0;
+                }
+                log::info!("test..last_request_block: {:?}", last_request_block);
                 if 0 == remainder {
+                    Self::set_last_request_block(round_number);
                     let debug_price_key = price_key.clone();
                     // let debug_extract_key = price_key.clone();
                     // debug_arr.push((sp_std::str::from_utf8(&debug_price_key), sp_std::str::from_utf8(&debug_extract_key), fraction_length.clone()));
@@ -1842,6 +1850,28 @@ where
             .longevity(5)
             .propagate(true)
             .build()
+    }
+
+    fn get_last_request_block() -> Option<u64> {
+        // Create a reference to Local Storage value.
+        // Since the local storage is common for all offchain workers, it's a good practice
+        // to prepend our entry with the pallet name.
+        let last_block_storage = StorageValueRef::persistent(LOCAL_STORAGE_LAST_REQUEST_BLOCK);
+        let result = last_block_storage.get::<u64>();
+        if result.is_ok() {
+            // gh-info has already been fetched. Return early.
+            log::info!("cached last_request_block: {:?}", result);
+            let _result = result.unwrap();
+            if _result.is_some() {
+                return _result;
+            }
+        }
+        Some(0)
+    }
+
+    fn set_last_request_block(block_number: u64) {
+        let last_block_storage = StorageValueRef::persistent(LOCAL_STORAGE_LAST_REQUEST_BLOCK);
+        last_block_storage.set(&block_number);
     }
 }
 
