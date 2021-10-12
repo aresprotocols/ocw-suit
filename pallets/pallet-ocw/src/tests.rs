@@ -75,7 +75,6 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
         Historical: pallet_session_historical::{Pallet},
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 		// Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 	}
@@ -167,12 +166,6 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 3;
 }
 
-impl pallet_timestamp::Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type MinimumPeriod = MinimumPeriod;
-    type WeightInfo = ();
-}
 
 impl frame_system::Config for Test {
     type BaseCallFilter = frame_support::traits::AllowAll;
