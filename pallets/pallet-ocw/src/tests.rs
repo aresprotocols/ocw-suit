@@ -75,6 +75,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
         Historical: pallet_session_historical::{Pallet},
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+        Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 		// Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 	}
@@ -162,6 +163,17 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 3;
+}
+
+impl pallet_timestamp::Config for Test {
+    type Moment = u64;
+    type OnTimestampSet = ();
+    type MinimumPeriod = MinimumPeriod;
+    type WeightInfo = ();
+}
+
 impl frame_system::Config for Test {
     type BaseCallFilter = frame_support::traits::AllowAll;
     type BlockWeights = ();
@@ -238,6 +250,7 @@ ord_parameter_types! {
 }
 
 impl Config for Test {
+    type UnixTime = pallet_timestamp::Pallet<Self>;
     type Event = Event;
     type AuthorityId = crypto::OcwAuthId<Self>;
     type AuthorityAres = crypto::AuthorityId;

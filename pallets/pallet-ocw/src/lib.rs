@@ -1204,14 +1204,9 @@ where
     }
 
     // Make bulk request format array.
-<<<<<<< HEAD
-    fn make_bulk_price_format_data(block_number: T::BlockNumber) -> Vec<(Vec<u8>, Vec<u8>, FractionLength)> {
-
-=======
     fn make_bulk_price_format_data(
         block_number: T::BlockNumber,
     ) -> Vec<(Vec<u8>, Vec<u8>, FractionLength)> {
->>>>>>> 537fee62c95e761e99d0f2c09a8351a3bc35270c
         let mut format = Vec::new();
         // let mut debug_arr: Vec<(&str,&str,u32)> = Vec::new();
         // price_key, request_url, parse_version, fraction_length
