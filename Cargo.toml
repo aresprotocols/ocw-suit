@@ -5,4 +5,6 @@ members = [
     "pallets/pallet-ocw",
     "pallets/staking-extend",
     "pallets/member-extend",
+    "pallets/challenge",
+    "pallets/collective"
 ]

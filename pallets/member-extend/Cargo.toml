@@ -19,7 +19,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, git = "https:
 frame-system = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 pallet-aura = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-core = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
-sp-keystore = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08", optional = true }
+sp-keystore = { version = "0.10.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08", optional = true }
 sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
 sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-08" }
