@@ -17,7 +17,7 @@ use sp_runtime::{
 use sp_std::vec::Vec;
 
 use frame_support::sp_std::str::FromStr;
-use frame_support::traits::{FindAuthor, Get, UnixTime, ValidatorSet};
+use frame_support::traits::{FindAuthor, Get, ValidatorSet};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
 
@@ -29,6 +29,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::k
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
+pub const LOCAL_STORAGE_LAST_REQUEST_BLOCK: &[u8] = b"are-ocw::last_request_block";
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
@@ -118,6 +119,7 @@ use frame_support::sp_runtime::SaturatedConversion;
 use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
+use pallet_ares_challenge::CheckDeposit;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
@@ -173,6 +175,8 @@ pub mod pallet {
         // type ValidatorSet: ValidatorSet<Self::AccountId> ;
 
         type FindAuthor: FindAuthor<Self::AccountId>;
+
+        type CheckDeposit: CheckDeposit<Self::AccountId>;
 
         // type MemberAuthority: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize + UncheckedFrom<[u8; 32]>;
         // type Member: IsMember<Self::MemberAuthority>;
@@ -271,13 +275,10 @@ pub mod pallet {
                     log::info!("Ares price worker author {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                     if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
-                        let offchain_worker_time =
-                            T::UnixTime::now().as_millis().saturated_into::<u64>();
-                        log::info!(
-                            "------------ offchain_worker_time = {:?}",
-                            offchain_worker_time
-                        );
-
+                        if !T::CheckDeposit::enough(&author) {
+                            log::info!("no enough deposit");
+                            return;
+                        }
                         // Try to get ares price.
                         match Self::ares_price_worker(block_number, author) {
                             Ok(v) => log::info!("Ares price at work : {:?} ", v),
@@ -1118,13 +1119,7 @@ where
             }
         }
 
-        // log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
-
-        let fetch_price_begin_time = T::UnixTime::now().as_millis().saturated_into::<u64>();
-        log::info!(
-            "------------ fetch_price_begin_time = {:?}",
-            fetch_price_begin_time
-        );
+        log::info!(" %%%%%%%%%% Price list : {:?}", price_list.clone());
 
         if price_list.len() > 0 {
             // -- Sign using any account
@@ -1228,8 +1223,15 @@ where
         {
             if 2 == parse_version {
                 let round_number: u64 = block_number.into();
-                let remainder: u64 = (round_number % request_interval as u64).into();
+                let last_request_block = Self::get_last_request_block().unwrap();
+                let mut remainder = 1;
+                //let remainder: u64 = (round_number % request_interval as u64).into();
+                if round_number >= last_request_block + request_interval as u64 {
+                    remainder = 0;
+                }
+                log::info!("test..last_request_block: {:?}", last_request_block);
                 if 0 == remainder {
+                    Self::set_last_request_block(round_number);
                     let debug_price_key = price_key.clone();
                     // let debug_extract_key = price_key.clone();
                     // debug_arr.push((sp_std::str::from_utf8(&debug_price_key), sp_std::str::from_utf8(&debug_extract_key), fraction_length.clone()));
@@ -1836,6 +1838,28 @@ where
             .longevity(5)
             .propagate(true)
             .build()
+    }
+
+    fn get_last_request_block() -> Option<u64> {
+        // Create a reference to Local Storage value.
+        // Since the local storage is common for all offchain workers, it's a good practice
+        // to prepend our entry with the pallet name.
+        let last_block_storage = StorageValueRef::persistent(LOCAL_STORAGE_LAST_REQUEST_BLOCK);
+        let result = last_block_storage.get::<u64>();
+        if result.is_ok() {
+            // gh-info has already been fetched. Return early.
+            log::info!("cached last_request_block: {:?}", result);
+            let _result = result.unwrap();
+            if _result.is_some() {
+                return _result;
+            }
+        }
+        Some(0)
+    }
+
+    fn set_last_request_block(block_number: u64) {
+        let last_block_storage = StorageValueRef::persistent(LOCAL_STORAGE_LAST_REQUEST_BLOCK);
+        last_block_storage.set(&block_number);
     }
 }
 
