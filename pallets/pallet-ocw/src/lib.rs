@@ -1034,7 +1034,7 @@ impl<T: Config> Pallet<T>
 
             // .with_filter(sign_public_keys)
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
-                .with_filter(sign_public_keys)
+                .with_filter(sign_public_keys) //TODO::disable for debug.
                 .send_unsigned_transaction(
                     |account| PricePayload {
                         price: price_list.clone(),
@@ -1246,7 +1246,7 @@ impl<T: Config> Pallet<T>
 
         // Make u64 with fraction length
         // let result_price = Self::format_price_fraction_to_u64(price_value.clone(), param_length);
-        log::info!(" TO=DEBUG:: price::");
+        // log::info!(" TO=DEBUG:: price::");
         let result_price = JsonNumberValue::new(price_value.clone()).toPrice(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.
