@@ -256,7 +256,9 @@ pub mod pallet {
                 Some(author) => {
                     log::info!("Ares price worker author {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
-                    if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
+                    if Self::are_block_author_and_sotre_key_the_same(author.clone())
+                    {
+
                         // Try to get ares price.
                         match Self::ares_price_worker(block_number, author) {
                             Ok(v) => log::info!("Ares price at work : {:?} ", v),
@@ -306,11 +308,7 @@ pub mod pallet {
                 event_result.push((price_key, price, fraction_length));
             }
 
-            // // TODO:: will be remove.
-            // log::info!("Call try to send Event {:?}", &event_result);
-            // Self::deposit_event(Event::KittyCreate(who, kitty_id));
-            // Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
-            // Self::deposit_event(Event::NewPrice(price_list , price_payload.public.clone().into_account()));
+            Self::deposit_event(Event::NewPrice(event_result, price_payload.public.clone().into_account()));
 
             // now increment the block number at which we expect next unsigned transaction.
             // let current_block = <system::Pallet<T>>::block_number();
@@ -794,27 +792,6 @@ impl<T: Config> Pallet<T>
         Ok(())
     }
 
-    // TODO:: will be delete.
-    // get uri key raw of ARES price
-    // fn get_price_source_list (read_chain_data: bool) ->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
-    //     // Use the on chain storage data mode.
-    //     if read_chain_data {
-    //         let result:Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get().into_iter().map(|(price_key,request_url,parse_version,fraction_length, request_interval)|{
-    //             (
-    //                 price_key,
-    //                 // sp_std::str::from_utf8(&request_url).unwrap().clone(),
-    //                 Self::make_local_storage_request_uri_by_vec_u8(request_url),
-    //                 parse_version,
-    //                 fraction_length,
-    //                 request_interval,
-    //             )
-    //         }).collect() ;
-    //         return result;
-    //     }
-    //
-    //     Vec::new()
-    // }
-
     // get uri key raw of ARES price
     fn get_raw_price_source_list ()->Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>{
         // Use the on chain storage data mode.
@@ -1011,17 +988,8 @@ impl<T: Config> Pallet<T>
             <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
     {
 
-
         // let price_source_list = Self::get_delimited_price_source_list(Self::get_price_source_list(T::UseOnChainPriceRequest::get()), block_number.into(), max_request_count);
         let mut price_list = Vec::new();
-
-        // for (price_key, request_url, version_num, fraction_length) in price_source_list {
-        //
-        //     if let Ok(price) = Self::fetch_price_body_with_http(price_key.clone(), sp_std::str::from_utf8(&request_url).unwrap(), version_num, fraction_length) {
-        //         // add price to price_list
-        //         price_list.push((price_key, price, fraction_length));
-        //     }
-        // }
 
         let price_result = Self::fetch_bulk_price_with_http(block_number, 2).ok().unwrap();
         for (price_key, price_option, fraction_length , json_number_value) in price_result {
