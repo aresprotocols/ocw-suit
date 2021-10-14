@@ -1091,7 +1091,7 @@ impl<T: Config> Pallet<T>
 
         if price_list.len() > 0 {
             // -- Sign using any account
-            let mut sign_public_keys: Vec<sp_core::sr25519::Public> = Vec::new();
+            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
             // sign_public_keys.push(account_id.clone().into());
             // OcwAuthId::try_from::(account_id);
             // T::Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
