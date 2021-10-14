@@ -1088,7 +1088,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
     let price_payload_b1 = PricePayload {
         block_number: 1, // type is BlockNumber
         price: vec![
-            ("btc_price".as_bytes().to_vec(), 502613720u64, 4, JsonNumberValue{
+            PricePayloadSubPrice("btc_price".as_bytes().to_vec(), 502613720u64, 4, JsonNumberValue{
                 integer: 50261,
                 fraction: 372,
                 fraction_length: 3,

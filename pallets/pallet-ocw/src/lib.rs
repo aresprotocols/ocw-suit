@@ -306,7 +306,10 @@ pub mod pallet {
             let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
 
             let mut event_result: Vec<(Vec<u8>, u64, FractionLength)> = Vec::new();
-            for (price_key, price, fraction_length, json_number_value) in price_list.clone() {
+
+            // for (price_key, price, fraction_length, json_number_value) in price_list.clone() {
+            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value) in price_list.clone() {
+
                 // Add the price to the on-chain list, but mark it as coming from an empty address.
                 // log::info!(" Call add_price {:?}", sp_std::str::from_utf8(&price_key));
                 Self::add_price(
@@ -785,7 +788,7 @@ impl Default for JsonNumberValue {
 pub struct PricePayload<Public, BlockNumber> {
     block_number: BlockNumber,
     // price_key,price_val, fraction len
-    price: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+    price: Vec<PricePayloadSubPrice>,
     public: Public,
 }
 
@@ -794,6 +797,9 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
         self.public.clone()
     }
 }
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PricePayloadSubPrice (Vec<u8>, u64, FractionLength, JsonNumberValue);
 
 impl<T: Config> Pallet<T>
 where
@@ -1072,7 +1078,7 @@ where
         for (price_key, price_option, fraction_length, json_number_value) in price_result {
             if price_option.is_some() {
                 // record price to vec!
-                price_list.push((
+                price_list.push(PricePayloadSubPrice(
                     price_key,
                     price_option.unwrap(),
                     fraction_length,
@@ -1085,7 +1091,7 @@ where
 
         if price_list.len() > 0 {
             // -- Sign using any account
-            let mut sign_public_keys = Vec::new();
+            let mut sign_public_keys: Vec<sp_core::sr25519::Public> = Vec::new();
             // sign_public_keys.push(account_id.clone().into());
             // OcwAuthId::try_from::(account_id);
             // T::Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
@@ -1784,7 +1790,8 @@ where
 
     fn validate_transaction_parameters_of_ares(
         block_number: &T::BlockNumber,
-        _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+        // _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+        _price_list: Vec<PricePayloadSubPrice>,
     ) -> TransactionValidity {
         // // Now let's check if the transaction has any chance to succeed.
         // let next_unsigned_at = <NextUnsignedAt<T>>::get();
