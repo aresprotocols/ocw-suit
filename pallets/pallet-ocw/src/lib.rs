@@ -59,10 +59,10 @@ pub mod crypto {
     pub struct OcwAuthId<T>(PhantomData<T>);
 
     impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -72,11 +72,11 @@ pub mod crypto {
     }
 
     impl<T: pallet::Config>
-        frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -142,9 +142,9 @@ pub mod pallet {
     /// This pallet's configuration trait
     #[pallet::config]
     pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config
-    where
-        sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
-        u64: From<<Self as frame_system::Config>::BlockNumber>,
+        where
+            sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
+            u64: From<<Self as frame_system::Config>::BlockNumber>,
     {
         /// The identifier type for an offchain worker.
         type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
@@ -157,12 +157,12 @@ pub mod pallet {
 
         /// ocw store key pair.
         type AuthorityAres: Member
-            + Parameter
-            + RuntimeAppPublic
-            + Default
-            + Ord
-            + MaybeSerializeDeserialize
-            + UncheckedFrom<[u8; 32]>;
+        + Parameter
+        + RuntimeAppPublic
+        + Default
+        + Ord
+        + MaybeSerializeDeserialize
+        + UncheckedFrom<[u8; 32]>;
 
         /// A type for retrieving the validators supposed to be online in a session.
         // type ValidatorSet: ValidatorSet<Self::AccountId> ;
@@ -216,12 +216,12 @@ pub mod pallet {
 
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        <T as frame_system::offchain::SigningTypes>::Public:
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+            <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
@@ -288,10 +288,10 @@ pub mod pallet {
     /// A public part of the pallet.
     #[pallet::call]
     impl<T: Config> Pallet<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         #[pallet::weight(0)]
         pub fn submit_price_unsigned_with_signed_payload(
@@ -306,7 +306,10 @@ pub mod pallet {
             let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
 
             let mut event_result: Vec<(Vec<u8>, u64, FractionLength)> = Vec::new();
-            for (price_key, price, fraction_length, json_number_value) in price_list.clone() {
+
+            // for (price_key, price, fraction_length, json_number_value) in price_list.clone() {
+            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value) in price_list.clone() {
+
                 // Add the price to the on-chain list, but mark it as coming from an empty address.
                 // log::info!(" Call add_price {:?}", sp_std::str::from_utf8(&price_key));
                 Self::add_price(
@@ -338,7 +341,7 @@ pub mod pallet {
 
             <PricesRequests<T>>::mutate(|prices_request| {
                 for (index, (old_price_key, _, _, _, _)) in
-                    prices_request.clone().into_iter().enumerate()
+                prices_request.clone().into_iter().enumerate()
                 {
                     if &price_key == &old_price_key {
                         // remove old one
@@ -501,10 +504,10 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, T::AccountId),
@@ -520,16 +523,16 @@ pub mod pallet {
 
     #[pallet::validate_unsigned]
     impl<T: Config> ValidateUnsigned for Pallet<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         type Call = Call<T>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
             if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
-                call
+            call
             {
                 // log::info!("RUN ==================== 1");
                 // let worker_ownerid_list = T::AuthorityAres::all();
@@ -594,7 +597,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn prices_trace)]
     pub(super) type PricesTrace<T: Config> =
-        StorageValue<_, Vec<(u64, T::AccountId, T::AccountId)>, ValueQuery>;
+    StorageValue<_, Vec<(u64, T::AccountId, T::AccountId)>, ValueQuery>;
 
     /// The lookup table for names.
     #[pallet::storage]
@@ -673,10 +676,10 @@ pub mod pallet {
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config>
-    where
-        AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         pub _phantom: sp_std::marker::PhantomData<T>,
         pub request_base: Vec<u8>,
@@ -687,10 +690,10 @@ pub mod pallet {
 
     #[cfg(feature = "std")]
     impl<T: Config> Default for GenesisConfig<T>
-    where
-        AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn default() -> Self {
             GenesisConfig {
@@ -705,10 +708,10 @@ pub mod pallet {
 
     #[pallet::genesis_build]
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
-    where
-        AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        where
+            AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn build(&self) {
             if !self.price_requests.is_empty() {
@@ -785,7 +788,7 @@ impl Default for JsonNumberValue {
 pub struct PricePayload<Public, BlockNumber> {
     block_number: BlockNumber,
     // price_key,price_val, fraction len
-    price: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+    price: Vec<PricePayloadSubPrice>,
     public: Public,
 }
 
@@ -795,11 +798,14 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
     }
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PricePayloadSubPrice (Vec<u8>, u64, FractionLength, JsonNumberValue);
+
 impl<T: Config> Pallet<T>
-where
-    sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-    u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+// <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
         let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
@@ -839,9 +845,9 @@ where
         block_number: T::BlockNumber,
         account_id: T::AccountId,
     ) -> Result<(), &'static str>
-    where
+        where
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres> ,
-        <T as frame_system::offchain::SigningTypes>::Public:
+            <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
     {
         // if !Self::is_submittable_block_now(block_number) {
@@ -1059,8 +1065,8 @@ where
         block_number: T::BlockNumber,
         account_id: T::AccountId,
     ) -> Result<(), &'static str>
-    where
-        <T as frame_system::offchain::SigningTypes>::Public:
+        where
+            <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
     {
         // let price_source_list = Self::get_delimited_price_source_list(Self::get_price_source_list(T::UseOnChainPriceRequest::get()), block_number.into(), max_request_count);
@@ -1072,7 +1078,7 @@ where
         for (price_key, price_option, fraction_length, json_number_value) in price_result {
             if price_option.is_some() {
                 // record price to vec!
-                price_list.push((
+                price_list.push(PricePayloadSubPrice(
                     price_key,
                     price_option.unwrap(),
                     fraction_length,
@@ -1085,7 +1091,7 @@ where
 
         if price_list.len() > 0 {
             // -- Sign using any account
-            let mut sign_public_keys = Vec::new();
+            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
             // sign_public_keys.push(account_id.clone().into());
             // OcwAuthId::try_from::(account_id);
             // T::Public::from_ss58check("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty");
@@ -1116,7 +1122,7 @@ where
 
             // .with_filter(sign_public_keys)
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
-                .with_filter(sign_public_keys)
+                .with_filter(sign_public_keys) //TODO::disable for debug.
                 .send_unsigned_transaction(
                     |account| PricePayload {
                         price: price_list.clone(),
@@ -1149,7 +1155,7 @@ where
                     "?symbol=".as_bytes().to_vec(),
                     extract_key,
                 ]
-                .concat();
+                    .concat();
             } else {
                 request_url = [request_url, "_".as_bytes().to_vec(), extract_key].concat();
             }
@@ -1188,7 +1194,7 @@ where
 
         // In the new version, it is more important to control the request interval here.
         for (price_key, extract_key, parse_version, fraction_length, request_interval) in
-            source_list
+        source_list
         {
             if 2 == parse_version {
                 let round_number: u64 = block_number.into();
@@ -1369,7 +1375,7 @@ where
 
         // Make u64 with fraction length
         // let result_price = Self::format_price_fraction_to_u64(price_value.clone(), param_length);
-        log::info!(" TO=DEBUG:: price::");
+        // log::info!(" TO=DEBUG:: price::");
         let result_price = JsonNumberValue::new(price_value.clone()).toPrice(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.
@@ -1504,7 +1510,7 @@ where
             let mut is_fraction_changed = false;
             // check fraction length inconsistent.
             for (index, (_, _, _, check_fraction, old_json_number_val)) in
-                old_price.clone().iter().enumerate()
+            old_price.clone().iter().enumerate()
             {
                 if check_fraction != &fraction_length {
                     // TODO:: Instead new funciton. !
@@ -1784,7 +1790,8 @@ where
 
     fn validate_transaction_parameters_of_ares(
         block_number: &T::BlockNumber,
-        _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+        // _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
+        _price_list: Vec<PricePayloadSubPrice>,
     ) -> TransactionValidity {
         // // Now let's check if the transaction has any chance to succeed.
         // let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -1809,8 +1816,8 @@ where
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(de)?;
     Ok(s.as_bytes().to_vec())
