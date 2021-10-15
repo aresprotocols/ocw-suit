@@ -1184,18 +1184,17 @@ where
     }
 
     fn is_aura() -> bool {
-        false
-        // let digest = frame_system::Pallet::<T>::digest();
-        // let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-        // // let author = T::FindAuthor::find_author(pre_runtime_digests.clone());
-        // let mut is_aura = false;
-        // for (id, _) in pre_runtime_digests {
-        //     if id == AURA_ENGINE_ID {
-        //         is_aura = true;
-        //     }
-        // }
-        // let a = 1;
-        // is_aura
+        let digest = frame_system::Pallet::<T>::digest();
+        let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+        // let author = T::FindAuthor::find_author(pre_runtime_digests.clone());
+        let mut is_aura = false;
+        for (id, _) in pre_runtime_digests {
+            if id == AURA_ENGINE_ID {
+                is_aura = true;
+            }
+        }
+        let a = 1;
+        is_aura
     }
 
     // Make bulk request format array.
