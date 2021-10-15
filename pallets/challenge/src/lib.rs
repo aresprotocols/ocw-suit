@@ -172,9 +172,10 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config<I>, I: 'static> Pallet<T, I> {
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn check(
+        pub fn propose(
             origin: OriginFor<T>,
             dest: <T::Lookup as StaticLookup>::Source,
+            block_hash: T::Hash,
             #[pallet::compact] price: BalanceOf<T, I>,
             #[pallet::compact] deposit: BalanceOf<T, I>,
         ) -> DispatchResult {
@@ -184,18 +185,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(10_000)]
-        pub fn demo(origin: OriginFor<T>) -> DispatchResult {
-            let who: T::AccountId = ensure_signed(origin)?;
-            info!(
-                "is_aura: {:?}, is_authority: {:?}",
-                Self::is_aura(),
-                Self::is_authority(&who)
-            );
-            Ok(())
-        }
-
-        #[pallet::weight(10_000)]
-        pub fn deposit_by_bidder(
+        pub fn reserve(
             origin: OriginFor<T>,
             #[pallet::compact] deposit: BalanceOf<T, I>,
         ) -> DispatchResult {
@@ -211,15 +201,6 @@ pub mod pallet {
             ensure!(Self::is_authority(&who), Error::<T, I>::BadOrigin);
             let id = T::PalletId::get().0;
             T::Currency::reserve_named(&id, &who, deposit)
-        }
-
-        #[pallet::weight(10_000)]
-        pub fn enough(origin: OriginFor<T>) -> DispatchResult {
-            let who: T::AccountId = ensure_signed(origin)?;
-            let id = T::PalletId::get().0;
-            let balance = T::Currency::reserved_balance_named(&id, &who);
-            info!("reserved balance: {:?}", balance);
-            Ok(())
         }
     }
 
@@ -304,9 +285,9 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
     }
 }
 
-pub trait CheckFlow<AccountId, Hash, Balance> {
+pub trait ChallengeFlow<AccountId, Hash, Balance> {
     type Balance;
-    // fn prepare(who: &AccountId, proposal_hash: Hash, deposit: Self::Balance) -> DispatchResult;
+
     fn prepare(
         who: &AccountId,
         dest: &AccountId,
@@ -314,13 +295,13 @@ pub trait CheckFlow<AccountId, Hash, Balance> {
         deposit: Balance,
     ) -> DispatchResult;
 
-    fn slash(proposal_hash: Hash) -> DispatchResult;
+    fn slash_proposer(proposal_hash: Hash) -> DispatchResult;
 
-    fn pass(proposal_hash: Hash) -> DispatchResult;
+    fn slash_data_feed(proposal_hash: Hash) -> DispatchResult;
 }
 
 impl<T: Config<I>, I: 'static>
-    CheckFlow<
+    ChallengeFlow<
         <T as frame_system::Config>::AccountId,
         <T as frame_system::Config>::Hash,
         BalanceOf<T, I>,
@@ -359,7 +340,7 @@ impl<T: Config<I>, I: 'static>
         Ok(())
     }
 
-    fn slash(proposal_hash: <T as frame_system::Config>::Hash) -> DispatchResult {
+    fn slash_proposer(proposal_hash: <T as frame_system::Config>::Hash) -> DispatchResult {
         // ensure!(<Proposals<T,I>>::contains_key(&proposal_hash), Error::<T,I>::MissingProposal);
         let proposal =
             <Proposals<T, I>>::get(&proposal_hash).ok_or(Error::<T, I>::MissingProposal)?;
@@ -374,16 +355,14 @@ impl<T: Config<I>, I: 'static>
         Ok(())
     }
 
-    fn pass(proposal_hash: <T as frame_system::Config>::Hash) -> DispatchResult {
-        info!("abc");
+    fn slash_data_feed(proposal_hash: <T as frame_system::Config>::Hash) -> DispatchResult {
         let proposal =
             <Proposals<T, I>>::get(&proposal_hash).ok_or(Error::<T, I>::MissingProposal)?;
 
         let who = proposal.provider;
-        let dest = proposal.dest;
+        let dest = proposal.dest; //bidder
         let deposit = proposal.deposit;
         let id = T::PalletId::get().0;
-        info!("start");
         T::Currency::unreserve_named(&id, &who, deposit);
 
         //TODO Slash bidder
@@ -401,7 +380,10 @@ impl<T: Config<I>, I: 'static>
             let proposer_reward: Self::Balance = (_value * 5).saturated_into();
             let _who = who.clone();
             let _reward_acc = Self::payouts();
-            info!("who: {:?}, proposer_reward: {:?}, reward: {:?}, treasury_reward: {:?}", _who, proposer_reward, _reward_acc ,treasury_reward);
+            info!(
+                "who: {:?}, proposer_reward: {:?}, reward: {:?}, treasury_reward: {:?}",
+                _who, proposer_reward, _reward_acc, treasury_reward
+            );
             let _ = T::Currency::deposit_creating(&who, proposer_reward);
             let _ = T::Currency::deposit_creating(&Self::payouts(), treasury_reward);
 
