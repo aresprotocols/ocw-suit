@@ -59,10 +59,10 @@ pub mod crypto {
     pub struct OcwAuthId<T>(PhantomData<T>);
 
     impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-    for OcwAuthId<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
+        for OcwAuthId<T>
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -72,11 +72,11 @@ pub mod crypto {
     }
 
     impl<T: pallet::Config>
-    frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-    for OcwAuthId<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
+        frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+        for OcwAuthId<T>
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -118,9 +118,9 @@ use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
+use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
-use sp_consensus_aura::AURA_ENGINE_ID;
 
 type FractionLength = u32;
 type RequestInterval = u8;
@@ -143,9 +143,9 @@ pub mod pallet {
     /// This pallet's configuration trait
     #[pallet::config]
     pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config
-        where
-            sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
-            u64: From<<Self as frame_system::Config>::BlockNumber>,
+    where
+        sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
+        u64: From<<Self as frame_system::Config>::BlockNumber>,
     {
         /// The identifier type for an offchain worker.
         type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
@@ -158,12 +158,12 @@ pub mod pallet {
 
         /// ocw store key pair.
         type AuthorityAres: Member
-        + Parameter
-        + RuntimeAppPublic
-        + Default
-        + Ord
-        + MaybeSerializeDeserialize
-        + UncheckedFrom<[u8; 32]>;
+            + Parameter
+            + RuntimeAppPublic
+            + Default
+            + Ord
+            + MaybeSerializeDeserialize
+            + UncheckedFrom<[u8; 32]>;
 
         /// A type for retrieving the validators supposed to be online in a session.
         // type ValidatorSet: ValidatorSet<Self::AccountId> ;
@@ -187,7 +187,6 @@ pub mod pallet {
         #[pallet::constant]
         type UnsignedPriority: Get<TransactionPriority>;
 
-
         #[pallet::constant]
         type NeedVerifierCheck: Get<bool>;
 
@@ -210,12 +209,12 @@ pub mod pallet {
 
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-            <T as frame_system::offchain::SigningTypes>::Public:
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
@@ -237,17 +236,16 @@ pub mod pallet {
                     }
                 }
             }
-
         }
     }
 
     /// A public part of the pallet.
     #[pallet::call]
     impl<T: Config> Pallet<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         #[pallet::weight(0)]
         pub fn submit_price_unsigned_with_signed_payload(
@@ -258,7 +256,10 @@ pub mod pallet {
             // This ensures that the function can only be called via unsigned transaction.
             ensure_none(origin)?;
 
-            log::info!("$$$$ = {:?} = UNDER submit_price_unsigned_with_signed_payload ", <system::Pallet<T>>::block_number());
+            log::info!(
+                "$$$$ = {:?} = UNDER submit_price_unsigned_with_signed_payload ",
+                <system::Pallet<T>>::block_number()
+            );
 
             // Nodes with the right to increase prices
             let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
@@ -267,8 +268,9 @@ pub mod pallet {
 
             let mut price_key_list = Vec::new();
             // for (price_key, price, fraction_length, json_number_value) in price_list.clone() {
-            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value) in price_list.clone() {
-
+            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value) in
+                price_list.clone()
+            {
                 // Add the price to the on-chain list, but mark it as coming from an empty address.
                 // log::info!(" Call add_price {:?}", sp_std::str::from_utf8(&price_key));
                 Self::add_price(
@@ -290,7 +292,10 @@ pub mod pallet {
 
             // println!("--- update_last_price_list_for_author {:?}, public={:?}", price_key_list, price_payload.public.clone().into_account());
             // update last author
-            Self::update_last_price_list_for_author(price_key_list, price_payload.public.clone().into_account());
+            Self::update_last_price_list_for_author(
+                price_key_list,
+                price_payload.public.clone().into_account(),
+            );
 
             // Set jump block
             let jump_block = price_payload.jump_block;
@@ -306,7 +311,6 @@ pub mod pallet {
                 ));
             }
 
-
             Ok(().into())
         }
 
@@ -316,7 +320,7 @@ pub mod pallet {
 
             <PricesRequests<T>>::mutate(|prices_request| {
                 for (index, (old_price_key, _, _, _, _)) in
-                prices_request.clone().into_iter().enumerate()
+                    prices_request.clone().into_iter().enumerate()
                 {
                     if &price_key == &old_price_key {
                         // remove old one
@@ -481,10 +485,10 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, T::AccountId),
@@ -501,18 +505,21 @@ pub mod pallet {
 
     #[pallet::validate_unsigned]
     impl<T: Config> ValidateUnsigned for Pallet<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         type Call = Call<T>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
             if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
-            call
+                call
             {
-                log::info!("$$$$ = {:?} = FIRST validate_unsigned ", <system::Pallet<T>>::block_number());
+                log::info!(
+                    "$$$$ = {:?} = FIRST validate_unsigned ",
+                    <system::Pallet<T>>::block_number()
+                );
                 let mut find_validator = !T::NeedVerifierCheck::get();
                 if false == find_validator {
                     // check exists
@@ -551,7 +558,6 @@ pub mod pallet {
     // #[pallet::getter(fn prices_trace)]
     // pub(super) type PricesTrace<T: Config> =
     // StorageValue<_, Vec<(u64, T::AccountId, T::AccountId)>, ValueQuery>;
-
 
     /// The lookup table for names.
     #[pallet::storage]
@@ -641,19 +647,14 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn jump_block_number)]
-    pub(super) type JumpBlockNumber<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        Vec<u8>,
-        u64,
-    >;
+    pub(super) type JumpBlockNumber<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, u64>;
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config>
-        where
-            AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         pub _phantom: sp_std::marker::PhantomData<T>,
         pub request_base: Vec<u8>,
@@ -664,10 +665,10 @@ pub mod pallet {
 
     #[cfg(feature = "std")]
     impl<T: Config> Default for GenesisConfig<T>
-        where
-            AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn default() -> Self {
             GenesisConfig {
@@ -682,10 +683,10 @@ pub mod pallet {
 
     #[pallet::genesis_build]
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
-        where
-            AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+    where
+        AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn build(&self) {
             if !self.price_requests.is_empty() {
@@ -774,10 +775,10 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayloadSubPrice (Vec<u8>, u64, FractionLength, JsonNumberValue);
+pub struct PricePayloadSubPrice(Vec<u8>, u64, FractionLength, JsonNumberValue);
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PricePayloadSubJumpBlock (Vec<u8>, RequestInterval); // price_key ,request_interval
+pub struct PricePayloadSubJumpBlock(Vec<u8>, RequestInterval); // price_key ,request_interval
 
 // Impl debug.
 impl fmt::Debug for PricePayloadSubJumpBlock {
@@ -794,10 +795,10 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
 }
 
 impl<T: Config> Pallet<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
-// <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
+where
+    sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    u64: From<<T as frame_system::Config>::BlockNumber>,
+    // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
         let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
@@ -837,12 +838,11 @@ impl<T: Config> Pallet<T>
         block_number: T::BlockNumber,
         account_id: T::AccountId,
     ) -> Result<(), &'static str>
-        where
+    where
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres> ,
-            <T as frame_system::offchain::SigningTypes>::Public:
+        <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
     {
-
         let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number, account_id); // PriceKey::PRICE_KEY_IS_ETH
         if let Err(e) = res {
             log::error!(
@@ -1038,15 +1038,16 @@ impl<T: Config> Pallet<T>
         block_number: T::BlockNumber,
         account_id: T::AccountId,
     ) -> Result<(), &'static str>
-        where
-            <T as frame_system::offchain::SigningTypes>::Public:
+    where
+        <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
     {
         let mut price_list = Vec::new();
 
-        let (price_result,jump_block) = Self::fetch_bulk_price_with_http(block_number, account_id.clone(), 2)
-            .ok()
-            .unwrap();
+        let (price_result, jump_block) =
+            Self::fetch_bulk_price_with_http(block_number, account_id.clone(), 2)
+                .ok()
+                .unwrap();
 
         // println!(" == save_fetch_ares_price_and_send_payload_signed = price_result ={:?}, jump_block ={:?}", &price_result, &jump_block);
 
@@ -1114,7 +1115,7 @@ impl<T: Config> Pallet<T>
                     "?symbol=".as_bytes().to_vec(),
                     extract_key,
                 ]
-                    .concat();
+                .concat();
             } else {
                 request_url = [request_url, "_".as_bytes().to_vec(), extract_key].concat();
             }
@@ -1127,21 +1128,31 @@ impl<T: Config> Pallet<T>
         fomat_data: Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>,
         account: T::AccountId,
         block_number: T::BlockNumber,
-    )
-        -> (Vec<(Vec<u8>, Vec<u8>, FractionLength)>, Vec<PricePayloadSubJumpBlock>)
-    {
+    ) -> (
+        Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
+        Vec<PricePayloadSubJumpBlock>,
+    ) {
         // isNeedUpdateJumpBlock
         let mut new_format_data = Vec::new();
         let mut jump_format_data = Vec::new();
 
-        fomat_data.iter().any(|(price_key,prase_key, fraction_length, request_interval)| {
-            if Self::is_need_update_jump_block(price_key.clone(), account.clone() ) {
-                jump_format_data.push(PricePayloadSubJumpBlock(price_key.to_vec(), *request_interval));
-            }else{
-                new_format_data.push((price_key.to_vec(), prase_key.to_vec(), *fraction_length));
-            }
-            false
-        });
+        fomat_data.iter().any(
+            |(price_key, prase_key, fraction_length, request_interval)| {
+                if Self::is_need_update_jump_block(price_key.clone(), account.clone()) {
+                    jump_format_data.push(PricePayloadSubJumpBlock(
+                        price_key.to_vec(),
+                        *request_interval,
+                    ));
+                } else {
+                    new_format_data.push((
+                        price_key.to_vec(),
+                        prase_key.to_vec(),
+                        *fraction_length,
+                    ));
+                }
+                false
+            },
+        );
 
         (new_format_data, jump_format_data)
     }
@@ -1152,8 +1163,8 @@ impl<T: Config> Pallet<T>
             return false;
         }
         match Self::get_last_price_author(price_key) {
-            None => { false }
-            Some(x) => { x == account }
+            None => false,
+            Some(x) => x == account,
         }
     }
 
@@ -1191,7 +1202,6 @@ impl<T: Config> Pallet<T>
     fn make_bulk_price_format_data(
         block_number: T::BlockNumber,
     ) -> Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)> {
-
         let mut format = Vec::new();
 
         // price_key, request_url, parse_version, fraction_length
@@ -1201,10 +1211,10 @@ impl<T: Config> Pallet<T>
 
         // In the new version, it is more important to control the request interval here.
         for (price_key, extract_key, parse_version, fraction_length, request_interval) in
-        source_list
+            source_list
         {
             if 2 == parse_version {
-                let mut round_number: u64 = block_number.into() ;
+                let mut round_number: u64 = block_number.into();
                 round_number += Self::get_jump_block_number(price_key.clone());
                 let remainder: u64 = (round_number % request_interval as u64).into();
                 if 0 == remainder {
@@ -1230,17 +1240,19 @@ impl<T: Config> Pallet<T>
         block_number: T::BlockNumber,
         account_id: T::AccountId,
         version_num: u8,
-    ) -> Result<(Vec<
+    ) -> Result<
         (
-            Vec<u8>, Option<u64>, FractionLength, NumberValue)>,
-                 Vec<PricePayloadSubJumpBlock>
-    ),
-        http::Error> {
+            Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)>,
+            Vec<PricePayloadSubJumpBlock>,
+        ),
+        http::Error,
+    > {
         // Get current available price list.
         let format_arr = Self::make_bulk_price_format_data(block_number);
 
         // Filter format arr, separate jump block data.
-        let (format_arr, jump_arr) = Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
+        let (format_arr, jump_arr) =
+            Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
 
         // make request url
         let request_url = Self::make_bulk_price_request_url(format_arr.clone());
@@ -1279,7 +1291,10 @@ impl<T: Config> Pallet<T>
             log::warn!("Error:: Extracting body, No UTF8 body");
             http::Error::Unknown
         })?;
-        Ok((Self::bulk_parse_price_of_ares(body_str, format_arr), jump_arr))
+        Ok((
+            Self::bulk_parse_price_of_ares(body_str, format_arr),
+            jump_arr,
+        ))
     }
 
     /// Fetch current price and return the result in cents.
@@ -1528,7 +1543,7 @@ impl<T: Config> Pallet<T>
             let mut is_fraction_changed = false;
             // check fraction length inconsistent.
             for (index, (_, _, _, check_fraction, old_json_number_val)) in
-            old_price.clone().iter().enumerate()
+                old_price.clone().iter().enumerate()
             {
                 if check_fraction != &fraction_length {
                     // TODO:: Instead new funciton. !
@@ -1671,12 +1686,8 @@ impl<T: Config> Pallet<T>
         if 0 < price_list_of_pool.len() {
             for (index, check_price) in price_list_of_pool.iter().enumerate() {
                 let offset_percent = match check_price.0 {
-                    x if &x > &average => {
-                        ((x - average) * 100) / average
-                    }
-                    x if &x < &average => {
-                        ((average - x) * 100) / average
-                    }
+                    x if &x > &average => ((x - average) * 100) / average,
+                    x if &x < &average => ((average - x) * 100) / average,
                     _ => 0,
                 };
                 if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
@@ -1778,26 +1789,28 @@ impl<T: Config> Pallet<T>
 
     // handleCalculateJumpBlock((interval,jump_block))
     fn handle_calculate_jump_block(jump_format: (u64, u64)) -> (u64, u64) {
-
-        let (interval,jump_block) = jump_format;
+        let (interval, jump_block) = jump_format;
         assert!(interval > 0, "The minimum interval value is 1");
 
         let new_jump_block = match jump_block.checked_sub(1) {
-            None => { interval.saturating_sub(1) }
-            Some(x) => { jump_block.saturating_sub(1) }
+            None => interval.saturating_sub(1),
+            Some(x) => jump_block.saturating_sub(1),
         };
         (interval, new_jump_block)
     }
 
     // Increase jump block number, PARAM:: price_key, interval
     fn increase_jump_block_number(price_key: Vec<u8>, interval: u64) -> (u64, u64) {
-        let (old_interval, jump_number) = Self::handle_calculate_jump_block((interval, Self::get_jump_block_number(price_key.clone())));
+        let (old_interval, jump_number) = Self::handle_calculate_jump_block((
+            interval,
+            Self::get_jump_block_number(price_key.clone()),
+        ));
         <JumpBlockNumber<T>>::insert(&price_key, jump_number.clone());
         (old_interval, jump_number)
     }
 
     // Get jump block number
-    fn get_jump_block_number(price_key:Vec<u8>) -> u64 {
+    fn get_jump_block_number(price_key: Vec<u8>) -> u64 {
         <JumpBlockNumber<T>>::get(&price_key).unwrap_or(0)
     }
 
@@ -1849,8 +1862,8 @@ impl<T: Config> Pallet<T>
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(de)?;
     Ok(s.as_bytes().to_vec())
