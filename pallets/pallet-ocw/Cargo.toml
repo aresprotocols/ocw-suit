@@ -34,6 +34,7 @@ sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'h
 
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 
 [features]
 default = ["std"]

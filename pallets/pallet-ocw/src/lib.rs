@@ -285,11 +285,6 @@ pub mod pallet {
                 event_result.push((price_key, price, fraction_length));
             }
 
-            Self::deposit_event(Event::NewPrice(
-                event_result,
-                price_payload.public.clone().into_account(),
-            ));
-
             // println!("--- update_last_price_list_for_author {:?}, public={:?}", price_key_list, price_payload.public.clone().into_account());
             // update last author
             Self::update_last_price_list_for_author(
@@ -305,12 +300,16 @@ pub mod pallet {
                     // println!(" DEBUG:: PricePayloadSubJumpBlock = > {:?}",PricePayloadSubJumpBlock(price_key.clone(), interval));
                     Self::increase_jump_block_number(price_key, interval as u64);
                 }
-                Self::deposit_event(Event::SetJumpBlock(
-                    jump_block,
-                    price_payload.public.clone().into_account(),
-                ));
+                // Self::deposit_event(Event::SetJumpBlock(
+                //     jump_block,
+                //     price_payload.public.clone().into_account(),
+                // ));
             }
-
+            Self::deposit_event(Event::NewPrice(
+                event_result,
+                jump_block,
+                price_payload.public.clone().into_account(),
+            ));
             Ok(().into())
         }
 
@@ -491,8 +490,8 @@ pub mod pallet {
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         // (price_key, price_val, fraction len)
-        NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, T::AccountId),
-        SetJumpBlock(Vec<PricePayloadSubJumpBlock>, T::AccountId),
+        NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, Vec<PricePayloadSubJumpBlock>, T::AccountId),
+        // SetJumpBlock(Vec<PricePayloadSubJumpBlock>, T::AccountId),
         // Average price update.
         RevokePriceRequest(Vec<u8>),
         AddPriceRequest(Vec<u8>, Vec<u8>, u32, FractionLength),
@@ -1221,12 +1220,12 @@ where
                     let debug_price_key = price_key.clone();
                     // let debug_extract_key = price_key.clone();
                     // debug_arr.push((sp_std::str::from_utf8(&debug_price_key), sp_std::str::from_utf8(&debug_extract_key), fraction_length.clone()));
-                    log::info!(
-                        " LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}",
-                        &request_interval,
-                        &block_number,
-                        &sp_std::str::from_utf8(&debug_price_key)
-                    );
+                    // log::info!(
+                    //     " LIN::DEBUG B:: BN= {:?} request_interval = {:?} , key = {:?}",
+                    //     &block_number,
+                    //     &request_interval,
+                    //     &sp_std::str::from_utf8(&debug_price_key)
+                    // );
                     format.push((price_key, extract_key, fraction_length, request_interval));
                 }
             }
