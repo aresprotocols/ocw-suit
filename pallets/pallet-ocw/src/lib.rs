@@ -174,7 +174,7 @@ pub mod pallet {
                     log::warn!(target: "pallet::ocw::offchain_worker", "Not found author.");
                 }
                 Some(author) => {
-                    log::info!("🚅 Ocw offchain start {:?} ", &author);
+                    log::info!("🚅 ⛔ ❗ Ocw offchain start {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                     if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
                         // Try to get ares price.
@@ -182,7 +182,7 @@ pub mod pallet {
                             Ok(v) => log::info!("🚅 Ares OCW price acquisition completed."),
                             Err(e) => log::warn!(
                                 target: "pallet::ocw::offchain_worker",
-                                "⚠️ Ares price has a problem : {:?}",
+                                "❗ Ares price has a problem : {:?}",
                                 e
                             ),
                         }
@@ -835,7 +835,7 @@ where
         } else {
             log::warn!(
                 target: "pallet::ocw::get_local_storage_request_domain",
-                "⚠️ Not found request base url."
+                "❗ Not found request base url."
             );
         }
         // log::info!("Ares local request base : {:?} .", &result_base_str);
@@ -1014,7 +1014,7 @@ where
                     },
                 )
                 .ok_or(
-                    "⚠️ No local accounts accounts available, `ares` StoreKey needs to be set.",
+                    "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
                 )?;
             result.map_err(|()| "⛔ Unable to submit transaction")?;
         }
@@ -1169,7 +1169,7 @@ where
 
         // request and return http body.
         if "" == request_url {
-            log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "⚠️ Ares http requests cannot be empty.");
+            log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ Ares http requests cannot be empty.");
             return Ok((Vec::new(), jump_arr));
         }
         log::info!(
@@ -1185,7 +1185,7 @@ where
         let response = pending.try_wait(deadline).map_err(|e| {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
-                "⚠️ The network cannot connect. http::Error::DeadlineReached error = {:?}",
+                "❗ The network cannot connect. http::Error::DeadlineReached error = {:?}",
                 e
             );
             http::Error::DeadlineReached
@@ -1193,7 +1193,7 @@ where
         if response.code != 200 {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
-                "⚠️ Unexpected http status code: {}",
+                "❗ Unexpected http status code: {}",
                 response.code
             );
             return Err(http::Error::Unknown);
@@ -1203,7 +1203,7 @@ where
         let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
-                "⚠️ Extracting body error, No UTF8 body!"
+                "❗ Extracting body error, No UTF8 body!"
             );
             http::Error::Unknown
         })?;
