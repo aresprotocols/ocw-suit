@@ -18,8 +18,6 @@ pub mod pallet {
 	use frame_support::sp_std::convert::TryInto;
 	use sp_runtime::app_crypto::sp_core::crypto::UncheckedFrom;
 
-	// type Aura<T> = pallet_aura::Pallet<T>;
-
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config  {
@@ -33,19 +31,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	impl<T: Config> IsMember<T::ValidatorId> for Pallet<T>
-		// where T::ValidatorId: PartialEq<<T::ValidatorSet as ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>
 	{
 		fn is_member(authority_id: &T::ValidatorId) -> bool {
-
-			log::info!(" ======BB======= LIN DEBUG:: offchain_worker , author = {:?}", &authority_id);
 			let encode_data: Vec<u8> = authority_id.encode();
 			assert!(32 == encode_data.len());
 			let raw: Result<[u8; 32], _> = encode_data.try_into();
 			let raw_data = raw.unwrap();
 			let member_authority = T::MemberAuthority::unchecked_from(raw_data);
-			log::info!(" ======BB======= LIN DEBUG:: offchain_worker , member_authority = {:?}", &member_authority);
 			T::Member::is_member(&member_authority)
-
 		}
 	}
 
