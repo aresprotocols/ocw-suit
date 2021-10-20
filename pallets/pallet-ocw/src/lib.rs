@@ -24,6 +24,8 @@ use sp_std::{prelude::*, str};
 #[cfg(test)]
 mod tests;
 
+pub mod aura_handler;
+
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
@@ -88,9 +90,6 @@ use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
-type FractionLength = u32;
-type RequestInterval = u8;
-
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -103,6 +102,8 @@ pub mod pallet {
     #[pallet::error]
     pub enum Error<T> {
         //
+        SubmitThresholdRangeError,
+        DruationNumberNotBeZero,
         UnknownAresPriceVersionNum,
     }
 
@@ -151,6 +152,12 @@ pub mod pallet {
 
         #[pallet::constant]
         type CalculationKind: Get<u8>;
+
+        type AuthorityCount: ValidatorCount;
+    }
+
+    pub trait ValidatorCount {
+        fn get_validators_count() -> u64;
     }
 
     #[pallet::pallet]
@@ -168,13 +175,15 @@ pub mod pallet {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
             let block_author = Self::get_block_author();
+            log::info!("❗❗❗ LINDEBUG:: author count = {:?}", T::AuthorityCount::get_validators_count());
 
             match block_author {
                 None => {
-                    log::warn!(target: "pallet::ocw::offchain_worker", "Not found author.");
+                    log::warn!(target: "pallet::ocw::offchain_worker", "❗ Not found author.");
                 }
                 Some(author) => {
-                    log::info!("🚅 ⛔ ❗ Ocw offchain start {:?} ", &author);
+                    log::info!("❗❗❗ LINDEBUG , {:?}", HexDisplay::from(&Self::make_purchase_price_id(author.clone(), 0)));
+                    log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
                     // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                     if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
                         // Try to get ares price.
@@ -505,17 +514,16 @@ pub mod pallet {
         }
     }
 
-    // #[pallet::storage]
-    // #[pallet::getter(fn next_unsigned_at)]
-    // pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+    #[pallet::storage]
+    #[pallet::getter(fn purchased_request_pool)]
+    pub(super) type PurchasedRequestPool<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        Vec<u8>, // purchased_id
+        PurchasedRequestData<T>,
+        ValueQuery,
+    >;
 
-    /// A vector of recently submitted prices.
-    // #[pallet::storage]
-    // #[pallet::getter(fn prices_trace)]
-    // pub(super) type PricesTrace<T: Config> =
-    // StorageValue<_, Vec<(u64, T::AccountId, T::AccountId)>, ValueQuery>;
-
-    /// The lookup table for names.
     #[pallet::storage]
     #[pallet::getter(fn last_price_author)]
     pub(super) type LastPriceAuthor<T: Config> = StorageMap<
@@ -534,14 +542,14 @@ pub mod pallet {
         Blake2_128Concat,
         Vec<u8>,
         // price, account, bolcknumber, FractionLength, JsonNumberValue
-        Vec<(
-            u64,
-            T::AccountId,
-            T::BlockNumber,
-            FractionLength,
-            JsonNumberValue,
-        )>,
-        // Vec<(u64, T::AccountId)>,
+        // Vec<(
+        //     u64,
+        //     T::AccountId,
+        //     T::BlockNumber,
+        //     FractionLength,
+        //     JsonNumberValue,
+        // )>,
+        Vec<AresPriceData<T>>,
         ValueQuery,
     >;
 
@@ -553,14 +561,14 @@ pub mod pallet {
         Blake2_128Concat,
         Vec<u8>,
         // price, account, bolcknumber, FractionLength, JsonNumberValue
-        Vec<(
-            u64,
-            T::AccountId,
-            T::BlockNumber,
-            FractionLength,
-            JsonNumberValue,
-        )>,
-        // Vec<(u64, T::AccountId)>,
+        // Vec<(
+        //     u64,
+        //     T::AccountId,
+        //     T::BlockNumber,
+        //     FractionLength,
+        //     JsonNumberValue,
+        // )>,
+        Vec<AresPriceData<T>>,
         ValueQuery,
     >;
 
@@ -662,93 +670,12 @@ pub mod pallet {
     }
 }
 
-// warp NumberValue
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct JsonNumberValue {
-    pub integer: u64,
-    pub fraction: u64,
-    pub fraction_length: u32,
-    pub exponent: u32,
-}
+pub mod structs;
+use structs::*;
+use hex;
+use sp_runtime::traits::UniqueSaturatedInto;
+use sp_core::hexdisplay::HexDisplay;
 
-//
-impl JsonNumberValue {
-    pub fn new(number_value: NumberValue) -> Self {
-        if number_value.integer < 0 || number_value.exponent < 0 {
-            panic!("Error source NumberValue integer or exponent");
-        }
-        Self {
-            fraction_length: number_value.fraction_length,
-            fraction: number_value.fraction,
-            exponent: number_value.exponent as u32,
-            integer: number_value.integer as u64,
-        }
-    }
-
-    pub fn toPrice(&self, fraction_number: FractionLength) -> u64 {
-        let mut price_fraction = self.fraction;
-        if price_fraction < 10u64.pow(fraction_number) {
-            price_fraction *= 10u64.pow(
-                fraction_number
-                    .checked_sub(self.fraction_length)
-                    .unwrap_or(0),
-            );
-        }
-        let exp = self
-            .fraction_length
-            .checked_sub(fraction_number)
-            .unwrap_or(0);
-        self.integer as u64 * (10u64.pow(fraction_number)) + (price_fraction / 10_u64.pow(exp))
-    }
-}
-
-#[cfg(feature = "std")]
-impl Default for JsonNumberValue {
-    fn default() -> Self {
-        Self {
-            fraction_length: 0,
-            fraction: 0,
-            exponent: 0,
-            integer: 0,
-        }
-    }
-}
-
-/// data required to submit a transaction.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayload<Public, BlockNumber> {
-    block_number: BlockNumber,
-    // price_key,price_val, fraction len
-    price: Vec<PricePayloadSubPrice>,
-    jump_block: Vec<PricePayloadSubJumpBlock>,
-    public: Public,
-}
-
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-    fn public(&self) -> T::Public {
-        self.public.clone()
-    }
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayloadSubPrice(Vec<u8>, u64, FractionLength, JsonNumberValue);
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PricePayloadSubJumpBlock(Vec<u8>, RequestInterval); // price_key ,request_interval
-
-// Impl debug.
-impl fmt::Debug for PricePayloadSubJumpBlock {
-    // `fmt` converts the vector of bytes inside the struct back to string for
-    //  more friendly display.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{{( price_key: {}, request_interval: {} )}}",
-            str::from_utf8(&self.0).map_err(|_| fmt::Error)?,
-            &self.1,
-        )
-    }
-}
 
 impl<T: Config> Pallet<T>
 where
@@ -855,88 +782,6 @@ where
         let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
         <T as pallet::Config>::FindAuthor::find_author(pre_runtime_digests)
     }
-    //
-    // fn fetch_local_price_request_info() -> Result<(), Error<T>> {
-    //
-    //     // let mut make_price_request_pool = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL);
-    //     // if let Some(local_request_info) = make_price_request_pool
-    //     //     .get::<Vec<u8>>()
-    //     //     .unwrap_or(Some(Vec::new())) {
-    //     //     log::info!("Ares local price request A: Data detected, try to parse.");
-    //     //     if let Some(price_json_str) = sp_std::str::from_utf8(&local_request_info).map_err(|_| {
-    //     //         log::warn!("Error:: Extracting storage format, No UTF8.");
-    //     //     }).ok() {
-    //     //         log::info!("Ares local price request: json data {:?}.", &price_json_str);
-    //     //         // to update local price storage.
-    //     //         // Self::update_local_price_storage(price_json_str);
-    //     //     }
-    //     //     // Clear data.
-    //     //     // make_price_request_pool.clear()
-    //     // }else{
-    //     //     // make_price_request_pool.set(&"{\"name\":\"linhai\"}".as_bytes().to_vec()) ;
-    //     //     log::info!(" Ares local price request: Waiting to insert data.");
-    //     // }
-    //
-    //     let mut storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
-    //     if let Some(request_base) = storage_request_base
-    //         .get::<Vec<u8>>()
-    //         .unwrap_or(Some(Vec::new()))
-    //     {
-    //         log::info!("Ares local request base B: Data detected, try to parse.");
-    //         if let Some(request_base_str) = sp_std::str::from_utf8(&request_base).map_err(|_| {
-    //             log::warn!("Error:: Extracting storage format, No UTF8.");
-    //         }).ok() {
-    //             log::info!("Ares local request base : json data {:?}.", &request_base_str);
-    //         }
-    //     } else {
-    //         log::warn!("Not found request base url.");
-    //     }
-    //
-    //     Ok(())
-    // }
-
-    // // TODO::Will be delete.
-    // fn get_local_storage_price_request_list() -> (StorageValueRef<'static>, Vec<LocalPriceRequestStorage>) {
-    //     let price_request_local_storage = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_LIST);
-    //     if let Some(mut price_request_vec) = price_request_local_storage.get::<Vec<LocalPriceRequestStorage>>().unwrap_or(Some(Vec::new())) {
-    //         return (price_request_local_storage, price_request_vec);
-    //     }
-    //     (price_request_local_storage, Vec::new())
-    // }
-
-    // // TODO::Will be delete.
-    // fn update_local_price_storage(price_json_str: &str) -> Result<Vec<LocalPriceRequestStorage>, ()> {
-    //
-    //     if let Some(new_price_request) = Self::extract_local_price_storage(price_json_str) {
-    //
-    //         if let (price_request_local_storage, mut price_request_vec) = Self::get_local_storage_price_request_list() {
-    //             if price_request_vec.len() > 0 {
-    //                 log::info!("Are local price request: OLD VALUE {:?}", &price_request_vec);
-    //                 for (index, local_price_request) in price_request_vec.clone().into_iter().enumerate() {
-    //                     if &new_price_request.price_key == &local_price_request.price_key {
-    //                         // kick out old value.
-    //                         price_request_vec.remove(index);
-    //                     }
-    //                 }
-    //                 // If not remove.
-    //                 if new_price_request.request_url != "".as_bytes().to_vec() {
-    //                     // Insert new request to storage
-    //                     price_request_vec.push(new_price_request);
-    //                 }
-    //                 // Save new request list.
-    //                 price_request_local_storage.set(&price_request_vec);
-    //                 return Ok(price_request_vec);
-    //             }else{
-    //                 // create local store
-    //                 let mut new_storage: Vec<LocalPriceRequestStorage> = Vec::new();
-    //                 new_storage.push(new_price_request);
-    //                 price_request_local_storage.set(&new_storage);
-    //                 return Ok(new_storage);
-    //             }
-    //         }
-    //     }
-    //     Err(())
-    // }
 
     // extract LocalPriceRequestStorage struct from json str
     fn extract_local_price_storage(price_json_str: &str) -> Option<LocalPriceRequestStorage> {
@@ -1440,7 +1285,81 @@ where
         <PricePoolDepth<T>>::get()
     }
 
-    //
+    // Calculate the purchased amount, related to the amount of data
+    fn calculate_purchased_amount(request_keys: &Vec<Vec<u8>>) -> u64 {
+        // TODO:: to be implement.
+        100
+    }
+
+    fn pay_to_purchase(who: T::AccountId, offer: u64) -> Result<(), Error<T>> {
+        // TODO:: to be implement.
+        Ok(().into())
+    }
+
+    fn make_purchase_price_id(who: T::AccountId, add_up: u8) -> Vec<u8> {
+        // TODO:: to be implement.
+
+        // check add up
+        if add_up == u8::MAX {
+            panic!("⛔ Add up number too large.");
+        }
+
+        let account32: AccountId32 = who.clone().into();
+        let account_u8_32 = <AccountId32 as AsRef<[u8;32]>>::as_ref(&account32);
+        let mut account_vec: Vec<u8> = account_u8_32.to_vec();
+
+        // Get block number to u64
+        let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
+        let current_blocknumber: u64 = current_block_num.unique_saturated_into();
+        let mut current_bn_vec: Vec<u8> = current_blocknumber.encode();
+        account_vec.append(&mut current_bn_vec);
+        // Get add up number
+        let mut add_u8_vec: Vec<u8> = add_up.encode();
+        account_vec.append(&mut add_u8_vec);
+        account_vec
+
+        // Check id exists.
+        // <<T
+        // TODO::deving
+
+        // let b = sp_core::sr25519::Public::from_raw(*a);
+        // b.to_vec();
+        // let str = sp_std::str::from_utf8(&b);
+        // let purchase_id = HexDisplay::from(&account_vec.clone());
+        // // log::info!("Hex = {:?}", &purchase_id);
+        // println!("ID = {:?}",purchase_id.);
+        // Vec::new()
+    }
+
+    // submit price on chain.
+    fn ask_price (
+        who: T::AccountId,
+        offer: u64,
+        submit_threshold: u8,
+        max_duration: u64,
+        request_keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<u8>, Error<T>> {
+
+        // Judge submit_threshold range is (0,100]
+        if 0 >= submit_threshold || 100 < submit_threshold {
+            return Err(Error::<T>::SubmitThresholdRangeError);
+        }
+
+        if 0 >= max_duration {
+            return Err(Error::<T>::DruationNumberNotBeZero);
+        }
+
+        // make purchase price id
+        let purchase_id = Self::make_purchase_price_id(who, 254);
+
+        // println!("purchase_id = {:?}", purchase_id);
+        // check whether purchase_id exists.
+
+
+        Err(Error::<T>::UnknownAresPriceVersionNum)
+    }
+
+    // add price on chain
     fn add_price(
         who: T::AccountId,
         price: u64,
@@ -1458,10 +1377,11 @@ where
             let mut old_price = <AresPrice<T>>::get(key_str.clone());
             let mut is_fraction_changed = false;
             // check fraction length inconsistent.
-            for (index, (_, _, _, check_fraction, old_json_number_val)) in
+            // for (index, (_, _, _, check_fraction, old_json_number_val)) in
+            for (index, price_data) in
                 old_price.clone().iter().enumerate()
             {
-                if check_fraction != &fraction_length {
+                if &price_data.fraction_len != &fraction_length {
                     // TODO:: Instead new funciton. !
                     // old_price.clear();
                     is_fraction_changed = true;
@@ -1480,51 +1400,64 @@ where
 
                 let mut old_value = (*value).clone();
                 if is_fraction_changed {
-                    old_value = match (*value).clone() {
-                        (
-                            old_price,
-                            account_id,
-                            b_number,
-                            old_fraction_lenght,
-                            json_number_value,
-                        ) => (
-                            json_number_value.toPrice(fraction_length.clone()),
-                            account_id,
-                            b_number,
-                            fraction_length.clone(),
-                            json_number_value,
-                        ),
-                    };
+                    // old_value = match (*value).clone() {
+                    //     (
+                    //         old_price,
+                    //         account_id,
+                    //         b_number,
+                    //         old_fraction_lenght,
+                    //         json_number_value,
+                    //     ) => (
+                    //         json_number_value.toPrice(fraction_length.clone()),
+                    //         account_id,
+                    //         b_number,
+                    //         fraction_length.clone(),
+                    //         json_number_value,
+                    //     ),
+                    // };
+                    old_value = (*value).clone();
+                    old_value.price = old_value.raw_number.toPrice(fraction_length.clone());
+                    old_value.fraction_len = fraction_length.clone();
                 }
 
                 // let new_value = old_value;
                 new_price.push(old_value);
             }
 
-            new_price.push((
-                price.clone(),
-                who.clone(),
-                current_block,
-                fraction_length,
-                json_number_value,
-            ));
+            // new_price.push((
+            //     price.clone(),
+            //     who.clone(),
+            //     current_block,
+            //     fraction_length,
+            //     json_number_value,
+            // ));
+
+            new_price.push(AresPriceData {
+                price: price.clone(),
+                account_id: who.clone(),
+                create_bn: current_block,
+                fraction_len: fraction_length,
+                raw_number: json_number_value,
+            });
+
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         } else {
             // push a new value.
-            let mut new_price: Vec<(
-                u64,
-                T::AccountId,
-                T::BlockNumber,
-                FractionLength,
-                JsonNumberValue,
-            )> = Vec::new();
-            new_price.push((
-                price.clone(),
-                who.clone(),
-                current_block,
-                fraction_length,
-                json_number_value,
-            ));
+            let mut new_price: Vec<AresPriceData<T>> = Vec::new();
+            // new_price.push((
+            //     price.clone(),
+            //     who.clone(),
+            //     current_block,
+            //     fraction_length,
+            //     json_number_value,
+            // ));
+            new_price.push(AresPriceData{
+                price: price.clone(),
+                account_id: who.clone(),
+                create_bn: current_block,
+                fraction_len: fraction_length,
+                raw_number: json_number_value,
+            });
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         }
 
@@ -1602,7 +1535,7 @@ where
         // Pick abnormal price.
         if 0 < price_list_of_pool.len() {
             for (index, check_price) in price_list_of_pool.iter().enumerate() {
-                let offset_percent = match check_price.0 {
+                let offset_percent = match check_price.price {
                     x if &x > &average => ((x - average) * 100) / average,
                     x if &x < &average => ((average - x) * 100) / average,
                     _ => 0,
@@ -1677,20 +1610,34 @@ where
         prices_info
             .clone()
             .into_iter()
-            .any(|(_, _, _, tmp_fraction, _)| {
+            // .any(|(_, _, _, tmp_fraction, _)| {
+            //     if 0 == fraction_length_of_pool {
+            //         fraction_length_of_pool = tmp_fraction;
+            //     }
+            //     if fraction_length_of_pool != tmp_fraction {
+            //         panic!("Inconsistent of fraction lenght.")
+            //     }
+            //     false
+            // });
+            .any(|tmp_price_data| {
                 if 0 == fraction_length_of_pool {
-                    fraction_length_of_pool = tmp_fraction;
+                    fraction_length_of_pool = tmp_price_data.fraction_len;
                 }
-                if fraction_length_of_pool != tmp_fraction {
+                if fraction_length_of_pool != tmp_price_data.fraction_len {
                     panic!("Inconsistent of fraction lenght.")
                 }
                 false
             });
 
+        // let prices: Vec<u64> = prices_info
+        //     .into_iter()
+        //     .map(|(price, _, _, _, _)| price)
+        //     .collect();
         let prices: Vec<u64> = prices_info
             .into_iter()
-            .map(|(price, _, _, _, _)| price)
+            .map(|price_data| price_data.price)
             .collect();
+
         if prices.is_empty() {
             return None;
         }
@@ -1714,6 +1661,37 @@ where
             Some(x) => jump_block.saturating_sub(1),
         };
         (interval, new_jump_block)
+    }
+
+    // Get validator count number
+    fn handler_validator_count() -> u64 {
+        T::AuthorityCount::get_validators_count()
+    }
+
+    // Split purchased_request by the commas.
+    fn extract_purchased_request(request: Vec<u8>) -> Vec<Vec<u8>> {
+        // convert to str
+        let purchased_str = sp_std::str::from_utf8(request.as_slice());
+        if purchased_str.is_err() {
+            return Vec::new();
+        }
+        let purchased_str = purchased_str.unwrap();
+        // remove space char.
+        // let purchased_str: Vec<char> = purchased_str.chars().filter(|c|{!c.is_whitespace()}).collect();
+        // let purchased_str: Vec<u8> = purchased_str.iter().map(|x|{ x.as_()}).collect();
+        // // let purchased_str = sp_std::str::from_utf8(purchased_str.as_slice()).unwrap();
+
+        let purchased_vec: Vec<&str> = purchased_str.split(',').collect();
+
+        let mut result = Vec::new();
+        for x in purchased_vec {
+            if x != "" {
+                if false == result.iter().any(|a| a == &x.as_bytes().to_vec()) {
+                    result.push(x.as_bytes().to_vec());
+                }
+            }
+        }
+        result
     }
 
     // Increase jump block number, PARAM:: price_key, interval
