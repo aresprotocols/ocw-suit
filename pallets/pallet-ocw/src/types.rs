@@ -5,6 +5,23 @@ pub type FractionLength = u32;
 pub type RequestInterval = u8;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PurchasedSourceRawKeys
+{
+    pub purchase_id: Vec<u8>,
+    pub raw_source_keys: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
+}
+
+impl Default for PurchasedSourceRawKeys
+{
+    fn default() -> Self {
+        Self {
+            purchase_id: Vec::new(),
+            raw_source_keys: Vec::new(),
+        }
+    }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PurchasedRequestData<T: Config>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           u64: From<<T as frame_system::Config>::BlockNumber>,
@@ -13,8 +30,7 @@ pub struct PurchasedRequestData<T: Config>
     pub offer: u64,
     pub submit_threshold: u8,
     pub max_duration: u64,
-    pub request_keys: Vec<u8>,
-    pub request_num: u64,
+    pub request_keys: Vec<Vec<u8>>,
 }
 
 impl <T: Config> Default for PurchasedRequestData<T>
@@ -28,7 +44,6 @@ impl <T: Config> Default for PurchasedRequestData<T>
             submit_threshold: 0,
             max_duration: 0,
             request_keys: Vec::new(),
-            request_num: 0,
         }
     }
 }
@@ -39,6 +54,17 @@ pub struct PurchasedAvgPriceData
     pub create_bn: u64,
     pub reached_type: u8,
     pub price_data: (u64, FractionLength),
+}
+
+impl Default for PurchasedAvgPriceData
+{
+    fn default() -> Self {
+        Self {
+            create_bn: 0,
+            reached_type: 0,
+            price_data: (0, 0)
+        }
+    }
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -130,6 +156,26 @@ pub struct PricePayload<Public, BlockNumber> {
     pub public: Public,
 }
 
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PurchasedPricePayload<Public, BlockNumber> {
+    pub block_number: BlockNumber,
+    pub purchase_id: Vec<u8>,
+    pub price: Vec<PricePayloadSubPrice>,
+    pub public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::BlockNumber> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue);
 
@@ -150,8 +196,3 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
     }
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-    fn public(&self) -> T::Public {
-        self.public.clone()
-    }
-}
