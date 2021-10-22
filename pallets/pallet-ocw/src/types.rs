@@ -1,10 +1,47 @@
 
 use super::*;
+use sp_core::hexdisplay::HexDisplay;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
 
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PurchasedDefaultData
+{
+    pub submit_threshold: u8,
+    pub max_duration: u64,
+    pub unit_price: u64,
+}
+
+impl PurchasedDefaultData {
+    pub fn new(submit_threshold: u8, max_duration: u64, unit_price: u64) -> Self {
+        if submit_threshold == 0 || submit_threshold > 100 {
+            panic!("Submit Threshold range is (0 - 100] ");
+        }
+        if max_duration == 0 {
+            panic!("Max Duration can not be 0.");
+        }
+        Self {
+            submit_threshold,
+            max_duration,
+            unit_price,
+        }
+    }
+}
+
+impl Default for PurchasedDefaultData
+{
+    fn default() -> Self {
+        Self {
+            submit_threshold: 60,
+            max_duration: 14400,
+            unit_price: 100_000_000_000_000,
+        }
+    }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PurchasedSourceRawKeys
 {
     pub purchase_id: Vec<u8>,
@@ -21,7 +58,32 @@ impl Default for PurchasedSourceRawKeys
     }
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+// Impl debug.
+impl fmt::Debug for PurchasedSourceRawKeys {
+    // `fmt` converts the vector of bytes inside the struct back to string for
+    //  more friendly display.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let raw_keys: Vec<_> = self.raw_source_keys.iter().map(
+            |(price_key,parse_key,fraction_len)| {
+                (
+                    str::from_utf8(price_key).unwrap(),
+                    str::from_utf8(parse_key).unwrap(),
+                    fraction_len
+                )
+            }
+        ).collect();
+        write!(
+            f,
+            "{{( purchase_id: {:?}, raw_source_keys: {:?} )}}",
+            HexDisplay::from(&self.purchase_id),
+            // str::from_utf8(&self.0).map_err(|_| fmt::Error)?,
+            raw_keys,
+        )
+    }
+}
+
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           u64: From<<T as frame_system::Config>::BlockNumber>,
@@ -45,6 +107,31 @@ impl <T: Config> Default for PurchasedRequestData<T>
             max_duration: 0,
             request_keys: Vec::new(),
         }
+    }
+}
+
+// Impl debug.
+impl <T: Config> fmt::Debug for PurchasedRequestData<T>
+    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+          u64: From<<T as frame_system::Config>::BlockNumber>,
+{
+    // `fmt` converts the vector of bytes inside the struct back to string for
+    //  more friendly display.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let request_keys: Vec<_> = self.request_keys.iter().map(
+            |x| {
+                str::from_utf8(x).unwrap()
+            }
+        ).collect();
+        write!(
+            f,
+            "{{( account_id: {:?}, offer: {:?}, submit_threshold: {:?}, max_duration: {:?}, request_keys: {:?} )}}",
+            &self.account_id,
+            &self.offer,
+            &self.submit_threshold,
+            &self.max_duration,
+            request_keys,
+        )
     }
 }
 
@@ -161,6 +248,20 @@ impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumbe
         self.public.clone()
     }
 }
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PurchasedForceCleanPayload<Public, BlockNumber> {
+    pub block_number: BlockNumber,
+    pub purchase_id_list: Vec<Vec<u8>>,
+    pub public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for PurchasedForceCleanPayload<T::Public, T::BlockNumber> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PurchasedPricePayload<Public, BlockNumber> {

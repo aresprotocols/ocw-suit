@@ -34,6 +34,9 @@ pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_d
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
+pub const PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP: u8 = 1;
+pub const PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN: u8 = 2;
+
 /// the types with this pallet-specific identifier.
 pub mod crypto {
     use super::KEY_TYPE;
@@ -81,7 +84,7 @@ pub mod crypto {
 use crate::crypto::OcwAuthId;
 use frame_support::sp_runtime::app_crypto::{Public, TryFrom};
 use frame_support::sp_runtime::sp_std::convert::TryInto;
-use frame_support::sp_runtime::traits::AccountIdConversion;
+use frame_support::sp_runtime::traits::{AccountIdConversion, IdentifyAccount, IsMember};
 use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
@@ -175,26 +178,43 @@ pub mod pallet {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
             let block_author = Self::get_block_author();
-            log::info!("❗❗❗ LINDEBUG:: author count = {:?}", T::AuthorityCount::get_validators_count());
-
             match block_author {
                 None => {
                     log::warn!(target: "pallet::ocw::offchain_worker", "❗ Not found author.");
                 }
                 Some(author) => {
-                    log::info!("❗❗❗ LINDEBUG , {:?}", HexDisplay::from(&Self::make_purchase_price_id(author.clone(), 0)));
-                    log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
-                    // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
-                    if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
-                        // Try to get ares price.
-                        match Self::ares_price_worker(block_number, author) {
-                            Ok(v) => log::info!("🚅 Ares OCW price acquisition completed."),
-                            Err(e) => log::warn!(
-                                target: "pallet::ocw::offchain_worker",
-                                "❗ Ares price has a problem : {:?}",
-                                e
-                            ),
-                        }
+                    // log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
+                    // // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
+                    // if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
+                    //     // Try to get ares price.
+                    //     match Self::ares_price_worker(block_number.clone(), author.clone()) {
+                    //         Ok(v) => log::info!("🚅 @ Ares OCW price acquisition completed."),
+                    //         Err(e) => log::warn!(
+                    //             target: "pallet::ocw::offchain_worker",
+                    //             "❗ Ares price has a problem : {:?}",
+                    //             e
+                    //         ),
+                    //     }
+                    // }
+
+                    //
+                    match Self::ares_purchased_worker(block_number.clone(), author.clone()) {
+                        Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
+                        Err(e) => log::warn!(
+                            target: "pallet::ocw::offchain_worker",
+                            "❗ Ares purchased price has a problem : {:?}",
+                            e
+                        ),
+                    }
+                    //
+
+                    match Self::ares_purchased_checker(block_number.clone(), author.clone()) {
+                        Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
+                        Err(e) => log::warn!(
+                            target: "pallet::ocw::offchain_worker",
+                            "❗ Ares purchased price has a problem : {:?}",
+                            e
+                        ),
                     }
                 }
             }
@@ -209,6 +229,49 @@ pub mod pallet {
         u64: From<<T as frame_system::Config>::BlockNumber>,
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
+        #[pallet::weight(1000)]
+        pub fn submit_ask_price (
+            origin: OriginFor<T>,
+            request_keys: Vec<u8>,
+        ) -> DispatchResultWithPostInfo  {
+            let who = ensure_signed(origin)?;
+            let purchased_default = <PurchasedDefaultSetting<T>>::get();
+            let submit_threshold =purchased_default.submit_threshold;
+            let max_duration = purchased_default.max_duration;
+            let request_keys = Self::extract_purchased_request(request_keys);
+            // println!("KEYS len = {:?} ", request_keys.len());
+            // println!("KEYS len 1 = {:?} ", sp_std::str::from_utf8(&request_keys[0]));
+            // println!("KEYS len 2 = {:?} ", sp_std::str::from_utf8(&request_keys[1]));
+
+            let offer = Self::calculate_purchased_amount(purchased_default.unit_price, &request_keys);  // purchased_default.unit_price.saturating_mul(request_keys.len() as u64);
+
+            // TODO:: Check if the balance is sufficient
+
+            // Up request on chain.
+            Self::ask_price(who, offer, submit_threshold, max_duration, request_keys);
+
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn submit_forced_clear_purchased_price_payload_signed (
+            origin: OriginFor<T>,
+            price_payload: PurchasedForceCleanPayload<T::Public, T::BlockNumber>,
+            _signature: T::Signature,
+        ) -> DispatchResultWithPostInfo  {
+
+            let purchase_id_list: Vec<Vec<u8>> = price_payload.purchase_id_list;
+
+            purchase_id_list.iter().any(|x| {
+                // Calculate the average price
+                Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+                // clean order pool
+                <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                false
+            });
+
+            Ok(().into())
+        }
 
         #[pallet::weight(0)]
         pub fn submit_purchased_price_unsigned_with_signed_payload(
@@ -223,18 +286,17 @@ pub mod pallet {
                 <system::Pallet<T>>::block_number()
             );
 
-
-
             Self::add_purchased_price(price_payload.purchase_id.clone(),
                                       price_payload.public.clone().into_account(),
                                       price_payload.price.clone());
+
 
             // check block expiration.
 
             // check that the validator threshold is up to standard.
             if Self::is_validator_purchased_threshold_up_on(price_payload.purchase_id.clone()) {
                 // Calculate the average price
-                Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone());
+                Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
                 // clean order pool
                 <PurchasedOrderPool<T>>::remove_prefix(price_payload.purchase_id.clone(), None);
             }
@@ -308,6 +370,21 @@ pub mod pallet {
                 jump_block,
                 price_payload.public.clone().into_account(),
             ));
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, unit_price: u64) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+
+
+            ensure!(submit_threshold>0 && submit_threshold <= 100 , Error::<T>::SubmitThresholdRangeError);
+            ensure!(max_duration > 0 , Error::<T>::DruationNumberNotBeZero);
+
+            let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, unit_price);
+
+            <PurchasedDefaultSetting<T>>::put(setting_data.clone());
+            Self::deposit_event(Event::UpdatePurchasedDefaultSetting(setting_data));
             Ok(().into())
         }
 
@@ -482,6 +559,12 @@ pub mod pallet {
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, Vec<PricePayloadSubJumpBlock>, T::AccountId),
+        NewPurchasedPrice(Vec<PricePayloadSubPrice>, T::AccountId),
+        // purchased_id
+        NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>),
+        // purchased_id , vec
+        PurchasedAvgPrice(Vec<u8>, Vec<Option<(Vec<u8>, PurchasedAvgPriceData)>>),
+        UpdatePurchasedDefaultSetting(PurchasedDefaultData),
         // Average price update.
         RevokePriceRequest(Vec<u8>),
         AddPriceRequest(Vec<u8>, Vec<u8>, u32, FractionLength),
@@ -508,19 +591,27 @@ pub mod pallet {
                     "🚅 Validate price payload data, on block: {:?} ",
                     <system::Pallet<T>>::block_number()
                 );
-                let mut find_validator = !T::NeedVerifierCheck::get();
-                if false == find_validator {
-                    // check exists
-                    // let encode_data: Vec<u8> = payload.public.encode();
-                    let validator_authority: T::ValidatorAuthority =
-                        <T as SigningTypes>::Public::into_account(payload.public.clone()).into();
-                    find_validator = T::VMember::is_member(&validator_authority);
-                }
+                // let mut find_validator = !T::NeedVerifierCheck::get();
+                // if false == find_validator {
+                //     // check exists
+                //     // let encode_data: Vec<u8> = payload.public.encode();
+                //     let validator_authority: T::ValidatorAuthority =
+                //         <T as SigningTypes>::Public::into_account(payload.public.clone()).into();
+                //     find_validator = T::VMember::is_member(&validator_authority);
+                // }
+                //
+                // if !find_validator {
+                //     log::error!(
+                //         target: "pallet::ocw::validate_unsigned",
+                //         "⛔️ Payload public id is no longer in the members. `InvalidTransaction`"
+                //     );
+                //     return InvalidTransaction::BadProof.into();
+                // }
 
-                if !find_validator {
+                if ! Self::is_validator_member(<T as SigningTypes>::Public::into_account(payload.public.clone()).into()) {
                     log::error!(
                         target: "pallet::ocw::validate_unsigned",
-                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction`"
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
                     );
                     return InvalidTransaction::BadProof.into();
                 }
@@ -531,7 +622,7 @@ pub mod pallet {
                 if !signature_valid {
                     log::error!(
                         target: "pallet::ocw::validate_unsigned",
-                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction`"
+                        "⛔️ Signature invalid. `InvalidTransaction` on price"
                     );
                     return InvalidTransaction::BadProof.into();
                 }
@@ -540,11 +631,91 @@ pub mod pallet {
                     &payload.block_number,
                     payload.price.to_vec(),
                 )
+            } else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) =
+                call
+            {
+                // submit_purchased_price_unsigned_with_signed_payload
+                log::info!(
+                    "🚅 Validate purchased price payload data, on block: {:?} ",
+                    <system::Pallet<T>>::block_number()
+                );
+
+                if ! Self::is_validator_member(<T as SigningTypes>::Public::into_account(payload.public.clone()).into()) {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on purchased price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Signature invalid. `InvalidTransaction` on purchased price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let priority_num: u64 = T::UnsignedPriority::get();
+                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
+                    .priority(priority_num.saturating_add(1))
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
+
+            } else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) =
+                call
+            {
+                // submit_forced_clear_purchased_price_payload_signed
+                log::info!(
+                    "🚅 Validate forced clear purchased price payload data, on block: {:?} ",
+                    <system::Pallet<T>>::block_number()
+                );
+
+                if ! Self::is_validator_member(<T as SigningTypes>::Public::into_account(payload.public.clone()).into()) {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on force clear purchased"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Signature invalid. `InvalidTransaction` on force clear purchased"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let priority_num: u64 = T::UnsignedPriority::get();
+                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_force_clear_purchased")
+                    .priority(priority_num.saturating_add(2))
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
+
             } else {
                 InvalidTransaction::Call.into()
             }
         }
     }
+
+    #[pallet::storage]
+    #[pallet::getter(fn purchased_default_setting)]
+    pub(super) type PurchasedDefaultSetting<T: Config> = StorageValue<
+        _,
+        PurchasedDefaultData,
+        ValueQuery,
+    >;
 
     #[pallet::storage]
     #[pallet::getter(fn purchased_request_pool)]
@@ -805,6 +976,28 @@ where
         Ok(())
     }
 
+
+    // Dispose purchased price request.
+    fn ares_purchased_checker(
+        block_number: T::BlockNumber,
+        account_id: T::AccountId,
+    ) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+
+        let res = Self::save_forced_clear_purchased_price_payload_signed(block_number.clone(), account_id.clone());
+        if let Err(e) = res {
+            log::error!(
+                target: "pallet::ocw::ares_purchased_checker",
+                "⛔ block number = {:?}, account = {:?}, error = {:?}",
+                block_number, account_id, e
+            );
+        }
+        Ok(())
+    }
+
     // get uri key raw of ARES price
     fn get_raw_price_source_list() -> Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>
     {
@@ -885,6 +1078,55 @@ where
             round_offset = 1u8;
         }
         vec_len / round_num + round_offset
+    }
+
+
+    fn save_forced_clear_purchased_price_payload_signed(
+        block_number: T::BlockNumber,
+        account_id: T::AccountId,
+    ) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+        let force_request_list = Self::get_expired_purchased_transactions();
+
+        if force_request_list.len() > 0 {
+            // send force clear transaction
+            // -- Sign using any account
+            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+
+            // TODO:: Will be merge on save_fetch_price_and_send_payload_signed
+            let encode_data: Vec<u8> = account_id.encode();
+            assert!(32 == encode_data.len());
+            let raw_data = encode_data.try_into();
+            let raw_data = raw_data.unwrap();
+            // <T as SigningTypes>::Public::
+            let new_account = T::AuthorityAres::unchecked_from(raw_data);
+            // <T as SigningTypes>::Public::unchecked_from(raw_data);
+            let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+            sign_public_keys.push(new_account.into());
+
+            // Singer
+            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+                .with_filter(sign_public_keys)
+                .send_unsigned_transaction(
+                    |account| PurchasedForceCleanPayload {
+                        block_number,
+                        purchase_id_list: force_request_list.clone(),
+                        public: account.public.clone(),
+                    },
+                    |payload, signature| {
+                        Call::submit_forced_clear_purchased_price_payload_signed(payload, signature)
+                    },
+                )
+                .ok_or(
+                    "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+                )?;
+            result.map_err(|()| "⛔ Unable to submit transaction")?;
+        }
+
+        Ok(())
     }
 
     //
@@ -1119,6 +1361,18 @@ where
             None => false,
             Some(x) => x == account,
         }
+    }
+
+    fn is_validator_member(validator: T::ValidatorAuthority) -> bool {
+        let mut find_validator = !T::NeedVerifierCheck::get();
+        if false == find_validator {
+            // check exists
+            // let encode_data: Vec<u8> = payload.public.encode();
+            // let validator_authority: T::ValidatorAuthority =
+            //     <T as SigningTypes>::Public::into_account(payload.public.clone()).into();
+            find_validator = T::VMember::is_member(&validator);
+        }
+        find_validator
     }
 
     // Store the list of authors in the price list.
@@ -1482,9 +1736,8 @@ where
     }
 
     // Calculate the purchased amount, related to the amount of data
-    fn calculate_purchased_amount(request_keys: &Vec<Vec<u8>>) -> u64 {
-        // TODO:: to be implement.
-        100
+    fn calculate_purchased_amount(unit_price: u64, request_keys: &Vec<Vec<u8>>) -> u64 {
+        unit_price.saturating_mul(request_keys.len() as u64)
     }
 
     fn pay_to_purchase(who: T::AccountId, offer: u64) -> Result<(), Error<T>> {
@@ -1590,13 +1843,17 @@ where
         // make purchase price id
         let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
 
-        <PurchasedRequestPool<T>>::insert(purchase_id.clone(), PurchasedRequestData {
+        let request_data = PurchasedRequestData {
             account_id: who,
             offer,
             submit_threshold,
             max_duration,
             request_keys,
-        });
+        };
+
+        <PurchasedRequestPool<T>>::insert(purchase_id.clone(), request_data.clone());
+
+        Self::deposit_event(Event::NewPurchasedRequest(purchase_id.clone(), request_data));
 
         Ok(purchase_id)
     }
@@ -1803,8 +2060,28 @@ where
         }
     }
 
+    // to determine whether the submit price period has expired but there is still no submit.
+    // This function returns a list of purchased_id.
+    fn get_expired_purchased_transactions() -> Vec<Vec<u8>> {
+        let a : PurchasedRequestData<T> ;
+        let mut purchased_id_list: Vec<Vec<u8>> = Vec::new();
+        let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 
-    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T>>) {
+        <PurchasedRequestPool<T>>::iter().any(|(p_id ,p_d  )|
+            {
+                if(current_block >= p_d.max_duration) {
+
+                    purchased_id_list.push(p_id.to_vec());
+                }
+                false
+            }
+        );
+        purchased_id_list
+    }
+
+    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T>>, reached_type: u8)
+        -> Option<(Vec<u8>, PurchasedAvgPriceData)>
+    {
 
         let (average, fraction_length) =
             Self::average_price(prices_info.clone(), T::CalculationKind::get())
@@ -1823,7 +2100,7 @@ where
                 };
                 if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
                     // Set price to abnormal list and pick out check_price
-                    // TODO:: need update AresAbnormalPrice , add the comparison value of the current deviation
+                    // TODO:: need update struct of AresAbnormalPrice , add the comparison value of the current deviation
                     <AresAbnormalPrice<T>>::append(price_key.clone(), check_price);
                     // abnormal_price_index_list
                     abnormal_price_index_list.push(index);
@@ -1842,39 +2119,51 @@ where
                 // reset price pool
                 // <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
                 // <PurchasedPricePool<T>>::insert(purchase_id.clone(), price_key.clone(), prices_info);
-                return Self::handler_purchase_avg_price_storage(purchase_id.clone(), price_key.clone(), prices_info.clone());
+                return Self::handler_purchase_avg_price_storage(purchase_id.clone(), price_key.clone(), prices_info.clone(), reached_type);
             }
 
             // let current_block = <system::Pallet<T>>::block_number() as u64;
             let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
+
+            let avg_price_data = PurchasedAvgPriceData{
+                create_bn: current_block,
+                reached_type,
+                price_data: (average.clone(), fraction_length.clone()),
+            };
             // Update avg price (average, fraction_length)
             <PurchasedAvgPrice<T>>::insert(purchase_id.clone(),
                                            price_key.clone(),
-                                           PurchasedAvgPriceData{
-                                                    create_bn: current_block,
-                                                    reached_type: 1, // TODO:: update
-                                                    price_data: (average, fraction_length),
-                                                });
+                                           avg_price_data.clone(),
+                                            );
             // Clear price pool.
             <PurchasedPricePool<T>>::remove(purchase_id.clone(), price_key.clone());
             // Clear purchased request.
             <PurchasedRequestPool<T>>::remove(purchase_id.clone());
+
+            return Some((price_key.clone(), avg_price_data));
         }
+        None
     }
 
-    fn update_purchase_avg_price_storage(purchase_id: Vec<u8>) {
+    fn update_purchase_avg_price_storage(purchase_id: Vec<u8>, reached_type: u8) {
         // Get purchase price pool
         let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
 
         //
+        let mut event_result_list = Vec::new();
+        //
         price_key_list.iter().any(|x| {
             let prices_info = <PurchasedPricePool<T>>::get(purchase_id.clone(), x.to_vec());
-            // let (average, fraction_length) =
-            //     Self::average_price(prices_info, T::CalculationKind::get())
-            //         .expect("⛔ The average is not empty.");
-            Self::handler_purchase_avg_price_storage(purchase_id.clone(),x.to_vec(), prices_info);
+            let result = Self::handler_purchase_avg_price_storage(purchase_id.clone(),x.to_vec(), prices_info, reached_type);
+            event_result_list.push(result);
             false
         });
+
+        Self::deposit_event(Event::PurchasedAvgPrice(
+            purchase_id.clone(),
+            event_result_list,
+        ));
+
     }
 
 
@@ -1972,7 +2261,6 @@ where
 
     fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, price_list : Vec<PricePayloadSubPrice>) {
 
-
         let current_block = <system::Pallet<T>>::block_number();
 
         price_list.iter().any(|PricePayloadSubPrice(a,b,c,d)|{
@@ -2003,6 +2291,12 @@ where
             account_id.clone(),
             current_block.clone(),
         );
+
+        Self::deposit_event(Event::NewPurchasedPrice(
+            price_list.clone(),
+            account_id.clone(),
+        ));
+
     }
 
     // Judge whether the predetermined conditions of the validator of the current

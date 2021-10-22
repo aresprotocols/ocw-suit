@@ -381,7 +381,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 
 
 #[test]
-fn save_fetch_purchased_price_and_send_payload_signed() {
+fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
     let mut t = new_test_ext();
 
@@ -632,6 +632,215 @@ fn save_fetch_purchased_price_and_send_payload_signed() {
         let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(order_pool.len(), 0);
 
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 1);
+
+    });
+}
+
+
+#[test]
+fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration() {
+
+    let mut t = new_test_ext();
+
+    const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+    let (offchain, offchain_state) = testing::TestOffchainExt::new();
+    let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+    let keystore = KeyStore::new();
+    SyncCryptoStore::sr25519_generate_new(
+        &keystore,
+        crate::crypto::Public::ID,
+        Some(&format!("{}/hunter1", PHRASE))
+    ).unwrap();
+
+    SyncCryptoStore::sr25519_generate_new(
+        &keystore,
+        crate::crypto::Public::ID,
+        Some(&format!("{}/hunter2", PHRASE))
+    ).unwrap();
+
+
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+        .get(0)
+        .unwrap()
+        .clone();
+
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+        .get(1)
+        .unwrap()
+        .clone();
+
+    t.register_extension(OffchainWorkerExt::new(offchain));
+    t.register_extension(TransactionPoolExt::new(pool));
+    t.register_extension(KeystoreExt(Arc::new(keystore)));
+
+    let padding_request = testing::PendingRequest {
+        method: "GET".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
+        sent: true,
+        ..Default::default()
+    };
+
+    offchain_state.write().expect_request(padding_request);
+
+    t.execute_with(|| {
+        System::set_block_number(1);
+
+        // Add purchase price
+        // Add purchased request.
+        let request_acc = AccountId::from_raw([1;32]);
+        let offer = 10u64;
+        let submit_threshold = 100u8;
+        let max_duration = 3u64;
+        let request_keys = vec![toVec("btc_price")];
+        assert_ok!(AresOcw::ask_price(
+            request_acc.clone(),
+            offer,
+            submit_threshold,
+            max_duration,
+            request_keys.clone() ));
+
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
+        let purchased_key = purchased_key_option.unwrap();
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+
+        System::set_block_number(2);
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
+        // then
+        let tx = pool_state.write().transactions.pop().unwrap();
+        let tx = Extrinsic::decode(&mut &*tx).unwrap();
+        assert_eq!(tx.signature, None);
+        if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) = tx.call {
+            // Test purchased submit call
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            assert!(purchased_key_option.is_some());
+            AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            assert!(purchased_key_option.is_none());
+            assert_eq!(TestAuthorityCount::get_validators_count(), 4);
+        }
+
+        let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(price_pool.len(), 1 );
+
+        let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(request_pool.len(), 1);
+
+        let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 1);
+
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+    });
+
+
+    t.execute_with(|| {
+        System::set_block_number(2);
+
+        let expired_purchased_list =  AresOcw::get_expired_purchased_transactions();
+        assert_eq!(expired_purchased_list.len(), 0);
+
+        let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(price_pool.len(), 1 );
+
+        let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(request_pool.len(), 1);
+
+        let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 1);
+
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+    });
+
+    t.execute_with(|| {
+        System::set_block_number(3);
+
+        let expired_purchased_list =  AresOcw::get_expired_purchased_transactions();
+        assert_eq!(expired_purchased_list.len(), 1);
+
+        let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(price_pool.len(), 1 );
+
+        let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(request_pool.len(), 1);
+
+        let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 1);
+
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+
+        // Forced to settle
+        AresOcw::save_forced_clear_purchased_price_payload_signed(3, public_key_1.into_account()).unwrap();
+
+        // then
+        let tx = pool_state.write().transactions.pop().unwrap();
+        let tx = Extrinsic::decode(&mut &*tx).unwrap();
+        assert_eq!(tx.signature, None);
+        if let Call::AresOcw(crate::Call::submit_forced_clear_purchased_price_payload_signed(body, signature)) = tx.call {
+            // Test purchased submit call
+            AresOcw::submit_forced_clear_purchased_price_payload_signed(Origin::none(), body, signature);
+        }
+
+        let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(price_pool.len(), 0 );
+
+        let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(request_pool.len(), 0);
+
+        let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 1);
+
+    });
+}
+
+#[test]
+fn test_submit_ask_price() {
+    let mut t = new_test_ext();
+    let (offchain, state) = testing::TestOffchainExt::new();
+    t.register_extension(OffchainWorkerExt::new(offchain));
+    t.execute_with(|| {
+        System::set_block_number(2);
+
+        AresOcw::submit_ask_price(Origin::signed(AccountId::from_raw([1;32])), toVec("btc_price,eth_price"));
+
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([2;32]));
+
+        let purchased_key = purchased_key_option.unwrap();
+        // println!("purchased_key.raw_source_keys = {:?}", &purchased_key);
+
+        assert_eq!(purchased_key.raw_source_keys, vec![
+            ("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4),
+            ("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4),
+        ]);
+
+        let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(price_pool.len(), 0 );
+
+        let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(request_pool.len(), 1);
+
+        let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+
+        let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
+        assert_eq!(order_pool.len(), 0);
+
+        let request_data: PurchasedRequestData<Test> = <PurchasedRequestPool<Test>>::get(purchased_key.purchase_id.clone());
+        assert_eq!(request_data.account_id.clone(), AccountId::from_raw([1;32]));
+        assert_eq!(request_data.request_keys.clone(), vec![toVec("btc_price"), toVec("eth_price"), ] );
+        assert_eq!(request_data.max_duration.clone(), PurchasedDefaultData::default().max_duration );
+        assert_eq!(request_data.submit_threshold.clone(), PurchasedDefaultData::default().submit_threshold );
+        assert_eq!(request_data.offer.clone(), PurchasedDefaultData::default().unit_price * (request_data.request_keys.len() as u64));
+
     });
 }
 
@@ -729,12 +938,12 @@ fn update_purchase_avg_price_storage() {
         let price_pool = <PurchasedPricePool<Test>>::get("abc".encode(),"btc_price".encode() );
         assert_eq!(price_pool.len(),3);
         // update
-        AresOcw::update_purchase_avg_price_storage("abc".encode());
+        AresOcw::update_purchase_avg_price_storage("abc".encode(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
         // Get avg
         let avg_price = <PurchasedAvgPrice<Test>>::get("abc".encode(), "btc_price".encode());
         assert_eq!(avg_price, PurchasedAvgPriceData{
             create_bn: 2,
-            reached_type: 1,
+            reached_type: PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP,
             price_data: (101, 2)
         });
         let price_pool = <PurchasedPricePool<Test>>::get("abc".encode(),"btc_price".encode() );
@@ -745,12 +954,12 @@ fn update_purchase_avg_price_storage() {
         let price_pool = <PurchasedPricePool<Test>>::get("bcd".encode(),"btc_price".encode() );
         assert_eq!(price_pool.len(),3);
         // update
-        AresOcw::update_purchase_avg_price_storage("bcd".encode());
+        AresOcw::update_purchase_avg_price_storage("bcd".encode(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
         // Get avg
         let avg_price = <PurchasedAvgPrice<Test>>::get("bcd".encode(), "btc_price".encode());
         assert_eq!(avg_price, PurchasedAvgPriceData{
             create_bn: 2,
-            reached_type: 1,
+            reached_type: PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN,
             price_data: (201, 2)
         });
         let price_pool = <PurchasedPricePool<Test>>::get("bcd".encode(),"btc_price".encode() );
