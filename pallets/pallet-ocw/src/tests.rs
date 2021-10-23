@@ -700,7 +700,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration() {
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,
-            submit_threshold,
+            submit_threshold, // 1 + 3 = 4
             max_duration,
             request_keys.clone() ));
 
@@ -758,7 +758,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration() {
     });
 
     t.execute_with(|| {
-        System::set_block_number(3);
+        System::set_block_number(4);
 
         let expired_purchased_list =  AresOcw::get_expired_purchased_transactions();
         assert_eq!(expired_purchased_list.len(), 1);
@@ -837,7 +837,7 @@ fn test_submit_ask_price() {
         let request_data: PurchasedRequestData<Test> = <PurchasedRequestPool<Test>>::get(purchased_key.purchase_id.clone());
         assert_eq!(request_data.account_id.clone(), AccountId::from_raw([1;32]));
         assert_eq!(request_data.request_keys.clone(), vec![toVec("btc_price"), toVec("eth_price"), ] );
-        assert_eq!(request_data.max_duration.clone(), PurchasedDefaultData::default().max_duration );
+        assert_eq!(request_data.max_duration.clone(), PurchasedDefaultData::default().max_duration + 2 );
         assert_eq!(request_data.submit_threshold.clone(), PurchasedDefaultData::default().submit_threshold );
         assert_eq!(request_data.offer.clone(), PurchasedDefaultData::default().unit_price * (request_data.request_keys.len() as u64));
 
@@ -976,7 +976,7 @@ fn test_is_validator_purchased_threshold_up_on() {
     let (offchain, state) = testing::TestOffchainExt::new();
     t.register_extension(OffchainWorkerExt::new(offchain));
     t.execute_with(|| {
-        assert_eq!(true, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+        assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
         // add ask
         PurchasedRequestPool::<Test>::insert(
             "abc".encode(),
@@ -1152,6 +1152,23 @@ fn test_extract_purchased_request() {
         let extract_str = "btc_price,eth_price,btc_price,";
         assert_eq!(vec![toVec("btc_price"), toVec("eth_price")], AresOcw::extract_purchased_request(toVec(extract_str)));
 
+    });
+}
+
+#[test]
+fn test_update_purchased_param() {
+    let mut t = new_test_ext();
+    let (offchain, state) = testing::TestOffchainExt::new();
+    t.register_extension(OffchainWorkerExt::new(offchain));
+    t.execute_with(|| {
+        assert_eq!(AresOcw::purchased_default_setting(), PurchasedDefaultData::default());
+        // submit_threshold: u8, max_duration: u64, unit_price: u64
+        assert_ok!(AresOcw::update_purchased_param(Origin::root(), 10, 20, 30));
+        assert_eq!(AresOcw::purchased_default_setting(), PurchasedDefaultData {
+            submit_threshold: 10,
+            max_duration: 20,
+            unit_price: 30,
+        });
     });
 }
 
@@ -1400,6 +1417,8 @@ fn test_get_price_pool_depth () {
         assert_eq!(bet_avg_price, (4440, 4));
     });
 }
+
+
 
 #[test]
 fn test_json_number_value_to_price () {
