@@ -144,8 +144,8 @@ pub mod pallet {
         #[pallet::constant]
         type UnsignedPriority: Get<TransactionPriority>;
 
-        #[pallet::constant]
-        type NeedVerifierCheck: Get<bool>;
+        // #[pallet::constant]
+        // type NeedVerifierCheck: Get<bool>;
 
         // Used to confirm RequestPropose.
         type RequestOrigin: EnsureOrigin<Self::Origin>;
@@ -177,25 +177,31 @@ pub mod pallet {
     {
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
+
+            let control_setting = <OcwControlSetting<T>>::get();
+
             let block_author = Self::get_block_author();
             match block_author {
                 None => {
                     log::warn!(target: "pallet::ocw::offchain_worker", "❗ Not found author.");
                 }
                 Some(author) => {
-                    // log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
-                    // // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
-                    // if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
-                    //     // Try to get ares price.
-                    //     match Self::ares_price_worker(block_number.clone(), author.clone()) {
-                    //         Ok(v) => log::info!("🚅 @ Ares OCW price acquisition completed."),
-                    //         Err(e) => log::warn!(
-                    //             target: "pallet::ocw::offchain_worker",
-                    //             "❗ Ares price has a problem : {:?}",
-                    //             e
-                    //         ),
-                    //     }
-                    // }
+
+                    if control_setting.open_free_price_reporter {
+                        log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
+                        // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
+                        if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
+                            // Try to get ares price.
+                            match Self::ares_price_worker(block_number.clone(), author.clone()) {
+                                Ok(v) => log::info!("🚅 @ Ares OCW price acquisition completed."),
+                                Err(e) => log::warn!(
+                                    target: "pallet::ocw::offchain_worker",
+                                    "❗ Ares price has a problem : {:?}",
+                                    e
+                                ),
+                            }
+                        }
+                    }
 
                     // //
                     // match Self::ares_purchased_worker(block_number.clone(), author.clone()) {
@@ -207,44 +213,39 @@ pub mod pallet {
                     //     ),
                     // }
                     //
-                    match Self::ares_purchased_checker(block_number.clone(), author.clone()) {
-                        Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
+
+                    if control_setting.open_paid_price_reporter {
+                        match Self::ares_purchased_checker(block_number.clone(), author.clone()) {
+                            Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
+                            Err(e) => log::warn!(
+                                target: "pallet::ocw::offchain_worker",
+                                "❗ Ares purchased price has a problem : {:?}",
+                                e
+                            ),
+                        }
+                    }
+                }
+            }
+
+            if control_setting.open_paid_price_reporter {
+                let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
+                if let Some(keystore_account) = local_keys.get(0) {
+                    let mut a = [0u8; 32];
+                    a[..].copy_from_slice(&keystore_account.to_raw_vec());
+                    // let local_account32 = AccountId32::new(a);
+                    // // local_account32.
+                    // let local_account: T::AccountId = local_account32.into();
+                    let new_account = sp_core::sr25519::Public::from_raw(a);
+                    let local_account: T::AccountId = new_account.into();
+
+                    match Self::ares_purchased_worker(block_number.clone(), local_account) {
+                        Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
                         Err(e) => log::warn!(
                             target: "pallet::ocw::offchain_worker",
                             "❗ Ares purchased price has a problem : {:?}",
                             e
                         ),
                     }
-                }
-            }
-
-            // LocalKeystore // ::keys(KEY_TYPE);
-            // Signer::<T, T::AuthorityId>::keystore_accounts();
-            // RuntimeAppPublic::all().into_iter().enumerate().map(|(index, key)| {
-                // let generic_public = C::GenericPublic::from(key);
-                // let public: T::Public = generic_public.into();
-                // let account_id = public.clone().into_account();
-                // Account::new(index, account_id, public)
-
-            // })
-
-            let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
-            if let Some(keystore_account) = local_keys.get(0) {
-                let mut a = [0u8; 32];
-                a[..].copy_from_slice(&keystore_account.to_raw_vec());
-                // let local_account32 = AccountId32::new(a);
-                // // local_account32.
-                // let local_account: T::AccountId = local_account32.into();
-                let new_account = sp_core::sr25519::Public::from_raw(a);
-                let local_account: T::AccountId = new_account.into();
-
-                match Self::ares_purchased_worker(block_number.clone(), local_account) {
-                    Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
-                    Err(e) => log::warn!(
-                        target: "pallet::ocw::offchain_worker",
-                        "❗ Ares purchased price has a problem : {:?}",
-                        e
-                    ),
                 }
             }
         }
@@ -427,6 +428,23 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
+        pub fn update_ocw_control_setting(origin: OriginFor<T>, need_verifier_check: bool, open_free_price_reporter: bool, open_paid_price_reporter: bool) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+
+            let setting_data = OcwControlData {
+                need_verifier_check,
+                open_free_price_reporter,
+                open_paid_price_reporter,
+            };
+
+            <OcwControlSetting<T>>::put(setting_data.clone());
+            Self::deposit_event(Event::UpdateOcwControlSetting(setting_data));
+            Ok(().into())
+        }
+
+
+
+        #[pallet::weight(0)]
         pub fn revoke_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
 
@@ -607,6 +625,7 @@ pub mod pallet {
         // purchased_id , vec
         PurchasedAvgPrice(Vec<u8>, Vec<Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)>>),
         UpdatePurchasedDefaultSetting(PurchasedDefaultData),
+        UpdateOcwControlSetting(OcwControlData),
         // Average price update.
         RevokePriceRequest(Vec<u8>),
         AddPriceRequest(Vec<u8>, Vec<u8>, u32, FractionLength),
@@ -756,6 +775,14 @@ pub mod pallet {
     pub(super) type PurchasedDefaultSetting<T: Config> = StorageValue<
         _,
         PurchasedDefaultData,
+        ValueQuery,
+    >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn ocw_control_setting)]
+    pub(super) type OcwControlSetting<T: Config> = StorageValue<
+        _,
+        OcwControlData,
         ValueQuery,
     >;
 
@@ -961,7 +988,10 @@ where
     u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
-        let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
+        // let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
+
+        let mut is_same = !<OcwControlSetting<T>>::get().need_verifier_check;
+
         let worker_ownerid_list = T::AuthorityAres::all();
         for ownerid in worker_ownerid_list.iter() {
             let mut a = [0u8; 32];
@@ -1406,7 +1436,8 @@ where
     }
 
     fn is_validator_member(validator: T::ValidatorAuthority) -> bool {
-        let mut find_validator = !T::NeedVerifierCheck::get();
+        // let mut find_validator = !T::NeedVerifierCheck::get();
+        let mut find_validator = !<OcwControlSetting<T>>::get().need_verifier_check;
         if false == find_validator {
             // check exists
             // let encode_data: Vec<u8> = payload.public.encode();

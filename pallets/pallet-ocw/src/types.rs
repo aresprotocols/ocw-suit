@@ -6,6 +6,26 @@ pub type FractionLength = u32;
 pub type RequestInterval = u8;
 
 
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct OcwControlData
+{
+    pub need_verifier_check: bool,
+    pub open_free_price_reporter: bool,
+    pub open_paid_price_reporter: bool,
+}
+
+impl Default for OcwControlData
+{
+    fn default() -> Self {
+        Self {
+            need_verifier_check: true,
+            open_free_price_reporter: true,
+            open_paid_price_reporter: true,
+        }
+    }
+}
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PurchasedDefaultData
 {
@@ -13,6 +33,7 @@ pub struct PurchasedDefaultData
     pub max_duration: u64,
     pub unit_price: u64,
 }
+
 
 impl PurchasedDefaultData {
     pub fn new(submit_threshold: u8, max_duration: u64, unit_price: u64) -> Self {

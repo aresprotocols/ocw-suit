@@ -235,7 +235,7 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
     // pub const PriceVecMaxSize: u32 = 3;
     pub const MaxCountOfPerRequest: u8 = 3;
-    pub const NeedVerifierCheck: bool = false;
+    // pub const NeedVerifierCheck: bool = false;
     // pub const UseOnChainPriceRequest: bool = true;
     pub const FractionLengthNum: u32 = 2;
     pub const CalculationKind: u8 = 2;
@@ -262,7 +262,7 @@ impl Config for Test {
     type FindAuthor = TestFindAuthor;
     // type PriceVecMaxSize = PriceVecMaxSize;
     // type MaxCountOfPerRequest = MaxCountOfPerRequest;
-    type NeedVerifierCheck = NeedVerifierCheck;
+    // type NeedVerifierCheck = NeedVerifierCheck;
     // type UseOnChainPriceRequest = UseOnChainPriceRequest;
     type FractionLengthNum = FractionLengthNum;
     type CalculationKind = CalculationKind;
@@ -1065,8 +1065,8 @@ fn test_ask_price() {
         assert_eq!(AresOcw::purchased_request_pool(purchase_id), PurchasedRequestData{
             account_id: account_id1.clone(),
             offer,
-            submit_threshold,
-            max_duration,
+            submit_threshold ,
+            max_duration: max_duration+1,
             request_keys: request_keys.clone()
         });
 
@@ -1081,7 +1081,7 @@ fn test_ask_price() {
             account_id: account_id1.clone(),
             offer,
             submit_threshold,
-            max_duration,
+            max_duration: max_duration+1,
             request_keys: request_keys.clone()
         });
 
