@@ -1166,18 +1166,18 @@ where
         if force_request_list.len() > 0 {
             // send force clear transaction
             // -- Sign using any account
-            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let encode_data: Vec<u8> = account_id.encode();
+            // assert!(32 == encode_data.len());
+            // let raw_data = encode_data.try_into();
+            // let raw_data = raw_data.unwrap();
+            // // <T as SigningTypes>::Public::
+            // // let new_account = T::AuthorityAres::unchecked_from(raw_data);
+            // // <T as SigningTypes>::Public::unchecked_from(raw_data);
+            // let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+            // sign_public_keys.push(new_account.into());
 
-            // TODO:: Will be merge on save_fetch_price_and_send_payload_signed
-            let encode_data: Vec<u8> = account_id.encode();
-            assert!(32 == encode_data.len());
-            let raw_data = encode_data.try_into();
-            let raw_data = raw_data.unwrap();
-            // <T as SigningTypes>::Public::
-            // let new_account = T::AuthorityAres::unchecked_from(raw_data);
-            // <T as SigningTypes>::Public::unchecked_from(raw_data);
-            let new_account = sp_core::sr25519::Public::from_raw(raw_data);
-            sign_public_keys.push(new_account.into());
+            let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
@@ -1199,6 +1199,21 @@ where
         }
 
         Ok(())
+    }
+
+
+    fn handler_get_sign_public_keys(account_id: T::AccountId) -> Vec<<T as SigningTypes>::Public>
+        where <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
+        let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+        let encode_data: Vec<u8> = account_id.encode();
+        assert!(32 == encode_data.len());
+        let raw_data = encode_data.try_into();
+        let raw_data = raw_data.unwrap();
+        let new_account = T::AuthorityAres::unchecked_from(raw_data);
+        let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+        sign_public_keys.push(new_account.into());
+        sign_public_keys
     }
 
     //
@@ -1257,18 +1272,18 @@ where
 
         if price_list.len() > 0  {
             // -- Sign using any account
-            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let encode_data: Vec<u8> = account_id.encode();
+            // assert!(32 == encode_data.len());
+            // let raw_data = encode_data.try_into();
+            // let raw_data = raw_data.unwrap();
+            // // <T as SigningTypes>::Public::
+            // let new_account = T::AuthorityAres::unchecked_from(raw_data);
+            // // <T as SigningTypes>::Public::unchecked_from(raw_data);
+            // let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+            // sign_public_keys.push(new_account.into());
 
-            // TODO:: Will be merge on save_fetch_price_and_send_payload_signed
-            let encode_data: Vec<u8> = account_id.encode();
-            assert!(32 == encode_data.len());
-            let raw_data = encode_data.try_into();
-            let raw_data = raw_data.unwrap();
-            // <T as SigningTypes>::Public::
-            let new_account = T::AuthorityAres::unchecked_from(raw_data);
-            // <T as SigningTypes>::Public::unchecked_from(raw_data);
-            let new_account = sp_core::sr25519::Public::from_raw(raw_data);
-            sign_public_keys.push(new_account.into());
+            let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
@@ -1334,17 +1349,18 @@ where
 
         if price_list.len() > 0 || jump_block.len() > 0 {
             // -- Sign using any account
-            let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+            // let encode_data: Vec<u8> = account_id.encode();
+            // assert!(32 == encode_data.len());
+            // let raw_data = encode_data.try_into();
+            // let raw_data = raw_data.unwrap();
+            // // <T as SigningTypes>::Public::
+            // // let new_account = T::AuthorityAres::unchecked_from(raw_data);
+            // // <T as SigningTypes>::Public::unchecked_from(raw_data);
+            // let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+            // sign_public_keys.push(new_account.into());
 
-            let encode_data: Vec<u8> = account_id.encode();
-            assert!(32 == encode_data.len());
-            let raw_data = encode_data.try_into();
-            let raw_data = raw_data.unwrap();
-            // <T as SigningTypes>::Public::
-            // let new_account = T::AuthorityAres::unchecked_from(raw_data);
-            // <T as SigningTypes>::Public::unchecked_from(raw_data);
-            let new_account = sp_core::sr25519::Public::from_raw(raw_data);
-            sign_public_keys.push(new_account.into());
+            let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
             let (_, result) = Signer::<T, T::AuthorityId>::any_account()
@@ -1974,21 +1990,6 @@ where
 
                 let mut old_value = (*value).clone();
                 if is_fraction_changed {
-                    // old_value = match (*value).clone() {
-                    //     (
-                    //         old_price,
-                    //         account_id,
-                    //         b_number,
-                    //         old_fraction_lenght,
-                    //         json_number_value,
-                    //     ) => (
-                    //         json_number_value.toPrice(fraction_length.clone()),
-                    //         account_id,
-                    //         b_number,
-                    //         fraction_length.clone(),
-                    //         json_number_value,
-                    //     ),
-                    // };
                     old_value = (*value).clone();
                     old_value.price = old_value.raw_number.toPrice(fraction_length.clone());
                     old_value.fraction_len = fraction_length.clone();
@@ -1997,14 +1998,6 @@ where
                 // let new_value = old_value;
                 new_price.push(old_value);
             }
-
-            // new_price.push((
-            //     price.clone(),
-            //     who.clone(),
-            //     current_block,
-            //     fraction_length,
-            //     json_number_value,
-            // ));
 
             new_price.push(AresPriceData {
                 price: price.clone(),
@@ -2034,38 +2027,6 @@ where
             });
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         }
-
-        // Get current block number for test.
-        // let current_block = <system::Pallet<T>>::block_number();
-
-        // <PricesTrace<T>>::mutate(|prices_trace| {
-        //     // let author = <pallet_authorship::Pallet<T>>::author();
-        //     let author = Self::get_block_author().unwrap();
-        //     let MAX_LEN: usize = max_len.clone() as usize;
-        //     let price_trace_len = prices_trace.len();
-        //     if price_trace_len < MAX_LEN {
-        //         prices_trace.push((price.clone(), author.clone(), who.clone()));
-        //     } else {
-        //         prices_trace[price_trace_len % MAX_LEN] = (price.clone(), author.clone(), who.clone());
-        //     }
-        // });
-
-        // // Check price pool deep reaches the maximum value, and if so, calculated the average.
-        // if  <AresPrice<T>>::get(key_str.clone()).len() >= max_len as usize {
-        //     let average = Self::average_price(key_str.clone(), T::CalculationKind::get())
-        //         .expect("The average is not empty.");
-        //     log::info!("Calculate current average price average price is: ({},{}) , {:?}", average, fraction_length, &key_str);
-        //     // Update avg price
-        //     <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
-        // }else{
-        //     <AresAvgPrice<T>>::insert(key_str.clone(), (0, 0));
-        // }
-
-        // let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).len();
-        // if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
-        //     println!("update_avg_price_storage price count = {:?}", ares_price_list_len);
-        //     Self::update_avg_price_storage(key_str.clone(), max_len);
-        // }
 
         Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
 
