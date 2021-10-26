@@ -31,12 +31,13 @@ pub struct PurchasedDefaultData
 {
     pub submit_threshold: u8,
     pub max_duration: u64,
+    pub avg_keep_duration: u64,
     pub unit_price: u64,
 }
 
 
 impl PurchasedDefaultData {
-    pub fn new(submit_threshold: u8, max_duration: u64, unit_price: u64) -> Self {
+    pub fn new(submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> Self {
         if submit_threshold == 0 || submit_threshold > 100 {
             panic!("Submit Threshold range is (0 - 100] ");
         }
@@ -46,6 +47,7 @@ impl PurchasedDefaultData {
         Self {
             submit_threshold,
             max_duration,
+            avg_keep_duration,
             unit_price,
         }
     }
@@ -56,7 +58,8 @@ impl Default for PurchasedDefaultData
     fn default() -> Self {
         Self {
             submit_threshold: 60,
-            max_duration: 14400,
+            max_duration: 20,
+            avg_keep_duration: 14400,
             unit_price: 100_000_000_000_000,
         }
     }
