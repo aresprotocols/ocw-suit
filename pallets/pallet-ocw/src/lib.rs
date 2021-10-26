@@ -344,7 +344,9 @@ pub mod pallet {
 
             Self::add_purchased_price(price_payload.purchase_id.clone(),
                                       price_payload.public.clone().into_account(),
+                                      price_payload.block_number.clone(),
                                       price_payload.price.clone());
+
 
             // check
             if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
@@ -641,7 +643,7 @@ pub mod pallet {
         // The report request was closed when the price was submitted
         PurchasedRequestWorkHasEnded(Vec<u8>, T::AccountId),
 
-        NewPurchasedPrice(Vec<PricePayloadSubPrice>, T::AccountId),
+        NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
         // purchased_id
         NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>),
         // purchased_id , vec
@@ -2358,7 +2360,7 @@ where
     }
 
 
-    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, price_list : Vec<PricePayloadSubPrice>) {
+    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, block_number: T::BlockNumber, price_list : Vec<PricePayloadSubPrice>) {
 
         let current_block = <system::Pallet<T>>::block_number();
 
@@ -2392,6 +2394,7 @@ where
         );
 
         Self::deposit_event(Event::NewPurchasedPrice(
+            block_number.clone(),
             price_list.clone(),
             account_id.clone(),
         ));
