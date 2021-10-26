@@ -108,6 +108,7 @@ pub mod pallet {
         SubmitThresholdRangeError,
         DruationNumberNotBeZero,
         UnknownAresPriceVersionNum,
+        // InsufficientCountOfValidators,
     }
 
     /// This pallet's configuration trait
@@ -289,14 +290,30 @@ pub mod pallet {
             price_payload: PurchasedForceCleanPayload<T::Public, T::BlockNumber>,
             _signature: T::Signature,
         ) -> DispatchResultWithPostInfo  {
+            ensure_none(origin)?;
 
             let purchase_id_list: Vec<Vec<u8>> = price_payload.purchase_id_list;
-
             purchase_id_list.iter().any(|x| {
-                // Calculate the average price
-                Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
-                // clean order pool
-                <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                // // Calculate the average price
+                // Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+                // // clean order pool
+                // <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                // false
+
+                // check that the validator threshold is up to standard.
+                if Self::is_validator_purchased_threshold_up_on(x.to_vec()) {
+                    // Calculate the average price
+                    Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+                    // clean order pool
+                    <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                }else{
+                    <PurchasedPricePool<T>>::remove_prefix(x.to_vec(), None);
+                    <PurchasedRequestPool<T>>::remove(x.to_vec());
+                    <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                    // send err.
+                    // Err(Error::<T>::InsufficientCountOfValidators.into());
+                    Self::deposit_event(Event::InsufficientCountOfValidators);
+                }
                 false
             });
 
@@ -329,16 +346,21 @@ pub mod pallet {
                                       price_payload.public.clone().into_account(),
                                       price_payload.price.clone());
 
-
-            // check block expiration.
-
-            // check that the validator threshold is up to standard.
-            if Self::is_validator_purchased_threshold_up_on(price_payload.purchase_id.clone()) {
+            // check
+            if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
                 // Calculate the average price
                 Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
                 // clean order pool
                 <PurchasedOrderPool<T>>::remove_prefix(price_payload.purchase_id.clone(), None);
             }
+
+            // check that the validator threshold is up to standard.
+            // if Self::is_validator_purchased_threshold_up_on(price_payload.purchase_id.clone()) {
+            //     // Calculate the average price
+            //     Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+            //     // clean order pool
+            //     <PurchasedOrderPool<T>>::remove_prefix(price_payload.purchase_id.clone(), None);
+            // }
 
             Ok(().into())
         }
@@ -413,14 +435,14 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, unit_price: u64) -> DispatchResult {
+        pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
 
 
             ensure!(submit_threshold>0 && submit_threshold <= 100 , Error::<T>::SubmitThresholdRangeError);
             ensure!(max_duration > 0 , Error::<T>::DruationNumberNotBeZero);
 
-            let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, unit_price);
+            let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, avg_keep_duration, unit_price);
 
             <PurchasedDefaultSetting<T>>::put(setting_data.clone());
             Self::deposit_event(Event::UpdatePurchasedDefaultSetting(setting_data));
@@ -634,6 +656,7 @@ pub mod pallet {
         PricePoolDepthUpdate(u32),
         //
         PriceAllowableOffsetUpdate(u8),
+        InsufficientCountOfValidators,
     }
 
     #[pallet::validate_unsigned]
@@ -819,6 +842,16 @@ pub mod pallet {
         Vec<u8>, // price_key,,
         PurchasedAvgPriceData,
         // Vec<AresPrice<T>>,
+        ValueQuery,
+    >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn purchased_avg_trace)]
+    pub(super) type PurchasedAvgTrace<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        Vec<u8>, // pricpurchased_ide_key
+        (T::BlockNumber),
         ValueQuery,
     >;
 
@@ -2179,13 +2212,14 @@ where
                                            price_key.clone(),
                                            avg_price_data.clone(),
                                             );
+            <PurchasedAvgTrace<T>>::insert(purchase_id.clone(),(<system::Pallet<T>>::block_number()));
+
             // Clear price pool.
             <PurchasedPricePool<T>>::remove(purchase_id.clone(), price_key.clone());
             // Clear purchased request.
             <PurchasedRequestPool<T>>::remove(purchase_id.clone());
 
             return Some((price_key.clone(), avg_price_data, valid_request_account_id_list));
-
         }
         None
     }
@@ -2209,8 +2243,28 @@ where
             event_result_list,
         ));
 
+        let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
+        Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
     }
 
+    fn check_and_clear_expired_purchased_average_price_storage (purchase_id: Vec<u8>, current_block_num: u64) -> bool {
+        if !<PurchasedAvgTrace<T>>::contains_key(&purchase_id) {
+            return false;
+        }
+
+        if let (avg_trace) = <PurchasedAvgTrace<T>>::get(purchase_id.clone()) {
+            let avg_trace_num: u64 = avg_trace.unique_saturated_into();
+            let purchase_setting = <PurchasedDefaultSetting<T>>::get();
+            let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
+            if current_block_num > comp_blocknum {
+                <PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
+                <PurchasedAvgTrace<T>>::remove(purchase_id.clone());
+                return true;
+            }
+        }
+
+        false
+    }
 
     // fn get_block_author() -> Option<<<T as pallet::Config>::ValidatorSet as frame_support::traits::ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>
     // {
@@ -2362,10 +2416,26 @@ where
 
         let div_val =(reporter_count * 100) / (validator_count ) ;
 
+
         let purchased_request = <PurchasedRequestPool<T>>::get(purchased_id.clone()) ;
         let submit_threshold = purchased_request.submit_threshold as u64;
 
         div_val >= submit_threshold
+    }
+
+    fn is_all_validator_submitted_price (purchased_id: Vec<u8>) -> bool {
+        if false == <PurchasedRequestPool<T>>::contains_key(purchased_id.clone()) {
+            return false;
+        }
+
+        let reporter_count = <PurchasedOrderPool<T>>::iter_prefix_values(purchased_id.clone()).count();
+        if 0 == reporter_count {
+            return false;
+        }
+
+        let validator_count = T::AuthorityCount::get_validators_count();
+
+        (reporter_count as u64) >= validator_count
     }
 
     // Split purchased_request by the commas.
