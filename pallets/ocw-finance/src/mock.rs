@@ -40,13 +40,21 @@ frame_support::construct_runtime!(
 	}
 );
 
+// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
+pub struct BaseFilter;
+impl Contains<Call> for BaseFilter {
+	fn contains(_call: &Call) -> bool {
+		true
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
