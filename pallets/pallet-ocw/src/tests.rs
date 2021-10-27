@@ -1345,6 +1345,7 @@ fn test_is_validator_purchased_threshold_up_on() {
         AresOcw::add_purchased_price(
             "abc".encode(),
             AccountId::from_raw([1;32]),
+            1,
             vec![
                 PricePayloadSubPrice(
                     "btc_price".encode(),
@@ -1360,6 +1361,7 @@ fn test_is_validator_purchased_threshold_up_on() {
         AresOcw::add_purchased_price(
             "abc".encode(),
             AccountId::from_raw([2;32]),
+            1,
             vec![
                 PricePayloadSubPrice(
                     "btc_price".encode(),
@@ -1375,6 +1377,7 @@ fn test_is_validator_purchased_threshold_up_on() {
         AresOcw::add_purchased_price(
             "abc".encode(),
             AccountId::from_raw([3;32]),
+            1,
             vec![
                 PricePayloadSubPrice(
                     "btc_price".encode(),

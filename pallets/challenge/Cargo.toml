@@ -2,11 +2,11 @@
 authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
 description = 'Substrate FRAME pallet template for defining custom runtime logic.'
 edition = '2018'
-homepage = 'https://substrate.dev'
 license = 'Unlicense'
 name = 'pallet-ares-challenge'
 publish = false
-repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
+homepage = "https://github.com/aresprotocols"
+repository = "https://github.com/aresprotocols/ocw-suit"
 version = '3.0.1'
 readme = 'README.md'
 

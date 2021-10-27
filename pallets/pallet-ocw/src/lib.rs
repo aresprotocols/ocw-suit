@@ -344,7 +344,9 @@ pub mod pallet {
 
             Self::add_purchased_price(price_payload.purchase_id.clone(),
                                       price_payload.public.clone().into_account(),
+                                      price_payload.block_number.clone(),
                                       price_payload.price.clone());
+
 
             // check
             if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
@@ -641,7 +643,7 @@ pub mod pallet {
         // The report request was closed when the price was submitted
         PurchasedRequestWorkHasEnded(Vec<u8>, T::AccountId),
 
-        NewPurchasedPrice(Vec<PricePayloadSubPrice>, T::AccountId),
+        NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
         // purchased_id
         NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>),
         // purchased_id , vec
@@ -744,9 +746,16 @@ pub mod pallet {
                 }
 
                 let priority_num: u64 = T::UnsignedPriority::get();
+
+                // let perfix_v8 = Self::make_transaction_tag_prefix_with_public_account(
+                //     "pallet-ocw::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
+                //     payload.public.clone()
+                // );
+                // let perfix_str: &'static str = sp_std::str::from_utf8("pallet-ocw::validate_transaction_parameters_of_purchased_price").unwrap();
                 ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
                     .priority(priority_num.saturating_add(1))
-                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .and_provides(payload.public.clone())
+                    // .and_provides(&payload.block_number) // next_unsigned_at
                     .longevity(5)
                     .propagate(true)
                     .build()
@@ -1526,6 +1535,12 @@ where
         let a = 1;
         is_aura
     }
+
+    // fn make_transaction_tag_prefix_with_public_account(mut perfix: Vec<u8>, account: <T as SigningTypes>::Public)-> Vec<u8> {
+    //     let mut account_u8 = account.encode();
+    //     perfix.append(&mut account_u8);
+    //     perfix
+    // }
 
     // Make bulk request format array.
     fn make_bulk_price_format_data(
@@ -2358,7 +2373,7 @@ where
     }
 
 
-    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, price_list : Vec<PricePayloadSubPrice>) {
+    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, block_number: T::BlockNumber, price_list : Vec<PricePayloadSubPrice>) {
 
         let current_block = <system::Pallet<T>>::block_number();
 
@@ -2392,6 +2407,7 @@ where
         );
 
         Self::deposit_event(Event::NewPurchasedPrice(
+            block_number.clone(),
             price_list.clone(),
             account_id.clone(),
         ));

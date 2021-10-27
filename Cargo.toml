@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "pallets/pallet-ocw",
+    "pallets/ocw-finance",
     "pallets/staking-extend",
     "pallets/member-extend",
     "pallets/challenge",
