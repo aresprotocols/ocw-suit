@@ -756,7 +756,7 @@ pub mod pallet {
                 ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
                     .priority(priority_num.saturating_add(1))
                     .and_provides(payload.public.clone())
-                    // .and_provides(&payload.block_number) // next_unsigned_at
+                    // .and_provides(&payload.block_number)
                     .longevity(5)
                     .propagate(true)
                     .build()
