@@ -746,9 +746,16 @@ pub mod pallet {
                 }
 
                 let priority_num: u64 = T::UnsignedPriority::get();
+
+                // let perfix_v8 = Self::make_transaction_tag_prefix_with_public_account(
+                //     "pallet-ocw::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
+                //     payload.public.clone()
+                // );
+                // let perfix_str: &'static str = sp_std::str::from_utf8("pallet-ocw::validate_transaction_parameters_of_purchased_price").unwrap();
                 ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
                     .priority(priority_num.saturating_add(1))
-                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .and_provides(payload.public.clone())
+                    // .and_provides(&payload.block_number) // next_unsigned_at
                     .longevity(5)
                     .propagate(true)
                     .build()
@@ -1528,6 +1535,12 @@ where
         let a = 1;
         is_aura
     }
+
+    // fn make_transaction_tag_prefix_with_public_account(mut perfix: Vec<u8>, account: <T as SigningTypes>::Public)-> Vec<u8> {
+    //     let mut account_u8 = account.encode();
+    //     perfix.append(&mut account_u8);
+    //     perfix
+    // }
 
     // Make bulk request format array.
     fn make_bulk_price_format_data(
