@@ -5,7 +5,10 @@ use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
 	weights::Weight,
+	PalletId,
 };
+
+
 use frame_system as system;
 use pallet_balances;
 use pallet_balances::{BalanceLock, Error as BalancesError};
@@ -15,10 +18,15 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
+use frame_benchmarking::frame_support::pallet_prelude::Get;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 // pub(crate) type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 pub(crate) type AccountId = u64;
+/// Balance of an account.
+pub type Balance = u64;
+pub const DOLLARS: u64 = 1_000_000_000_000;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -56,7 +64,7 @@ impl system::Config for Test {
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	// type AccountData = ();
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -64,20 +72,27 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
+parameter_types! {
+	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
+	pub const BasicDollars: Balance = DOLLARS;
+}
+
 impl ocw_finance::Config for Test {
 	type Event = Event;
+	type PalletId = AresFinancePalletId;
 	type Currency = pallet_balances::Pallet<Self>;
+	type BasicDollars = BasicDollars;
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	pub const ExistentialDeposit: Balance = 1;
 	pub const MaxLocks: u32 = 10;
 }
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = MaxLocks;
-	type Balance = u64;
+	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;

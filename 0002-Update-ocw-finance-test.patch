@@ -1,0 +1,39 @@
+From 0abf8ee7fead823e0677dbc98d68a13f6b3d6cf1 Mon Sep 17 00:00:00 2001
+From: linhai <kami@cancanyou.com>
+Date: Wed, 27 Oct 2021 10:26:22 +0800
+Subject: [PATCH 2/2] Update ocw-finance test.
+
+---
+ pallets/ocw-finance/src/mock.rs | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/pallets/ocw-finance/src/mock.rs b/pallets/ocw-finance/src/mock.rs
+index 0e951a3..b881139 100644
+--- a/pallets/ocw-finance/src/mock.rs
++++ b/pallets/ocw-finance/src/mock.rs
+@@ -32,13 +32,21 @@ frame_support::construct_runtime!(
+ 	}
+ );
+ 
++// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
++pub struct BaseFilter;
++impl Contains<Call> for BaseFilter {
++	fn contains(_call: &Call) -> bool {
++		true
++	}
++}
++
+ parameter_types! {
+ 	pub const BlockHashCount: u64 = 250;
+ 	pub const SS58Prefix: u8 = 42;
+ }
+ 
+ impl system::Config for Test {
+-	type BaseCallFilter = frame_support::traits::Everything;
++	type BaseCallFilter = BaseFilter;
+ 	type BlockWeights = ();
+ 	type BlockLength = ();
+ 	type DbWeight = ();
+-- 
+2.24.3 (Apple Git-128)
+

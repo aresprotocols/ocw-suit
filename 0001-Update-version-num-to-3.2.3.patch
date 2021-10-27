@@ -1,0 +1,24 @@
+From 78a9e19549619ec7daeb6e2499d0e32a736d8530 Mon Sep 17 00:00:00 2001
+From: linhai <kami@cancanyou.com>
+Date: Wed, 27 Oct 2021 10:01:46 +0800
+Subject: [PATCH 1/2] Update version num to 3.2.3
+
+---
+ pallets/pallet-ocw/Cargo.toml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pallets/pallet-ocw/Cargo.toml b/pallets/pallet-ocw/Cargo.toml
+index c570c00..aebad57 100644
+--- a/pallets/pallet-ocw/Cargo.toml
++++ b/pallets/pallet-ocw/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+ name = "pallet-ocw"
+-version = "3.2.2"
++version = "3.2.3"
+ authors = ["Ares Technologies <linhai@cancanyou.com>"]
+ edition = "2018"
+ license = "Unlicense"
+-- 
+2.24.3 (Apple Git-128)
+
