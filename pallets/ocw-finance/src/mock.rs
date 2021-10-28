@@ -26,6 +26,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub(crate) type AccountId = u64;
 /// Balance of an account.
 pub type Balance = u64;
+pub type BlockNumber = u64;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
 frame_support::construct_runtime!(
@@ -83,6 +84,7 @@ impl system::Config for Test {
 parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
+	pub const AskPeriod: BlockNumber = 10;
 }
 
 impl ocw_finance::Config for Test {
@@ -90,10 +92,11 @@ impl ocw_finance::Config for Test {
 	type PalletId = AresFinancePalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type BasicDollars = BasicDollars;
+	type AskPeriod = AskPeriod;
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: Balance = 1;
+	pub const ExistentialDeposit: Balance = 100;
 	pub const MaxLocks: u32 = 10;
 }
 impl pallet_balances::Config for Test {
@@ -111,11 +114,19 @@ impl pallet_balances::Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
+		balances: vec![(1, 1000000000100), (2, 2000000000100), (3, 3000000000100), (4, 4000000000100), (5, 5000000000100), (6, 6000000000100)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
+	crate::GenesisConfig::<Test> {
+		_pt: Default::default()
+	}.assimilate_storage(&mut t).unwrap();
+	
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
+}
+
+pub fn toVec(to_str: &str) -> Vec<u8> {
+	to_str.as_bytes().to_vec()
 }
