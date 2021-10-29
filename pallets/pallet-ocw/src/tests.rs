@@ -2882,6 +2882,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     t.into()
 }
 
+
 fn init_aura_enging_digest() {
     use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
     let slot = Slot::from(1);

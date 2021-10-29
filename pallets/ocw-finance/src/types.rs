@@ -5,11 +5,15 @@ use sp_runtime::RuntimeDebug;
 pub type BalanceOf<T> =
 <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+    <T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
+
 pub type PurchaseId = Vec<u8>;
 
 pub type AskPeriodNum = u64;
 
-pub type AskPointNum = u64;
+pub type AskPointNum = u32;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OcwPaymentResult<T: Config> {

@@ -27,6 +27,7 @@ pub(crate) type AccountId = u64;
 /// Balance of an account.
 pub type Balance = u64;
 pub type BlockNumber = u64;
+pub type AskPeriodNum = u64;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
 frame_support::construct_runtime!(
@@ -85,6 +86,8 @@ parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
 	pub const AskPeriod: BlockNumber = 10;
+	pub const RewardPeriodCycle: AskPeriodNum = 2;
+	pub const RewardSlot: AskPeriodNum = 1;
 }
 
 impl ocw_finance::Config for Test {
@@ -93,6 +96,9 @@ impl ocw_finance::Config for Test {
 	type Currency = pallet_balances::Pallet<Self>;
 	type BasicDollars = BasicDollars;
 	type AskPeriod = AskPeriod;
+	type RewardPeriodCycle = RewardPeriodCycle;
+	type RewardSlot = RewardSlot;
+	type OnSlash = ();
 }
 
 parameter_types! {

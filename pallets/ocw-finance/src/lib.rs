@@ -1,13 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{Currency, Get, ReservableCurrency, ExistenceRequirement};
+use frame_support::traits::{Currency, Get, ReservableCurrency, ExistenceRequirement, OnUnbalanced};
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use pallet::*;
 use crate::traits::*;
 use crate::types::*;
-use sp_runtime::traits::Saturating;
+use sp_runtime::traits::{Saturating, Zero};
 use frame_support::sp_runtime::traits::{AccountIdConversion, Clear};
 use frame_support::sp_std::convert::TryInto;
 
@@ -27,7 +27,7 @@ mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::traits::{Currency, ReservableCurrency};
+	use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced};
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, PalletId};
 	use frame_system::pallet_prelude::*;
 	use crate::types::*;
@@ -51,6 +51,15 @@ pub mod pallet {
 		///
 		#[pallet::constant]
 		type AskPeriod: Get<Self::BlockNumber>;
+
+
+		#[pallet::constant]
+		type RewardPeriodCycle: Get<AskPeriodNum>;
+
+		#[pallet::constant]
+		type RewardSlot: Get<AskPeriodNum>;
+
+		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	}
 
@@ -95,6 +104,19 @@ pub mod pallet {
 		Blake2_128Concat,
 		(<T as frame_system::Config>::AccountId, PurchaseId), // pay or pay to account. ,,
 		AskPointNum,
+		ValueQuery,
+	>;
+
+
+	#[pallet::storage]
+	#[pallet::getter(fn reward_trace)]
+	pub type RewardTrace<T> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		AskPeriodNum, //,
+		Blake2_128Concat,
+		<T as frame_system::Config>::AccountId,
+		(<T as frame_system::Config>::BlockNumber, BalanceOf<T>),
 		ValueQuery,
 	>;
 
@@ -147,6 +169,14 @@ pub mod pallet {
 		RefundFailed,
 		//
 		PointRecordIsAlreadyExists,
+		//
+		RewardSlotNotExpired,
+		//
+		RewardPeriodHasExpired,
+		//
+		NoRewardPoints,
+		//
+		RewardHasBeenClaimed
 	}
 
 	#[pallet::hooks]
@@ -292,8 +322,8 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 
 impl <T: Config> IForReporter<T> for Pallet<T> {
 
-	//
-	fn record_submit_point(who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: u64) -> Result<(), Error<T>> {
+	// Note that `bn` is not the current block, but `p_id` corresponds to the submitted block
+	fn record_submit_point(who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: AskPointNum) -> Result<(), Error<T>> {
 		// (period, who, (purchase_id, price_count) )
 		let ask_period = Self::make_period_num(bn);
 		// println!("(who.clone(), p_id.clone()) = {:?}", (who.clone(), p_id.clone()));
@@ -320,23 +350,118 @@ impl <T: Config> IForBase<T> for Pallet<T> {
 
 impl <T: Config> IForReward<T> for Pallet<T> {
 	//
-	fn take_reward(ask_period: AskPeriodNum, who: T::AccountId) -> Result<(), Error<T>> {
-		// get his point.
+	fn take_reward(ask_period: AskPeriodNum, who: T::AccountId) -> Result<BalanceOf<T>, Error<T>> {
 
-		todo!()
+		//
+		if <RewardTrace<T>>::contains_key(ask_period.clone(), who.clone()) {
+			return Err(Error::<T>::RewardHasBeenClaimed);
+		}
+
+		// calculate current period number
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
+		let current_period = Self::make_period_num(current_block_number);
+
+		// Check unreached.
+		if ask_period > (current_period.saturating_sub(T::RewardSlot::get())) {
+			return Err(Error::<T>::RewardSlotNotExpired);
+		}
+
+		// Check expired.
+		if ask_period < Self::get_earliest_reward_period(current_block_number) {
+			return Err(Error::<T>::RewardPeriodHasExpired);
+		}
+
+		// get his point.
+		let mut reward_point: AskPointNum = 0;
+		let reward_list: Vec<(T::AccountId, PurchaseId)> = <AskPeriodPoint<T>>::iter_prefix(ask_period).map(|((acc, p_id), point)| {
+			if &acc == &who {
+				reward_point += point;
+			}
+			(who.clone(), p_id.clone())
+		}).collect();
+
+		if 0 == reward_point {
+			return Err(Error::<T>::NoRewardPoints);
+		}
+
+		//convert point to balance.
+		// get period income
+		let period_income: BalanceOf<T> = Self::get_period_income(ask_period);
+		let period_point = Self::get_period_point(ask_period);
+		let single_reward_balance = period_income / period_point.into();
+
+		// get reward of `who`
+		let reward_balance = single_reward_balance.saturating_mul(reward_point.into());
+
+		let res = T::Currency::transfer(
+			&Self::account_id(),
+			&who,
+			reward_balance,
+			ExistenceRequirement::KeepAlive,
+		);
+
+		<RewardTrace<T>>::insert(ask_period.clone(), who.clone(), (current_block_number, reward_balance));
+
+		Ok(reward_balance)
 	}
 
+	fn get_period_income(ask_period: AskPeriodNum) -> BalanceOf<T> {
+		// <BalanceOf<T>>::from(1000u32)
+		let mut result = <BalanceOf<T>>::from(0u32);
+		<AskPeriodPayment<T>>::iter_prefix_values(ask_period).into_iter().any(|x| {
+			result += x;
+			false
+		});
+		result
+	}
+
+
 	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum {
-		todo!()
+		// calculate current period number
+		let param_period = Self::make_period_num(bn);
+		param_period.saturating_sub(T::RewardPeriodCycle::get()).saturating_sub(T::RewardSlot::get())
 	}
 
 	//
-	fn get_sum_of_record_point(ask_period: AskPeriodNum) -> AskPointNum {
+	fn get_period_point(ask_period: AskPeriodNum) -> AskPointNum {
 		<AskPeriodPoint<T>>::iter_prefix_values(ask_period).into_iter().sum()
 	}
 
 	//
 	fn check_and_slash_expired_rewards(ask_period: AskPeriodNum) -> Option<BalanceOf<T>> {
-		todo!()
+		let check_period = ask_period
+			.saturating_sub(1)
+			.saturating_sub(T::RewardPeriodCycle::get())
+			.saturating_sub(T::RewardSlot::get());
+
+		if 0 == check_period {
+			return None;
+		}
+
+		// get checkout period fund
+		let period_income: BalanceOf<T> = Self::get_period_income(check_period);
+
+		// get sum of paid reward
+		let mut paid_reward = <BalanceOf<T>>::from(0u32);
+		<RewardTrace<T>>::iter_prefix_values(check_period).any(|(bn, amount)| {
+			paid_reward += amount;
+			false
+		});
+
+		let diff: BalanceOf<T> = period_income.saturating_sub(paid_reward);
+		if diff == 0u32.into() {
+			return None;
+		}
+
+		// println!("check_period = {:?}, paid_reward = {:?}, diff = {:?}  ", check_period, paid_reward, diff);
+
+		let (negative_imbalance, _remaining_balance) = T::Currency::slash(&Self::account_id(), diff);
+		T::OnSlash::on_unbalanced(negative_imbalance);
+
+		<RewardTrace<T>>::remove_prefix(check_period, None);
+		<AskPeriodPoint<T>>::remove_prefix(check_period, None);
+		<AskPeriodPayment<T>>::remove_prefix(check_period, None);
+
+		Some(diff)
 	}
 }

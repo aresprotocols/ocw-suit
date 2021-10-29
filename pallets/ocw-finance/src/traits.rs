@@ -19,18 +19,21 @@ pub trait IForPrice<T: Config>: IForBase<T> {
 
 pub trait IForReporter<T: Config>: IForBase<T> {
 	//
-	fn record_submit_point (who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: u64) -> Result<(), Error<T>>;
+	fn record_submit_point (who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: AskPointNum) -> Result<(), Error<T>>;
 }
 
 pub trait IForReward<T: Config>: IForBase<T> {
 	//
-	fn take_reward(ask_period: AskPeriodNum, who: T::AccountId) -> Result<(), Error<T>>;
+	fn take_reward(ask_period: AskPeriodNum, who: T::AccountId) -> Result<BalanceOf<T>, Error<T>>;
+
+	//
+	fn get_period_income(ask_period: AskPeriodNum) -> BalanceOf<T>;
 
 	//
 	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum;
 
 	//
-	fn get_sum_of_record_point(ask_period: AskPeriodNum) -> AskPointNum;
+	fn get_period_point(ask_period: AskPeriodNum) -> AskPointNum;
 
 	//
 	fn check_and_slash_expired_rewards(ask_period: AskPeriodNum) -> Option<BalanceOf<T>>;
