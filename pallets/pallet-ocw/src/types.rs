@@ -1,6 +1,7 @@
 
 use super::*;
 use sp_core::hexdisplay::HexDisplay;
+use sp_runtime::traits::{Saturating, Zero};
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
@@ -113,7 +114,8 @@ pub struct PurchasedRequestData<T: Config>
           u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     pub account_id: T::AccountId,
-    pub offer: u64,
+    pub offer: BalanceOf<T>,
+    pub create_bn: T::BlockNumber,
     pub submit_threshold: u8,
     pub max_duration: u64,
     pub request_keys: Vec<Vec<u8>>,
@@ -126,7 +128,8 @@ impl <T: Config> Default for PurchasedRequestData<T>
     fn default() -> Self {
         Self {
             account_id: Default::default(),
-            offer: 0,
+            offer: 0u32.into(),
+            create_bn: Default::default(),
             submit_threshold: 0,
             max_duration: 0,
             request_keys: Vec::new(),

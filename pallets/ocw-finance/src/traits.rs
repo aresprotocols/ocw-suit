@@ -11,15 +11,19 @@ pub trait IForPrice<T: Config>: IForBase<T> {
 	fn calculate_fee_of_ask_quantity(price_count: u32) -> BalanceOf<T> ;
 
 	// Pay purchased price request fee.
-	fn payment_for_ask_quantity(who: T::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<T> ;
+	fn reserve_for_ask_quantity(who: T::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<T> ;
 
 	// Refund fee of purchased price reqest.
-	fn refund_ask_paid (p_id: PurchaseId) -> Result<(), Error<T>>;
+	fn unreserve_ask (p_id: PurchaseId) -> Result<(), Error<T>>;
+
+	fn pay_to_ask(p_id: PurchaseId) -> Result<(), Error<T>>;
 }
 
 pub trait IForReporter<T: Config>: IForBase<T> {
 	//
 	fn record_submit_point (who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: AskPointNum) -> Result<(), Error<T>>;
+	//
+	fn get_record_point(ask_period: u64, who: T::AccountId, p_id: PurchaseId) -> Option<AskPointNum>;
 }
 
 pub trait IForReward<T: Config>: IForBase<T> {

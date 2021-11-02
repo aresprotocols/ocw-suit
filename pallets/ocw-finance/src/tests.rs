@@ -14,7 +14,7 @@ fn test_it_works_for_default_value() {
 }
 
 #[test]
-fn test_payment_for_ask_quantity() {
+fn test_reserve_for_ask_quantity() {
 	new_test_ext().execute_with(|| {
 
 		let current_bn: u64 = 1;
@@ -25,9 +25,10 @@ fn test_payment_for_ask_quantity() {
 		const price_count: u32 = 3;
 
 		let calculate_result = OcwFinance::calculate_fee_of_ask_quantity(price_count);
-		let payment_result = OcwFinance::payment_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
-
+		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
+		let payment_result = OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
+		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
 		assert_eq!(payment_result, OcwPaymentResult::Success(toVec("Purchased_ID"), calculate_result));
 
 		// check storage status
@@ -37,13 +38,13 @@ fn test_payment_for_ask_quantity() {
 			create_bn: current_bn,
 			is_income: true,
 		});
-		let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, toVec("Purchased_ID")));
-		assert_eq!(ask_payment, calculate_result);
+		// let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, toVec("Purchased_ID")));
+		// assert_eq!(ask_payment, calculate_result);
 	});
 }
 
 #[test]
-fn test_refund_ask_paid() {
+fn test_unreserve_ask() {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 
@@ -55,23 +56,24 @@ fn test_refund_ask_paid() {
 		const price_count: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OcwFinance::refund_ask_paid(toVec("Purchased_ID"));
+		let refund_result: Result<(), Error<Test>> = OcwFinance::unreserve_ask(toVec("Purchased_ID"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OcwFinance::payment_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
+		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
+		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
 
 		// check period income.
 		assert_eq!(
 			OcwFinance::get_period_income(OcwFinance::make_period_num(current_bn)),
-			3000000000000
+			0
 		);
 		assert_eq!(
 			OcwFinance::pot(),
-			(OcwFinance::account_id(), 3000000000000)
+			(OcwFinance::account_id(), 0)
 		);
 
 		// check storage status
@@ -81,11 +83,12 @@ fn test_refund_ask_paid() {
 			create_bn: current_bn,
 			is_income: true,
 		});
+
 		let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, toVec("Purchased_ID")));
-		assert_eq!(ask_payment, 3000000000000);
+		assert_eq!(ask_payment, 0, "only reserve so payment still be 0.");
 
 		// get ask paid fee.
-		assert_ok!(OcwFinance::refund_ask_paid(toVec("Purchased_ID")));
+		assert_ok!(OcwFinance::unreserve_ask(toVec("Purchased_ID")));
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
 
 		// check storage status
@@ -107,13 +110,13 @@ fn test_refund_ask_paid() {
 		const price_count: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OcwFinance::refund_ask_paid(toVec("Purchased_ID_2"));
+		let refund_result: Result<(), Error<Test>> = OcwFinance::unreserve_ask(toVec("Purchased_ID_2"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OcwFinance::payment_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
+		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 
 	});
@@ -130,23 +133,23 @@ fn test_refund_ask_paid() {
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 4000000000100);
-		OcwFinance::payment_for_ask_quantity(AccountId, toVec("Purchased_ID_NEW"), price_count);
+		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID_NEW"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 
 		// check period income.
 		assert_eq!(
 			OcwFinance::get_period_income(OcwFinance::make_period_num(previous_bn)),
-			3000000000000
+			0
 		);
 
 		// check period income.
 		assert_eq!(
 			OcwFinance::get_period_income(OcwFinance::make_period_num(current_bn)),
-			4000000000000
+			0
 		);
 		assert_eq!(
 			OcwFinance::pot(),
-			(OcwFinance::account_id(), 7000000000000)
+			(OcwFinance::account_id(), 0) // because use reserve
 		);
 
 	});
@@ -194,10 +197,10 @@ fn test_check_and_slash_expired_rewards() {
 		const AccountId_2: u64 = 2;
 		const AccountId_3: u64 = 3;
 
-		OcwFinance::payment_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		OcwFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
 		assert_ok!(OcwFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
 		assert_ok!(OcwFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-
+		assert_ok!(OcwFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
 		// check pot
 		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
 
@@ -313,8 +316,11 @@ fn test_take_reward() {
 		assert_eq!(Balances::free_balance(AccountId_3), 3000000000100);
 
 		// ask paid.
-		OcwFinance::payment_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		OcwFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
+		assert_ok!(OcwFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
 		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
+
 
 		//
 		assert_eq!(

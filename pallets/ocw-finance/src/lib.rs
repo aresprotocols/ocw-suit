@@ -10,7 +10,10 @@ use crate::types::*;
 use sp_runtime::traits::{Saturating, Zero};
 use frame_support::sp_runtime::traits::{AccountIdConversion, Clear};
 use frame_support::sp_std::convert::TryInto;
+use sp_std::vec::Vec;
 
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
 
 #[cfg(test)]
 mod mock;
@@ -21,8 +24,8 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod traits;
-mod types;
+pub mod traits;
+pub mod types;
 
 
 #[frame_support::pallet]
@@ -48,10 +51,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type BasicDollars: Get<BalanceOf<Self>>;
 
-		///
 		#[pallet::constant]
 		type AskPeriod: Get<Self::BlockNumber>;
-
 
 		#[pallet::constant]
 		type RewardPeriodCycle: Get<AskPeriodNum>;
@@ -122,7 +123,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub(crate) _pt: PhantomData<T>,
+		pub _pt: PhantomData<T>,
 	}
 
 	#[cfg(feature = "std")]
@@ -176,7 +177,11 @@ pub mod pallet {
 		//
 		NoRewardPoints,
 		//
-		RewardHasBeenClaimed
+		RewardHasBeenClaimed,
+		//
+		UnReserveBalanceError,
+		//
+		TransferBalanceError,
 	}
 
 	#[pallet::hooks]
@@ -193,42 +198,40 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://substrate.dev/docs/en/knowledgebase/runtime/origin
-			let who = ensure_signed(origin)?;
 
-			// Update storage.
-			<Something<T>>::put(something);
+		// #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		// pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
+		// 	// Check that the extrinsic was signed and get the signer.
+		// 	// This function will return an error if the extrinsic is not signed.
+		// 	// https://substrate.dev/docs/en/knowledgebase/runtime/origin
+		// 	let who = ensure_signed(origin)?;
+		//
+		// 	// Update storage.
+		// 	<Something<T>>::put(something);
+		//
+		// 	// Emit an event.
+		// 	Self::deposit_event(Event::SomethingStored(something, who));
+		// 	// Return a successful DispatchResultWithPostInfo
+		// 	Ok(())
+		// }
 
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
-		}
-
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
-
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => Err(Error::<T>::NoneValue)?,
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				}
-			}
-		}
+		// #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
+		// pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
+		// 	let _who = ensure_signed(origin)?;
+		//
+		// 	// Read a value from storage.
+		// 	match <Something<T>>::get() {
+		// 		// Return an error if the value has not been set.
+		// 		None => Err(Error::<T>::NoneValue)?,
+		// 		Some(old) => {
+		// 			// Increment the value read from storage; will error in the event of overflow.
+		// 			let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+		// 			// Update the value in storage with the incremented result.
+		// 			<Something<T>>::put(new);
+		// 			Ok(())
+		// 		}
+		// 	}
+		// }
 	}
 }
 
@@ -252,15 +255,17 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 		T::BasicDollars::get().saturating_mul(price_count.into())
 	}
 
-	fn payment_for_ask_quantity(who: <T as frame_system::Config>::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<T> {
+	fn reserve_for_ask_quantity(who: <T as frame_system::Config>::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<T> {
 		let reserve_balance = Self::calculate_fee_of_ask_quantity(price_count);
 		// T::Currency::reserve(&account_id, reserve_balance.clone());
-		let res = T::Currency::transfer(
-			&who,
-			&Self::account_id(),
-			reserve_balance,
-			ExistenceRequirement::KeepAlive,
-		);
+		// let res = T::Currency::transfer(
+		// 	&who,
+		// 	&Self::account_id(),
+		// 	reserve_balance,
+		// 	ExistenceRequirement::KeepAlive,
+		// );
+
+		let res = T::Currency::reserve(&who, reserve_balance);
 
 		if res.is_err() {
 			return OcwPaymentResult::InsufficientBalance(p_id.clone(), reserve_balance.clone());
@@ -278,12 +283,12 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 			},
 		);
 		let ask_period = Self::make_period_num(current_block_number);
-		<AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), reserve_balance);
+		// <AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), reserve_balance);
 
 		OcwPaymentResult::Success(p_id, reserve_balance)
 	}
 
-	fn refund_ask_paid(p_id: PurchaseId) -> Result<(), Error<T>> {
+	fn unreserve_ask(p_id: PurchaseId) -> Result<(), Error<T>> {
 
 		let payment_list = <PaymentTrace<T>>::iter_prefix(p_id.clone());
 		// if payment_list.into_iter()..count() == 0 as usize {
@@ -292,19 +297,16 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 		let mut find_pid = false;
 		let is_success = payment_list.into_iter().into_iter().any(|(who, paid_value)| {
 			if paid_value.is_income {
-				let res = T::Currency::transfer(
-					&Self::account_id(),
-					&who,
-					paid_value.amount,
-					ExistenceRequirement::KeepAlive,
-				);
-				if res.is_ok() {
+				find_pid = true;
+
+				let res = T::Currency::unreserve(&who, paid_value.amount);
+
+				if res.is_zero() {
 					<PaymentTrace<T>>::remove(p_id.clone(), who.clone());
-					let ask_period = Self::make_period_num(paid_value.create_bn);
-					<AskPeriodPayment<T>>::remove(ask_period, (who.clone(), p_id.clone()));
+					// let ask_period = Self::make_period_num(paid_value.create_bn);
+					// <AskPeriodPayment<T>>::remove(ask_period, (who.clone(), p_id.clone()));
 					return true;
 				}
-				find_pid = true;
 			}
 			false
 		});
@@ -317,6 +319,46 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 			return Err(Error::NotFoundPaymentRecord);
 		}
 		Err(Error::RefundFailed)
+	}
+
+	fn pay_to_ask(p_id: PurchaseId) -> Result<(), Error<T>> {
+
+		let payment_list = <PaymentTrace<T>>::iter_prefix(p_id.clone());
+
+		let mut opt_paid_value: Option<(T::AccountId, PaidValue<T>)> = None;
+		payment_list.into_iter().into_iter().any(|(who, paid_value)| {
+			if paid_value.is_income {
+				opt_paid_value = Some((who,paid_value));
+			}
+			false
+		});
+
+		if opt_paid_value.is_none() {
+			return Err(Error::NotFoundPaymentRecord);
+		}
+
+		let (who, paid_value ) = opt_paid_value.unwrap();
+		// unreserve
+		let unreserve_value = T::Currency::unreserve(&who, paid_value.amount);
+		if !unreserve_value.is_zero() {
+			return Err(Error::<T>::UnReserveBalanceError);
+		}
+
+		let res = T::Currency::transfer(
+			&who,
+			&Self::account_id(),
+			paid_value.amount,
+			ExistenceRequirement::KeepAlive,
+		);
+
+		if !res.is_ok() {
+			return Err(Error::<T>::TransferBalanceError);
+		}
+
+		let ask_period = Self::make_period_num(paid_value.create_bn);
+		<AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), paid_value.amount);
+
+		Ok(())
 	}
 }
 
@@ -333,6 +375,14 @@ impl <T: Config> IForReporter<T> for Pallet<T> {
 		<AskPeriodPoint<T>>::insert(ask_period, (who.clone(), p_id), ask_point);
 		Ok(())
 	}
+
+	fn get_record_point(ask_period: u64, who: T::AccountId, p_id: PurchaseId) -> Option<AskPointNum> {
+		let point = <AskPeriodPoint<T>>::try_get(ask_period, (who.clone(), p_id.clone()));
+		if point.is_err() {
+			return None;
+		}
+		return Some(point.unwrap());
+	}
 }
 
 
@@ -347,6 +397,18 @@ impl <T: Config> IForBase<T> for Pallet<T> {
 		param_bn / ask_perio
 	}
 }
+
+// impl <BlockNumber: > IForBase<BlockNumber> for Pallet<BlockNumber> {
+// 	//
+// 	fn make_period_num(bn: BlockNumber) -> AskPeriodNum {
+// 		let param_bn: u64 = bn.try_into().unwrap_or(0);
+// 		let ask_perio: u64 = T::AskPeriod::get().try_into().unwrap_or(0);
+// 		if 0 == param_bn || 0 == ask_perio {
+// 			return 0;
+// 		}
+// 		param_bn / ask_perio
+// 	}
+// }
 
 impl <T: Config> IForReward<T> for Pallet<T> {
 	//

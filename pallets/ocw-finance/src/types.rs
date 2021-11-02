@@ -1,6 +1,7 @@
 use super::*;
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
+use sp_std::vec::Vec;
 
 pub type BalanceOf<T> =
 <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
