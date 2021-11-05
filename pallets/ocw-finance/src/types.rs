@@ -21,6 +21,9 @@ pub enum OcwPaymentResult<T: Config> {
     InsufficientBalance(PurchaseId,BalanceOf<T>),
     Success(PurchaseId,BalanceOf<T>)
 }
+// "OcwPaymentResult": {
+// "_enum": ["InsufficientBalance(PurchaseId,BalanceOf)","Success(PurchaseId,BalanceOf)"]
+// }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PaidValue<T: Config> {
