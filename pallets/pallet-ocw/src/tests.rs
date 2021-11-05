@@ -19,7 +19,14 @@ use crate::*;
 use crate as ares_ocw_worker;
 use codec::Decode;
 use super::Event as AresOcwEvent;
-use frame_support::{assert_ok, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild};
+use frame_support::{assert_ok, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild, PalletId};
+// use frame_support::{
+//     assert_noop, assert_ok, ord_parameter_types, parameter_types,
+//     traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
+//     weights::Weight,
+//     PalletId,
+// };
+
 use std::sync::Arc;
 use pallet_session::historical as pallet_session_historical;
 use sp_core::{
@@ -44,9 +51,12 @@ use sp_runtime::{
     },
 };
 
+
+
+
 use sp_core::sr25519::Public as Public;
 // use pallet_session::historical as pallet_session_historical;
-use frame_support::traits::{FindAuthor, VerifySeal, Len, ExtrinsicCall};
+use frame_support::traits::{FindAuthor, VerifySeal, Len, ExtrinsicCall, OnInitialize};
 // use pallet_authorship::SealVerify;
 use sp_staking::SessionIndex;
 use sp_runtime::traits::AppVerify;
@@ -65,6 +75,14 @@ use frame_support::sp_runtime::testing::{Digest, DigestItem};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+pub type Balance = u64;
+pub type BlockNumber = u64;
+pub type AskPeriodNum = u64;
+pub const DOLLARS: u64 = 1_000_000_000_000;
+
+use ocw_finance::types::*;
+use ocw_finance::traits::*;
+
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -77,11 +95,46 @@ frame_support::construct_runtime!(
         Historical: pallet_session_historical::{Pallet},
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
-		// Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		OcwFinance: ocw_finance::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
+parameter_types! {
+	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
+	pub const BasicDollars: Balance = DOLLARS;
+	pub const AskPeriod: BlockNumber = 10;
+	pub const RewardPeriodCycle: AskPeriodNum = 2;
+	pub const RewardSlot: AskPeriodNum = 1;
+}
+
+impl ocw_finance::Config for Test {
+    type Event = Event;
+    type PalletId = AresFinancePalletId;
+    type Currency = pallet_balances::Pallet<Self>;
+    type BasicDollars = BasicDollars;
+    type AskPeriod = AskPeriod;
+    type RewardPeriodCycle = RewardPeriodCycle;
+    type RewardSlot = RewardSlot;
+    type OnSlash = ();
+}
+
+parameter_types! {
+	pub const ExistentialDeposit: Balance = 100;
+	pub const MaxLocks: u32 = 10;
+}
+impl pallet_balances::Config for Test {
+    type MaxReserves = ();
+    type ReserveIdentifier = [u8; 8];
+    type MaxLocks = MaxLocks;
+    type Balance = Balance;
+    type Event = Event;
+    type DustRemoval = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
+    type WeightInfo = ();
+}
 
 #[cfg(feature = "historical")]
 impl crate::historical::Config for Test {
@@ -122,41 +175,10 @@ impl FindAuthor<AccountId> for TestFindAuthor {
     }
 }
 
-// pub struct VerifyBlock;
-// impl VerifySeal<Header, Public> for VerifyBlock {
-//     fn verify_seal(header: &Header) -> Result<Option<Public>, &'static str> {
-//         let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-//         let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
-//
-//         let author = AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
-//
-//         for (id, seal) in seals {
-//             if id == TEST_ID {
-//                 match Public::decode(&mut &seal[..]) {
-//                     Err(_) => return Err("wrong seal"),
-//                     Ok(a) => {
-//                         if a != author {
-//                             return Err("wrong author in seal");
-//                         }
-//                         break
-//                     }
-//                 }
-//             }
-//         }
-//         Ok(Some(author))
-//     }
-// }
 
 parameter_types! {
 	pub const UncleGenerations: u32 = 5;
 }
-
-// impl pallet_authorship::Config for Test {
-//     type FindAuthor = AuthorGiven;
-//     type UncleGenerations = UncleGenerations;
-//     type FilterUncle = SealVerify<VerifyBlock>;
-//     type EventHandler = ();
-// }
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -193,7 +215,7 @@ impl frame_system::Config for Test {
     type BlockHashCount = BlockHashCount;
     type Version = ();
     type PalletInfo = PalletInfo;
-    type AccountData = ();
+    type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
@@ -271,6 +293,7 @@ impl Config for Test {
     type VMember = TestMember;
 
     type AuthorityCount = TestAuthorityCount;
+    type OcwFinanceHandler = OcwFinance;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -494,10 +517,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
     offchain_state.write().expect_request(padding_request);
 
+    let mut pub_purchase_id = Vec::new();
     t.execute_with(|| {
         System::set_block_number(1);
-
         let purchase_id = AresOcw::make_purchase_price_id(<Test as SigningTypes>::Public::from(public_key_1), 0);
+        pub_purchase_id = purchase_id.clone();
         let price_payload_b1 = PurchasedPricePayload {
             block_number: 1, // type is BlockNumber
             purchase_id: purchase_id.clone(),
@@ -519,11 +543,17 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
         let submit_threshold = 100u8;
         let max_duration = 3u64;
         let request_keys = vec![toVec("btc_price")];
+
+        Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
+        assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
+        let result = OcwFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+        println!("result = {:?}", result);
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,
             submit_threshold,
             max_duration,
+            purchase_id.clone(),
             request_keys.clone() ));
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(request_acc.clone());
@@ -612,6 +642,28 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             assert!(purchased_key_option.is_none());
         }
 
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_1.into_account(),
+            pub_purchase_id.clone(),
+        ), None);
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_2.into_account(),
+            pub_purchase_id.clone(),
+        ), None);
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_3.into_account(),
+            pub_purchase_id.clone(),
+        ), None);
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_4.into_account(),
+            pub_purchase_id.clone(),
+        ), None);
+
+
         let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(order_pool.len(), 0);
 
@@ -655,6 +707,27 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_4.clone());
             assert!(purchased_key_option.is_none());
         }
+
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_1.into_account(),
+            pub_purchase_id.clone(),
+        ), Some(1));
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_2.into_account(),
+            pub_purchase_id.clone(),
+        ), Some(1));
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_3.into_account(),
+            pub_purchase_id.clone(),
+        ), Some(1));
+        assert_eq!(OcwFinance::get_record_point(
+            OcwFinance::make_period_num(2),
+            public_key_4.into_account(),
+            pub_purchase_id.clone(),
+        ), Some(1));
 
         let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(order_pool.len(), 1);
@@ -737,7 +810,10 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
     offchain_state.write().expect_request(padding_request);
 
     t.execute_with(|| {
-        System::set_block_number(1);
+
+        let current_bn: u64 = 1;
+        System::set_block_number(current_bn);
+        <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
         // Add purchase price
         // Add purchased request.
@@ -746,11 +822,19 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
         let submit_threshold = 60u8;
         let max_duration = 3u64;
         let request_keys = vec![toVec("btc_price")];
+
+        // check finance pallet status.
+        assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000);
+        let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
+        OcwFinance::reserve_for_ask_quantity(request_acc.into_account(), purchase_id.clone(), request_keys.len() as u32);
+        assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000 - DOLLARS * 1);
+
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,
             submit_threshold, // 1 + 3 = 4
             max_duration,
+            purchase_id.clone(),
             request_keys.clone() ));
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
@@ -843,7 +927,6 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
         }
 
         // println!("|{:?}|", System::events());
-        // System::assert_last_event(AresOcwEvent::InsufficientCountOfValidators);
         System::assert_last_event(tests::Event::AresOcw(AresOcwEvent::InsufficientCountOfValidators));
 
         let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
@@ -860,6 +943,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 
         let avg_trace = <PurchasedAvgTrace<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(avg_trace.len(), 0);
+
+        let request_acc = AccountId::from_raw([1;32]);
+        assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000);
     });
 }
 
@@ -931,11 +1017,16 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
         let submit_threshold = 60u8;
         let max_duration = 3u64;
         let request_keys = vec![toVec("btc_price")];
+        Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
+        assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
+        let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
+        let result = OcwFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,
             submit_threshold, // 1 + 3 = 4
             max_duration,
+            purchase_id,
             request_keys.clone() ));
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
@@ -1124,6 +1215,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
         // Forced to settle
         AresOcw::save_forced_clear_purchased_price_payload_signed(4, public_key_1.into_account()).unwrap();
 
+        println!(" --------- clean down.");
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -1158,7 +1250,7 @@ fn test_submit_ask_price() {
     t.execute_with(|| {
         System::set_block_number(2);
 
-        AresOcw::submit_ask_price(Origin::signed(AccountId::from_raw([1;32])), toVec("btc_price,eth_price"));
+        AresOcw::submit_ask_price(Origin::signed(AccountId::from_raw([1;32])), 20_00000000000000, toVec("btc_price,eth_price"));
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([2;32]));
 
@@ -1190,7 +1282,8 @@ fn test_submit_ask_price() {
         assert_eq!(request_data.request_keys.clone(), vec![toVec("btc_price"), toVec("eth_price"), ] );
         assert_eq!(request_data.max_duration.clone(), PurchasedDefaultData::default().max_duration + 2 );
         assert_eq!(request_data.submit_threshold.clone(), PurchasedDefaultData::default().submit_threshold );
-        assert_eq!(request_data.offer.clone(), PurchasedDefaultData::default().unit_price * (request_data.request_keys.len() as u64));
+
+        assert_eq!(request_data.offer.clone(), BasicDollars::get() * (request_data.request_keys.len() as u64));
 
     });
 }
@@ -1210,6 +1303,7 @@ fn update_purchase_avg_price_storage() {
                 account_id: Default::default(),
                 offer: 0,
                 submit_threshold: 60,
+                create_bn: Default::default(),
                 max_duration: 0,
                 request_keys: vec![]
             },
@@ -1221,6 +1315,7 @@ fn update_purchase_avg_price_storage() {
                 account_id: Default::default(),
                 offer: 0,
                 submit_threshold: 60,
+                create_bn: Default::default(),
                 max_duration: 0,
                 request_keys: vec![]
             },
@@ -1290,6 +1385,7 @@ fn update_purchase_avg_price_storage() {
         assert_eq!(price_pool.len(),3);
         // update
         AresOcw::update_purchase_avg_price_storage("abc".encode(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+        AresOcw::purchased_storage_clean("abc".encode());
         // Get avg
         let avg_price = <PurchasedAvgPrice<Test>>::get("abc".encode(), "btc_price".encode());
         assert_eq!(avg_price, PurchasedAvgPriceData{
@@ -1306,6 +1402,7 @@ fn update_purchase_avg_price_storage() {
         assert_eq!(price_pool.len(),3);
         // update
         AresOcw::update_purchase_avg_price_storage("bcd".encode(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+        AresOcw::purchased_storage_clean("bcd".encode());
         // Get avg
         let avg_price = <PurchasedAvgPrice<Test>>::get("bcd".encode(), "btc_price".encode());
         assert_eq!(avg_price, PurchasedAvgPriceData{
@@ -1335,6 +1432,7 @@ fn test_is_validator_purchased_threshold_up_on() {
                 account_id: Default::default(),
                 offer: 0,
                 submit_threshold: 60,
+                create_bn: 1,
                 max_duration: 0,
                 request_keys: vec![]
             },
@@ -1407,8 +1505,9 @@ fn test_ask_price() {
         let max_duration = 3u64;
         let request_keys = vec![toVec("btc_price"), toVec("eth_price")];
 
+        let test_purchase_price_id = AresOcw::make_purchase_price_id(account_id1.clone(), 0);
         // request_num will be count in the ask_price function.
-        let result = AresOcw::ask_price(account_id1.clone(), offer, submit_threshold, max_duration, request_keys.clone());
+        let result = AresOcw::ask_price(account_id1.clone(), offer, submit_threshold, max_duration, test_purchase_price_id, request_keys.clone());
         assert!(result.is_ok());
         let purchase_id = result.unwrap();
         // println!("{:?}", &hex::encode(purchase_id.clone()));
@@ -1420,13 +1519,16 @@ fn test_ask_price() {
             account_id: account_id1.clone(),
             offer,
             submit_threshold ,
+            create_bn: 1,
             max_duration: max_duration+1,
             request_keys: request_keys.clone()
         });
 
-        let result = AresOcw::ask_price(account_id1.clone(), offer, submit_threshold, max_duration, request_keys.clone());
+        let test_purchase_price_id = AresOcw::make_purchase_price_id(account_id1.clone(), 0);
+        let result = AresOcw::ask_price(account_id1.clone(), offer, submit_threshold, max_duration, test_purchase_price_id.clone(), request_keys.clone());
         assert!(result.is_ok());
         let purchase_id = result.unwrap();
+        assert_eq!(purchase_id.clone(), test_purchase_price_id);
         assert_eq!(
             &hex::encode(purchase_id.clone()),
             "0101010101010101010101010101010101010101010101010101010101010101010000000000000001"
@@ -1435,6 +1537,7 @@ fn test_ask_price() {
             account_id: account_id1.clone(),
             offer,
             submit_threshold,
+            create_bn: 1,
             max_duration: max_duration+1,
             request_keys: request_keys.clone()
         });
@@ -1460,11 +1563,14 @@ fn test_fetch_purchased_request_keys() {
         let submit_threshold = 100u8;
         let max_duration = 3u64;
         let request_keys = vec![toVec("btc_price"), toVec("eth_price")];
+
+        let test_purchased_id = AresOcw::make_purchase_price_id(request_acc.clone(), 0);
         assert_ok!(AresOcw::ask_price(
             request_acc,
             offer,
             submit_threshold,
             max_duration,
+            test_purchased_id,
             request_keys.clone() ));
 
         // Get purchased request list
@@ -2866,6 +2972,14 @@ fn test_is_aura () {
 pub fn new_test_ext() -> sp_io::TestExternalities {
     // let mut t = sp_io::TestExternalities::default();
     let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(AccountId::from_raw([1;32]), 100000_000000000000), ],
+    }.assimilate_storage(&mut t).unwrap();
+
+    ocw_finance::GenesisConfig::<Test> {
+        _pt: Default::default()
+    }.assimilate_storage(&mut t).unwrap();
+
     crate::GenesisConfig::<Test>{
         _phantom: Default::default(),
         request_base: "http://127.0.0.1:5566".as_bytes().to_vec(),
@@ -2879,8 +2993,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         ]
     }.assimilate_storage(&mut t).unwrap();
 
+
+
     t.into()
 }
+
 
 fn init_aura_enging_digest() {
     use sp_consensus_aura::{Slot, AURA_ENGINE_ID};

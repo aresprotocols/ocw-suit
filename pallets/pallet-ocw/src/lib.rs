@@ -16,7 +16,6 @@ use sp_runtime::{
 };
 use sp_std::vec::Vec;
 
-use frame_support::sp_std::str::FromStr;
 use frame_support::traits::{FindAuthor, Get, ValidatorSet};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
@@ -83,25 +82,26 @@ pub mod crypto {
 }
 
 use crate::crypto::OcwAuthId;
-use frame_support::sp_runtime::app_crypto::{Public, TryFrom};
+use frame_support::sp_runtime::app_crypto::{Public};
 use frame_support::sp_runtime::sp_std::convert::TryInto;
-use frame_support::sp_runtime::traits::{AccountIdConversion, IdentifyAccount, IsMember};
+use frame_support::sp_runtime::traits::{IsMember};
 use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
-    use frame_support::sp_std::convert::TryInto;
-    use frame_system::pallet_prelude::*;
     use sp_core::crypto::UncheckedFrom;
+    use ocw_finance::traits::*;
+    use ocw_finance::types::{BalanceOf, OcwPaymentResult};
+    use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+    use frame_system::{ensure_signed, ensure_none};
 
     #[pallet::error]
     pub enum Error<T> {
@@ -109,12 +109,15 @@ pub mod pallet {
         SubmitThresholdRangeError,
         DruationNumberNotBeZero,
         UnknownAresPriceVersionNum,
+        InsufficientBalance,
+        InsufficientMaxFee,
+        PayToPurchaseFeeFailed,
         // InsufficientCountOfValidators,
     }
 
     /// This pallet's configuration trait
     #[pallet::config]
-    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config
+    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + ocw_finance::Config
     where
         sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
         u64: From<<Self as frame_system::Config>::BlockNumber>,
@@ -159,6 +162,8 @@ pub mod pallet {
         type CalculationKind: Get<u8>;
 
         type AuthorityCount: ValidatorCount;
+
+        type OcwFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
     }
 
     pub trait ValidatorCount {
@@ -205,7 +210,7 @@ pub mod pallet {
                         }
                     }
 
-                    // //
+                    //
                     // match Self::ares_purchased_worker(block_number.clone(), author.clone()) {
                     //     Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
                     //     Err(e) => log::warn!(
@@ -264,8 +269,9 @@ pub mod pallet {
         #[pallet::weight(1000)]
         pub fn submit_ask_price (
             origin: OriginFor<T>,
+            max_fee: BalanceOf<T>,
             request_keys: Vec<u8>,
-        ) -> DispatchResultWithPostInfo  {
+        ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
             let purchased_default = <PurchasedDefaultSetting<T>>::get();
             let submit_threshold =purchased_default.submit_threshold;
@@ -275,13 +281,28 @@ pub mod pallet {
             // println!("KEYS len 1 = {:?} ", sp_std::str::from_utf8(&request_keys[0]));
             // println!("KEYS len 2 = {:?} ", sp_std::str::from_utf8(&request_keys[1]));
 
-            let offer = Self::calculate_purchased_amount(purchased_default.unit_price, &request_keys);  // purchased_default.unit_price.saturating_mul(request_keys.len() as u64);
+            // let offer = Self::calculate_purchased_amount(purchased_default.unit_price, &request_keys);  // purchased_default.unit_price.saturating_mul(request_keys.len() as u64);
 
-            // TODO:: Check if the balance is sufficient
+            let offer = T::OcwFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
+            if offer > max_fee {
+                return Err(Error::<T>::InsufficientMaxFee.into());
+            }
 
-            // Up request on chain.
-            Self::ask_price(who, offer, submit_threshold, max_duration, request_keys);
+            let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
 
+            let payment_result: OcwPaymentResult<T> = T::OcwFinanceHandler::reserve_for_ask_quantity(who.clone(), purchase_id.clone(), request_keys.len() as u32);
+            // let payment_result: OcwPaymentResult<T> = OcwPaymentResult::<T>::Success(purchase_id.clone(), 0u32.into());
+            match payment_result {
+                OcwPaymentResult::InsufficientBalance(_, _balance) => {
+                    return Err(Error::<T>::InsufficientBalance.into());
+                }
+                OcwPaymentResult::Success(_, balance) => {
+                    // Up request on chain.
+                    Self::ask_price(who, balance, submit_threshold, max_duration, purchase_id, request_keys);
+                }
+            }
+
+            // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
 
@@ -295,25 +316,32 @@ pub mod pallet {
 
             let purchase_id_list: Vec<Vec<u8>> = price_payload.purchase_id_list;
             purchase_id_list.iter().any(|x| {
-                // // Calculate the average price
-                // Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
-                // // clean order pool
-                // <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
-                // false
-
                 // check that the validator threshold is up to standard.
                 if Self::is_validator_purchased_threshold_up_on(x.to_vec()) {
-                    // Calculate the average price
-                    Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
-                    // clean order pool
-                    <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                    // println!("is_validator_purchased_threshold_up_on 1");
+                    // update report work point
+                    if Self::update_reporter_point(x.to_vec()).is_ok() {
+                        // Calculate the average price
+                        Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+                        // println!("is_validator_purchased_threshold_up_on 2");
+                    }
+                    // println!("is_validator_purchased_threshold_up_on 3");
+                    Self::purchased_storage_clean(x.to_vec());
                 }else{
-                    <PurchasedPricePool<T>>::remove_prefix(x.to_vec(), None);
-                    <PurchasedRequestPool<T>>::remove(x.to_vec());
-                    <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
-                    // send err.
-                    // Err(Error::<T>::InsufficientCountOfValidators.into());
-                    Self::deposit_event(Event::InsufficientCountOfValidators);
+                    // println!("refund_ask_paid p_id = {:?}", x.to_vec());
+                    // Get `ask owner`
+                    let refund_result = T::OcwFinanceHandler::unreserve_ask(x.to_vec());
+                    // println!("refund_result = {:?}", &refund_result);
+                    if refund_result.is_ok() {
+                        // Remove chain storage.
+                        // <PurchasedPricePool<T>>::remove_prefix(x.to_vec(), None);
+                        // <PurchasedRequestPool<T>>::remove(x.to_vec());
+                        // <PurchasedOrderPool<T>>::remove_prefix(x.to_vec(), None);
+                        Self::purchased_storage_clean(x.to_vec());
+                        Self::deposit_event(Event::InsufficientCountOfValidators);
+                    } else {
+                        Self::deposit_event(Event::ProblemWithRefund);
+                    }
                 }
                 false
             });
@@ -351,10 +379,28 @@ pub mod pallet {
 
             // check
             if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
-                // Calculate the average price
-                Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+
+                // // get ask request mission.
+                // let request_mission: PurchasedRequestData<T> = <PurchasedRequestPool<T>>::get(price_payload.purchase_id.clone());
+                //
+                // // update report work point
+                // <PurchasedOrderPool<T>>::iter_prefix(price_payload.purchase_id.clone()).into_iter()
+                //     .any(|(acc, _)| {
+                //         T::OcwFinance::record_submit_point(acc,
+                //                                            price_payload.purchase_id.clone(),
+                //                                            request_mission.create_bn,
+                //                                            request_mission.request_keys.len() as u32);
+                //         false
+                //     });
+
+                // update report work point
+                if Self::update_reporter_point(price_payload.purchase_id.clone()).is_ok() {
+                    // Calculate the average price
+                    Self::update_purchase_avg_price_storage(price_payload.purchase_id.clone(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+                }
                 // clean order pool
-                <PurchasedOrderPool<T>>::remove_prefix(price_payload.purchase_id.clone(), None);
+                // <PurchasedOrderPool<T>>::remove_prefix(price_payload.purchase_id.clone(), None);
+                Self::purchased_storage_clean(price_payload.purchase_id.clone());
             }
 
             // check that the validator threshold is up to standard.
@@ -646,7 +692,8 @@ pub mod pallet {
 
         NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
         // purchased_id
-        NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>),
+        NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>, BalanceOf<T>),
+        // NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>),
         // purchased_id , vec
         PurchasedAvgPrice(Vec<u8>, Vec<Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)>>),
         UpdatePurchasedDefaultSetting(PurchasedDefaultData),
@@ -660,6 +707,7 @@ pub mod pallet {
         //
         PriceAllowableOffsetUpdate(u8),
         InsufficientCountOfValidators,
+        ProblemWithRefund,
     }
 
     #[pallet::validate_unsigned]
@@ -974,6 +1022,8 @@ pub mod pallet {
         pub price_requests: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>,
     }
 
+
+
     #[cfg(feature = "std")]
     impl<T: Config> Default for GenesisConfig<T>
     where
@@ -991,6 +1041,17 @@ pub mod pallet {
             }
         }
     }
+
+    // #[pallet::genesis_build]
+    // impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+    //     fn build(&self) {
+    //         let finance_account = <Pallet<T>>::account_id();
+    //         if T::Currency::total_balance(&finance_account).is_zero() {
+    //             T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
+    //             // Self::deposit_event(Event::<T>::OcwFinanceDepositCreating(T::Currency::minimum_balance()));
+    //         }
+    //     }
+    // }
 
     #[pallet::genesis_build]
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
@@ -1013,6 +1074,11 @@ pub mod pallet {
                 // storage_request_base.set(&self.request_base);
             }
             PriceAllowableOffset::<T>::put(self.price_allowable_offset);
+
+            // let finance_account = <Pallet<T>>::account_id();
+            // if T::Currency::total_balance(&finance_account).is_zero() {
+            //     T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
+            // }
         }
     }
 }
@@ -1021,8 +1087,9 @@ pub mod types;
 use types::*;
 use hex;
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_core::hexdisplay::HexDisplay;
 use frame_support::pallet_prelude::StorageMap;
+use ocw_finance::types::BalanceOf;
+use ocw_finance::traits::{IForReporter, IForPrice};
 
 
 impl<T: Config> Pallet<T>
@@ -1293,13 +1360,20 @@ where
             return Ok(());
         }
 
-        // TODO:: check fetch_bulk_price_with_http retrun type may be
-        let price_result =
-            Self::fetch_bulk_price_with_http(block_number, account_id.clone(), purchased_key.clone().raw_source_keys,2)
-                .ok()
-                .unwrap();
+        let fetch_http_reesult = Self::fetch_bulk_price_with_http(block_number, account_id.clone(), purchased_key.clone().raw_source_keys,2)
+            .ok();
 
-        for (price_key, price_option, fraction_length, json_number_value) in price_result {
+
+        let price_result = fetch_http_reesult;
+        if price_result.is_none() {
+            log::error!(
+                target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
+                "⛔ Ocw network error."
+            );
+            return Ok(());
+        }
+
+        for (price_key, price_option, fraction_length, json_number_value) in price_result.unwrap() {
             if price_option.is_some() {
                 // record price to vec!
                 price_list.push(PricePayloadSubPrice(
@@ -1373,8 +1447,17 @@ where
 
         let price_result =
             Self::fetch_bulk_price_with_http(block_number, account_id.clone(), format_arr,2)
-                .ok()
-                .unwrap();
+                .ok();
+
+        if price_result.is_none() {
+            log::error!(
+                target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
+                "⛔ Ocw network error."
+            );
+            return Ok(());
+        }
+
+        let price_result = price_result.unwrap();
 
         for (price_key, price_option, fraction_length, json_number_value) in price_result {
             if price_option.is_some() {
@@ -1485,7 +1568,7 @@ where
 
     // Judge the author who submitted the price last time, and return true if it is consistent with this time.
     fn is_need_update_jump_block(price_key: Vec<u8>, account: T::AccountId) -> bool {
-        if !Self::is_aura() {
+        if !Self::is_aura() || 1 == T::AuthorityCount::get_validators_count(){
             return false;
         }
         match Self::get_last_price_author(price_key) {
@@ -1874,6 +1957,7 @@ where
     }
 
     // Calculate the purchased amount, related to the amount of data
+    // TODO:: will be replace by owc-finance.
     fn calculate_purchased_amount(unit_price: u64, request_keys: &Vec<Vec<u8>>) -> u64 {
         unit_price.saturating_mul(request_keys.len() as u64)
     }
@@ -1896,6 +1980,12 @@ where
             false
         });
         result
+    }
+
+    fn purchased_storage_clean(p_id: Vec<u8>) {
+        <PurchasedPricePool<T>>::remove_prefix(p_id.to_vec(), None);
+        <PurchasedRequestPool<T>>::remove(p_id.to_vec());
+        <PurchasedOrderPool<T>>::remove_prefix(p_id.to_vec(), None);
     }
 
     //
@@ -1963,9 +2053,10 @@ where
     // submit price on chain.
     fn ask_price (
         who: T::AccountId,
-        offer: u64,
+        offer: BalanceOf<T>,
         submit_threshold: u8,
         max_duration: u64,
+        purchase_id: Vec<u8>,
         request_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<u8>, Error<T>> {
 
@@ -1979,7 +2070,7 @@ where
         }
 
         // make purchase price id
-        let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
+        // let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
 
         let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 
@@ -1987,13 +2078,15 @@ where
             account_id: who,
             offer,
             submit_threshold,
+            create_bn: <system::Pallet<T>>::block_number(),
             max_duration: current_block.saturating_add(max_duration),
             request_keys,
         };
 
         <PurchasedRequestPool<T>>::insert(purchase_id.clone(), request_data.clone());
 
-        Self::deposit_event(Event::NewPurchasedRequest(purchase_id.clone(), request_data));
+        Self::deposit_event(Event::NewPurchasedRequest(purchase_id.clone(), request_data, offer));
+        // Self::deposit_event(Event::NewPurchasedRequest(purchase_id.clone(), request_data));
 
         Ok(purchase_id)
     }
@@ -2128,7 +2221,7 @@ where
             if abnormal_price_index_list.len() > 0 {
                 // pick out abnormal
                 abnormal_price_index_list.iter().any(|remove_index| {
-                    price_list_of_pool.remove((*remove_index - remove_count));
+                    price_list_of_pool.remove(*remove_index - remove_count);
                     remove_count += 1;
                     false
                 });
@@ -2154,7 +2247,7 @@ where
 
         <PurchasedRequestPool<T>>::iter().any(|(p_id ,p_d  )|
             {
-                if(current_block >= p_d.max_duration) {
+                if current_block >= p_d.max_duration {
 
                     purchased_id_list.push(p_id.to_vec());
                 }
@@ -2198,7 +2291,7 @@ where
             if abnormal_price_index_list.len() > 0 {
                 // pick out abnormal
                 abnormal_price_index_list.iter().any(|remove_index| {
-                    prices_info.remove((*remove_index - remove_count));
+                    prices_info.remove(*remove_index - remove_count);
                     remove_count += 1;
                     false
                 });
@@ -2231,9 +2324,9 @@ where
             <PurchasedAvgTrace<T>>::insert(purchase_id.clone(),(<system::Pallet<T>>::block_number()));
 
             // Clear price pool.
-            <PurchasedPricePool<T>>::remove(purchase_id.clone(), price_key.clone());
-            // Clear purchased request.
-            <PurchasedRequestPool<T>>::remove(purchase_id.clone());
+            // <PurchasedPricePool<T>>::remove(purchase_id.clone(), price_key.clone());
+            // // Clear purchased request.
+            // <PurchasedRequestPool<T>>::remove(purchase_id.clone());
 
             return Some((price_key.clone(), avg_price_data, valid_request_account_id_list));
         }
@@ -2268,16 +2361,27 @@ where
             return false;
         }
 
-        if let (avg_trace) = <PurchasedAvgTrace<T>>::get(purchase_id.clone()) {
-            let avg_trace_num: u64 = avg_trace.unique_saturated_into();
-            let purchase_setting = <PurchasedDefaultSetting<T>>::get();
-            let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
-            if current_block_num > comp_blocknum {
-                <PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
-                <PurchasedAvgTrace<T>>::remove(purchase_id.clone());
-                return true;
-            }
+        // if let (avg_trace) = <PurchasedAvgTrace<T>>::get(purchase_id.clone()) {
+        //     let avg_trace_num: u64 = avg_trace.unique_saturated_into();
+        //     let purchase_setting = <PurchasedDefaultSetting<T>>::get();
+        //     let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
+        //     if current_block_num > comp_blocknum {
+        //         <PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
+        //         <PurchasedAvgTrace<T>>::remove(purchase_id.clone());
+        //         return true;
+        //     }
+        // }
+
+        let (avg_trace) = <PurchasedAvgTrace<T>>::get(purchase_id.clone()) ;
+        let avg_trace_num: u64 = avg_trace.unique_saturated_into();
+        let purchase_setting = <PurchasedDefaultSetting<T>>::get();
+        let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
+        if current_block_num > comp_blocknum {
+            <PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
+            <PurchasedAvgTrace<T>>::remove(purchase_id.clone());
+            return true;
         }
+
 
         false
     }
@@ -2544,6 +2648,25 @@ where
             .longevity(5)
             .propagate(true)
             .build()
+    }
+
+    fn update_reporter_point(purchase_id: Vec<u8>)->Result<(), Error<T>> {
+        // transfer balance to pallet account.
+        if T::OcwFinanceHandler::pay_to_ask(purchase_id.clone()).is_err() {
+            return Err(Error::<T>::PayToPurchaseFeeFailed)
+        }
+
+        let request_mission: PurchasedRequestData<T> = <PurchasedRequestPool<T>>::get(purchase_id.clone());
+        // update report work point
+        <PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone()).into_iter()
+            .any(|(acc, _)| {
+                T::OcwFinanceHandler::record_submit_point(acc,
+                                                   purchase_id.clone(),
+                                                   request_mission.create_bn,
+                                                   request_mission.request_keys.len() as u32);
+                false
+            });
+        Ok(())
     }
 }
 

@@ -11,10 +11,9 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	// use pallet_ocw::{ValidatorHandler};
 	use sp_std::vec::Vec;
-	use frame_support::sp_runtime::{RuntimeAppPublic, AccountId32};
-	use frame_support::traits::ValidatorSet;
+	use frame_support::sp_runtime::{RuntimeAppPublic};
 	use frame_support::sp_std::fmt::Debug;
-	use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
+	use frame_support::sp_runtime::traits::{IsMember};
 	use frame_support::sp_std::convert::TryInto;
 	use sp_runtime::app_crypto::sp_core::crypto::UncheckedFrom;
 
