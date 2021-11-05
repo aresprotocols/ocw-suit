@@ -191,7 +191,7 @@ fn test_check_and_slash_expired_rewards() {
 		let purchased_submit_bn: u64 = 50;
 		let current_bn: u64 = 50;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		// <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		const AccountId_2: u64 = 2;
@@ -214,7 +214,7 @@ fn test_check_and_slash_expired_rewards() {
 		let purchased_submit_bn: u64 = 50;
 		let current_bn: u64 = 90;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		// <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		const AccountId_2: u64 = 2;

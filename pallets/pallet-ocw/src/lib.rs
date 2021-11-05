@@ -210,17 +210,6 @@ pub mod pallet {
                         }
                     }
 
-                    //
-                    // match Self::ares_purchased_worker(block_number.clone(), author.clone()) {
-                    //     Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
-                    //     Err(e) => log::warn!(
-                    //         target: "pallet::ocw::offchain_worker",
-                    //         "❗ Ares purchased price has a problem : {:?}",
-                    //         e
-                    //     ),
-                    // }
-                    //
-
                     if control_setting.open_paid_price_reporter {
                         match Self::ares_purchased_checker(block_number.clone(), author.clone()) {
                             Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
@@ -340,6 +329,10 @@ pub mod pallet {
                         Self::purchased_storage_clean(x.to_vec());
                         Self::deposit_event(Event::InsufficientCountOfValidators);
                     } else {
+                        log::error!(
+                            target: "pallet::ocw::submit_forced_clear_purchased_price_payload_signed",
+                            "⛔️ T::OcwFinanceHandler::unreserve_ask() had an error!"
+                        );
                         Self::deposit_event(Event::ProblemWithRefund);
                     }
                 }
@@ -379,19 +372,6 @@ pub mod pallet {
 
             // check
             if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
-
-                // // get ask request mission.
-                // let request_mission: PurchasedRequestData<T> = <PurchasedRequestPool<T>>::get(price_payload.purchase_id.clone());
-                //
-                // // update report work point
-                // <PurchasedOrderPool<T>>::iter_prefix(price_payload.purchase_id.clone()).into_iter()
-                //     .any(|(acc, _)| {
-                //         T::OcwFinance::record_submit_point(acc,
-                //                                            price_payload.purchase_id.clone(),
-                //                                            request_mission.create_bn,
-                //                                            request_mission.request_keys.len() as u32);
-                //         false
-                //     });
 
                 // update report work point
                 if Self::update_reporter_point(price_payload.purchase_id.clone()).is_ok() {
@@ -2479,6 +2459,13 @@ where
 
 
     fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, block_number: T::BlockNumber, price_list : Vec<PricePayloadSubPrice>) {
+
+        if <PurchasedOrderPool<T>>::contains_key(
+            purchase_id.clone(),
+            account_id.clone(),
+        ) {
+            return ();
+        }
 
         let current_block = <system::Pallet<T>>::block_number();
 

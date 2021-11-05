@@ -35,6 +35,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use crate::types::*;
 	use frame_support::sp_runtime::traits::Zero;
+	use crate::traits::{IForReward, IForBase};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -152,8 +153,9 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		SomethingStored(u32, T::AccountId),
-		OcwFinanceDepositCreating(BalanceOf<T>),
+		PurchaseRewardTaken(T::AccountId, BalanceOf<T>),
+		// OcwFinanceDepositCreating(BalanceOf<T>),
+		PurchaseRewardSlashedAfterExpiration(BalanceOf<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -187,11 +189,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			// let finance_account = Self::account_id();
-			// if T::Currency::total_balance(&finance_account).is_zero() {
-			// 	T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-			// 	Self::deposit_event(Event::<T>::OcwFinanceDepositCreating(T::Currency::minimum_balance()));
-			// }
+			let current_block_number = n;
+			if T::BlockNumber::zero() == current_block_number % T::AskPeriod::get() {
+				Self::check_and_slash_expired_rewards(Self::make_period_num(current_block_number));
+			}
 			0
 		}
 	}
@@ -199,39 +200,19 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
-		// #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		// pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-		// 	// Check that the extrinsic was signed and get the signer.
-		// 	// This function will return an error if the extrinsic is not signed.
-		// 	// https://substrate.dev/docs/en/knowledgebase/runtime/origin
-		// 	let who = ensure_signed(origin)?;
-		//
-		// 	// Update storage.
-		// 	<Something<T>>::put(something);
-		//
-		// 	// Emit an event.
-		// 	Self::deposit_event(Event::SomethingStored(something, who));
-		// 	// Return a successful DispatchResultWithPostInfo
-		// 	Ok(())
-		// }
+		#[pallet::weight(10000)]
+		pub fn take_purchase_reward(origin: OriginFor<T>, ask_period: AskPeriodNum) -> DispatchResult {
 
-		// #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		// pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-		// 	let _who = ensure_signed(origin)?;
-		//
-		// 	// Read a value from storage.
-		// 	match <Something<T>>::get() {
-		// 		// Return an error if the value has not been set.
-		// 		None => Err(Error::<T>::NoneValue)?,
-		// 		Some(old) => {
-		// 			// Increment the value read from storage; will error in the event of overflow.
-		// 			let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-		// 			// Update the value in storage with the incremented result.
-		// 			<Something<T>>::put(new);
-		// 			Ok(())
-		// 		}
-		// 	}
-		// }
+			let who = ensure_signed(origin)?;
+
+			let take_balance: BalanceOf<T> = Self::take_reward(ask_period, who.clone(), )?;
+
+			// Emit an event.
+			Self::deposit_event(Event::PurchaseRewardTaken(who, take_balance));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
 	}
 }
 
@@ -357,6 +338,8 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 
 		let ask_period = Self::make_period_num(paid_value.create_bn);
 		<AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), paid_value.amount);
+
+		// Self::deposit_event(Event::OcwFinanceDepositCreating());
 
 		Ok(())
 	}
@@ -523,6 +506,8 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 		<RewardTrace<T>>::remove_prefix(check_period, None);
 		<AskPeriodPoint<T>>::remove_prefix(check_period, None);
 		<AskPeriodPayment<T>>::remove_prefix(check_period, None);
+
+		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration(diff));
 
 		Some(diff)
 	}
