@@ -36,6 +36,7 @@ pub mod pallet {
 	use crate::types::*;
 	use frame_support::sp_runtime::traits::Zero;
 	use crate::traits::{IForReward, IForBase};
+	use sp_std::vec::Vec;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
