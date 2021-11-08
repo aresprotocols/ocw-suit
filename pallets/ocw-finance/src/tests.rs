@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, PaymentTrace, AskPeriodPayment, RewardTrace, AskPeriodPoint};
+use crate::{mock::*, Error, PaymentTrace, AskPeriodPayment, RewardTrace, AskPeriodPoint, RewardPeriod};
 use frame_support::{assert_noop, assert_ok};
 use crate::traits::*;
 use crate::types::*;
@@ -180,6 +180,12 @@ fn test_record_submit_point() {
 		assert_eq!(OcwFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9), Err(Error::<Test>::PointRecordIsAlreadyExists) );
 		assert_ok!(OcwFinance::record_submit_point(AccountId_2, purchase_id_1.clone(), 3, 10));
 		assert_eq!(OcwFinance::get_period_point(OcwFinance::make_period_num(3)), 19, "Get all the record points in the first time zone");
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
+			(0, 9, purchase_id_1.clone())
+		]);
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_2), vec![
+			(0, 10, purchase_id_1.clone())
+		]);
 
 	});
 }
@@ -204,8 +210,24 @@ fn test_check_and_slash_expired_rewards() {
 		// check pot
 		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
 
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
+			(5, 2, toVec("Purchased_ID_BN_55"))
+		]);
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_3), vec![
+			(5, 2, toVec("Purchased_ID_BN_55"))
+		]);
+
 		// check none
 		assert_eq!(OcwFinance::check_and_slash_expired_rewards(OcwFinance::make_period_num(current_bn)), None);
+
+		// let current_period_num = OcwFinance::make_period_num(current_bn);
+		// check none
+		// assert_eq!(OcwFinance::check_and_slash_expired_rewards(
+		// 	current_period_num + RewardPeriodCycle::get() + RewardSlot::get() + 1
+		// ), Some(2000000000000));
+		//
+		// // check pot
+		// assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
 
 	});
 
@@ -253,6 +275,9 @@ fn test_check_and_slash_expired_rewards() {
 
 		// assert_eq!(Balances::usable_balance(OcwFinance::account_id()),0);
 		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
+
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![]);
+		assert_eq!(<RewardPeriod<Test>>::get(AccountId_3), vec![]);
 
 	});
 
