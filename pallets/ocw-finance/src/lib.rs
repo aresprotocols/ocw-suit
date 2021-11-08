@@ -111,6 +111,17 @@ pub mod pallet {
 
 
 	#[pallet::storage]
+	#[pallet::getter(fn reward_period)]
+	pub type RewardPeriod<T> = StorageMap<
+		_,
+		Blake2_128Concat,
+		<T as frame_system::Config>::AccountId, //,
+		Vec<(AskPeriodNum, AskPointNum, PurchaseId)>, // pay or pay to account. ,
+		ValueQuery,
+	>;
+
+
+	#[pallet::storage]
 	#[pallet::getter(fn reward_trace)]
 	pub type RewardTrace<T> = StorageDoubleMap<
 		_,
@@ -355,7 +366,17 @@ impl <T: Config> IForReporter<T> for Pallet<T> {
 		if <AskPeriodPoint<T>>::contains_key(ask_period, (who.clone(), p_id.clone())) {
 			return Err(Error::<T>::PointRecordIsAlreadyExists);
 		}
-		<AskPeriodPoint<T>>::insert(ask_period, (who.clone(), p_id), ask_point);
+		<AskPeriodPoint<T>>::insert(ask_period, (who.clone(), p_id.clone()), ask_point);
+		// Get reward period vec.
+		let mut reward_period = <RewardPeriod<T>>::get(who.clone());
+		// reward_period.retain(|(x_period, x_point, x_id)| {
+		// 	if x_period < &Self::get_earliest_reward_period(bn) {
+		// 		return false;
+		// 	}
+		// 	true
+		// });
+		reward_period.push((ask_period, ask_point, p_id));
+		<RewardPeriod<T>>::insert(who.clone(), reward_period);
 		Ok(())
 	}
 
@@ -378,6 +399,13 @@ impl <T: Config> IForBase<T> for Pallet<T> {
 			return 0;
 		}
 		param_bn / ask_perio
+	}
+
+	//
+	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum {
+		// calculate current period number
+		let param_period = Self::make_period_num(bn);
+		param_period.saturating_sub(T::RewardPeriodCycle::get()).saturating_sub(T::RewardSlot::get())
 	}
 }
 
@@ -460,13 +488,6 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 		result
 	}
 
-
-	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum {
-		// calculate current period number
-		let param_period = Self::make_period_num(bn);
-		param_period.saturating_sub(T::RewardPeriodCycle::get()).saturating_sub(T::RewardSlot::get())
-	}
-
 	//
 	fn get_period_point(ask_period: AskPeriodNum) -> AskPointNum {
 		<AskPeriodPoint<T>>::iter_prefix_values(ask_period).into_iter().sum()
@@ -504,6 +525,19 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 		T::OnSlash::on_unbalanced(negative_imbalance);
 
 		<RewardTrace<T>>::remove_prefix(check_period, None);
+		// <AskPeriodPoint<T>>::remove_prefix(check_period, None);
+		// RewardPeriod
+		<AskPeriodPoint<T>>::iter_prefix(check_period).any(|((acc,_), _)|{
+			let mut reward_period = <RewardPeriod<T>>::get(acc.clone());
+			reward_period.retain(|(del_period, _, _)| {
+				if &check_period == del_period {
+					return false;
+				}
+				true
+			});
+			<RewardPeriod<T>>::insert(acc.clone(), reward_period);
+			false
+		});
 		<AskPeriodPoint<T>>::remove_prefix(check_period, None);
 		<AskPeriodPayment<T>>::remove_prefix(check_period, None);
 

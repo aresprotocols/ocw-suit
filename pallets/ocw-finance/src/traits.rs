@@ -4,6 +4,8 @@ use types::*;
 pub trait IForBase<T: Config> {
 	//
 	fn make_period_num(bn: T::BlockNumber) -> AskPeriodNum;
+	//
+	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum;
 }
 
 pub trait IForPrice<T: Config>: IForBase<T> {
@@ -32,9 +34,6 @@ pub trait IForReward<T: Config>: IForBase<T> {
 
 	//
 	fn get_period_income(ask_period: AskPeriodNum) -> BalanceOf<T>;
-
-	//
-	fn get_earliest_reward_period(bn: T::BlockNumber) -> AskPeriodNum;
 
 	//
 	fn get_period_point(ask_period: AskPeriodNum) -> AskPointNum;
