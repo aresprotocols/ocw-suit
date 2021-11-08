@@ -7,5 +7,6 @@ members = [
     "pallets/staking-extend",
     "pallets/member-extend",
     "pallets/challenge",
-    "pallets/collective"
+    "pallets/collective",
+    "pallets/price-estimates"
 ]

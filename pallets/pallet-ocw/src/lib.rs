@@ -1064,6 +1064,8 @@ pub mod pallet {
 }
 
 pub mod types;
+pub mod crypto2;
+
 use types::*;
 use hex;
 use sp_runtime::traits::UniqueSaturatedInto;
@@ -2686,5 +2688,22 @@ impl fmt::Debug for LocalPriceRequestStorage {
             str::from_utf8(&self.request_url).map_err(|_| fmt::Error)?,
             &self.parse_version,
         )
+    }
+}
+
+pub trait AvgPrice {
+    fn price(
+        symbol: Vec<u8>
+    ) -> Result<(u64, FractionLength),()>;
+}
+
+impl<T: Config> AvgPrice for Pallet<T>
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+{
+
+    fn price(symbol: Vec<u8>) -> Result<(u64, FractionLength),()> {
+        AresAvgPrice::<T>::try_get(symbol)
     }
 }

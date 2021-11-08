@@ -1,0 +1,47 @@
+[package]
+authors = ['Ares Team']
+description = 'Substrate FRAME pallet template for defining custom runtime logic.'
+edition = '2018'
+license = 'Unlicense'
+name = 'pallet-price-estimates'
+publish = false
+homepage = "https://github.com/aresprotocols"
+repository = "https://github.com/aresprotocols/ocw-suit"
+version = '3.0.1'
+readme = 'README.md'
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[dev-dependencies]
+serde = { version = '1.0.130', default-features = false, features = ['derive'] }
+
+
+[dependencies]
+# -- snip --
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-core = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+sp-io = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+log = { version = "0.4.14", default-features = false }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1', optional = true }
+frame-system = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+frame-support = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git',tag = 'monthly-2021-09+1'}
+pallet-ocw =  {default-features = false, path = '../pallet-ocw'}
+#rust-crypto = "^0.2"
+# -- snip --
+
+[features]
+default = ['std']
+runtime-benchmarks = ['frame-benchmarking']
+std = [
+    'sp-io/std',
+    'codec/std',
+    'frame-support/std',
+    'frame-system/std',
+    'frame-benchmarking/std',
+    "sp-runtime/std",
+    "pallet-ocw/std",
+]
+try-runtime = ['frame-support/try-runtime']
