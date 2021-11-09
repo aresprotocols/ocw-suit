@@ -476,6 +476,16 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 
 		<RewardTrace<T>>::insert(ask_period.clone(), who.clone(), (current_block_number, reward_balance));
 
+		// AskPeriodNum, AskPointNum, PurchaseId
+		let mut reward_period_vec = <RewardPeriod<T>>::get(who.clone());
+		reward_period_vec.retain(|(period_num, _, _)| {
+			if period_num == &ask_period {
+				return false;
+			}
+			true
+		});
+		<RewardPeriod<T>>::insert(who, reward_period_vec);
+
 		Ok(reward_balance)
 	}
 
