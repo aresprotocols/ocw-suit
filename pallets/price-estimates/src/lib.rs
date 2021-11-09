@@ -2,6 +2,8 @@
 
 // mod tests;
 mod types;
+mod tests;
+
 use frame_system::{
     offchain::{
         AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
