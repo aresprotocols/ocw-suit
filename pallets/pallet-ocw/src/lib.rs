@@ -198,6 +198,7 @@ pub mod pallet {
                         log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
                         // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                         if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
+                            log::info!("🚅 @ Ares call [1] ares-price-worker.");
                             // Try to get ares price.
                             match Self::ares_price_worker(block_number.clone(), author.clone()) {
                                 Ok(v) => log::info!("🚅 @ Ares OCW price acquisition completed."),
@@ -211,30 +212,27 @@ pub mod pallet {
                     }
 
                     if control_setting.open_paid_price_reporter {
-                        match Self::ares_purchased_checker(block_number.clone(), author.clone()) {
-                            Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
-                            Err(e) => log::warn!(
-                                target: "pallet::ocw::offchain_worker",
-                                "❗ Ares purchased price has a problem : {:?}",
-                                e
-                            ),
+                        if let Some(keystore_validator) = Self::keystore_validator_member() {
+                            log::info!("🚅 @ Ares call [2] ares-purchased-checker.");
+                            match Self::ares_purchased_checker(block_number.clone(), keystore_validator) {
+                                Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
+                                Err(e) => log::warn!(
+                                    target: "pallet::ocw::offchain_worker",
+                                    "❗ Ares purchased price has a problem : {:?}",
+                                    e
+                                ),
+                            }
                         }
+
                     }
                 }
             }
 
             if control_setting.open_paid_price_reporter {
-                let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
-                if let Some(keystore_account) = local_keys.get(0) {
-                    let mut a = [0u8; 32];
-                    a[..].copy_from_slice(&keystore_account.to_raw_vec());
-                    // let local_account32 = AccountId32::new(a);
-                    // // local_account32.
-                    // let local_account: T::AccountId = local_account32.into();
-                    let new_account = sp_core::sr25519::Public::from_raw(a);
-                    let local_account: T::AccountId = new_account.into();
 
-                    match Self::ares_purchased_worker(block_number.clone(), local_account) {
+                if let Some(keystore_validator) = Self::keystore_validator_member() {
+                    log::info!("🚅 @ Ares call [3] ares-purchased-worker.");
+                    match Self::ares_purchased_worker(block_number.clone(), keystore_validator) {
                         Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
                         Err(e) => log::warn!(
                             target: "pallet::ocw::offchain_worker",
@@ -243,6 +241,28 @@ pub mod pallet {
                         ),
                     }
                 }
+
+                // let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
+                // if let Some(keystore_account) = local_keys.get(0) {
+                //     let mut a = [0u8; 32];
+                //     a[..].copy_from_slice(&keystore_account.to_raw_vec());
+                //     // let local_account32 = AccountId32::new(a);
+                //     // // local_account32.
+                //     // let local_account: T::AccountId = local_account32.into();
+                //     let new_account = sp_core::sr25519::Public::from_raw(a);
+                //     let local_account: T::AccountId = new_account.into();
+                //     if Self::is_validator_member(local_account.clone().into()) {
+                //         log::info!("🚅 @ Ares call [3] ares-purchased-worker.");
+                //         match Self::ares_purchased_worker(block_number.clone(), local_account) {
+                //             Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
+                //             Err(e) => log::warn!(
+                //                 target: "pallet::ocw::offchain_worker",
+                //                 "❗ Ares purchased price has a problem : {:?}",
+                //                 e
+                //             ),
+                //         }
+                //     }
+                // }
             }
         }
     }
@@ -703,31 +723,21 @@ pub mod pallet {
                 call
             {
                 log::info!(
-                    "🚅 Validate price payload data, on block: {:?} ",
-                    <system::Pallet<T>>::block_number()
+                    "🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
+                    payload.block_number.clone(),
+                    <system::Pallet<T>>::block_number(),
+                    payload.public.clone()
                 );
-                // let mut find_validator = !T::NeedVerifierCheck::get();
-                // if false == find_validator {
-                //     // check exists
-                //     // let encode_data: Vec<u8> = payload.public.encode();
-                //     let validator_authority: T::ValidatorAuthority =
-                //         <T as SigningTypes>::Public::into_account(payload.public.clone()).into();
-                //     find_validator = T::VMember::is_member(&validator_authority);
-                // }
-                //
-                // if !find_validator {
-                //     log::error!(
-                //         target: "pallet::ocw::validate_unsigned",
-                //         "⛔️ Payload public id is no longer in the members. `InvalidTransaction`"
-                //     );
-                //     return InvalidTransaction::BadProof.into();
-                // }
 
-                if ! Self::is_validator_member(<T as SigningTypes>::Public::into_account(payload.public.clone()).into()) {
+                let sign_accoount = <T as SigningTypes>::Public::into_account(payload.public.clone());
+                if ! Self::is_validator_member(sign_accoount.clone().into()) {
                     log::error!(
                         target: "pallet::ocw::validate_unsigned",
                         "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
                     );
+                    // log::warn!(
+                    //     "❗Author are not validator. disable refuse account: {:?}", sign_accoount.clone()
+                    // );
                     return InvalidTransaction::BadProof.into();
                 }
 
@@ -1083,7 +1093,12 @@ where
         // let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
 
         let mut is_same = !<OcwControlSetting<T>>::get().need_verifier_check;
-
+        if is_same {
+            log::warn!(
+                target: "pallet::are_block_author_and_sotre_key_the_same",
+                "❗❗❗ verifier_check is disable, current status is debug."
+            );
+        }
         let worker_ownerid_list = T::AuthorityAres::all();
         for ownerid in worker_ownerid_list.iter() {
             let mut a = [0u8; 32];
@@ -1255,6 +1270,7 @@ where
     {
         let force_request_list = Self::get_expired_purchased_transactions();
 
+        log::info!("🚅 Force request list length: {:?} .", &force_request_list.len());
         if force_request_list.len() > 0 {
             // send force clear transaction
             // -- Sign using any account
@@ -1557,6 +1573,25 @@ where
             None => false,
             Some(x) => x == account,
         }
+    }
+
+    fn keystore_validator_member() -> Option<T::AccountId>
+        where <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>
+    {
+        let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
+        if let Some(keystore_account) = local_keys.get(0) {
+            let mut a = [0u8; 32];
+            a[..].copy_from_slice(&keystore_account.to_raw_vec());
+            // let local_account32 = AccountId32::new(a);
+            // // local_account32.
+            // let local_account: T::AccountId = local_account32.into();
+            let new_account = sp_core::sr25519::Public::from_raw(a);
+            let local_account: T::AccountId = new_account.into();
+            if Self::is_validator_member(local_account.clone().into()) {
+                return Some(local_account);
+            }
+        }
+        None
     }
 
     fn is_validator_member(validator: T::ValidatorAuthority) -> bool {
@@ -2175,48 +2210,49 @@ where
     // TODO:: remove max_len ?
     fn update_avg_price_storage(key_str: Vec<u8>, max_len: u32) {
         let prices_info = <AresPrice<T>>::get(key_str.clone());
-        let (average, fraction_length) =
-            Self::average_price(prices_info, T::CalculationKind::get())
-                .expect("The average is not empty.");
+        let average_price_result =
+            Self::average_price(prices_info, T::CalculationKind::get());
 
-        let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
-        // Abnormal price index list
-        let mut abnormal_price_index_list = Vec::new();
-        // Pick abnormal price.
-        if 0 < price_list_of_pool.len() {
-            for (index, check_price) in price_list_of_pool.iter().enumerate() {
-                let offset_percent = match check_price.price {
-                    x if &x > &average => ((x - average) * 100) / average,
-                    x if &x < &average => ((average - x) * 100) / average,
-                    _ => 0,
-                };
-                if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
-                    // Set price to abnormal list and pick out check_price
-                    <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
-                    // abnormal_price_index_list
-                    abnormal_price_index_list.push(index);
+        if let Some((average, fraction_length)) = average_price_result {
+            let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
+            // Abnormal price index list
+            let mut abnormal_price_index_list = Vec::new();
+            // Pick abnormal price.
+            if 0 < price_list_of_pool.len() {
+                for (index, check_price) in price_list_of_pool.iter().enumerate() {
+                    let offset_percent = match check_price.price {
+                        x if &x > &average => ((x - average) * 100) / average,
+                        x if &x < &average => ((average - x) * 100) / average,
+                        _ => 0,
+                    };
+                    if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
+                        // Set price to abnormal list and pick out check_price
+                        <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
+                        // abnormal_price_index_list
+                        abnormal_price_index_list.push(index);
+                    }
                 }
-            }
 
-            let mut remove_count = 0;
-            // has abnormal price.
-            if abnormal_price_index_list.len() > 0 {
-                // pick out abnormal
-                abnormal_price_index_list.iter().any(|remove_index| {
-                    price_list_of_pool.remove(*remove_index - remove_count);
-                    remove_count += 1;
-                    false
-                });
-                // reset price pool
-                // TODO:: Refactoring recursion like handler_purchase_avg_price_storage
-                <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
-                return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
-            }
+                let mut remove_count = 0;
+                // has abnormal price.
+                if abnormal_price_index_list.len() > 0 {
+                    // pick out abnormal
+                    abnormal_price_index_list.iter().any(|remove_index| {
+                        price_list_of_pool.remove(*remove_index - remove_count);
+                        remove_count += 1;
+                        false
+                    });
+                    // reset price pool
+                    // TODO:: Refactoring recursion like handler_purchase_avg_price_storage
+                    <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
+                    return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
+                }
 
-            // Update avg price
-            <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
-            // Clear price pool.
-            <AresPrice<T>>::remove(key_str.clone());
+                // Update avg price
+                <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
+                // Clear price pool.
+                <AresPrice<T>>::remove(key_str.clone());
+            }
         }
     }
 
@@ -2403,8 +2439,7 @@ where
 
     /// Calculate current average price. // fraction_length: FractionLength
     fn average_price(prices_info: Vec<AresPriceData<T>>, kind: u8) -> Option<(u64, FractionLength)> {
-        // TODO:: move out <AresPrice<T>>::get(price_key_str.clone())
-        // let prices_info = <AresPrice<T>>::get(price_key_str.clone());
+
         let mut fraction_length_of_pool: FractionLength = 0;
         // Check and get fraction_length.
         prices_info
