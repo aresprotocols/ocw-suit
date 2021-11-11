@@ -1,8 +1,11 @@
-use frame_system::offchain::{SignedPayload, SigningTypes};
-use pallet_ocw::types::FractionLength;
-use sp_runtime::Permill;
 use super::*;
-// use crypto::{digest::Digest, sha3::Sha3};
+use frame_system::offchain::{SignedPayload, SigningTypes};
+use hex::ToHex;
+use pallet_ocw::types::FractionLength;
+use sp_runtime::{
+    traits::{Hash, Keccak256},
+    Permill,
+};
 use sp_std::str;
 
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
@@ -72,28 +75,73 @@ impl<T: SigningTypes> SignedPayload<T>
     }
 }
 
+pub fn is_eth_address(address: &[u8]) -> bool {
+    let _address = str::from_utf8(address).unwrap();
 
-pub fn eth_checksum(address: &[u8]) -> &str {
-    // let address = address.trim_start_matches("0x").to_lowercase();
-    // let address_hash = {
-    //     let mut hasher = Sha3::keccak256();
-    //     hasher.input(address);
-    //     hasher.result_str()
-    // };
-    //
-    // let mut acc: Vec<char> = vec![];
-    // for (index, x) in address.iter().enumerate() {
-    //     let n = u16::from_str_radix(&address_hash[index..index + 1], 16).unwrap();
-    //     let c = char::from(*x);
-    //     c.to
-    //     if n > 7 {
-    //         // make char uppercase if ith character is 9..f
-    //         acc.push(c.to_ascii_uppercase())
-    //     } else {
-    //         // already lowercased
-    //         acc.push(c)
-    //     }
+    // let basic = Regex::new(r"^(0x)?(?i)([0-9a-f]{40})$").unwrap();
+    // let lowercase = Regex::new(r"^(0x|0X)?[0-9a-f]{40}$").unwrap();
+    // let uppercase = Regex::new(r"^(0x|0X)?[0-9A-F]{40}$").unwrap();
+
+    // check if it has the basic requirements of an address( case-insensitive )
+    // if basic.find(address).is_none() {
+    //     false
+    //     // If it's ALL lowercase or ALL uppercase
+    // } else if lowercase.find(address).is_some() || uppercase.find(address).is_some() {
+    //     true
+    // } else {
+    //     eth_checksum(address)
     // }
+    eth_checksum(address)
+}
 
-    return str::from_utf8(b"aaa").unwrap();
+pub fn is_hex_address(address: &[u8]) -> bool {
+    // log::info!("test-hex: {:?} ,length: {}", address, address.len());
+    if address.len() != 40 {
+        return false;
+    }
+    for (i, x) in address.iter().enumerate() {
+        let c: char = char::from(*x);
+        /*if i < 2 {
+            // check 0x prefix
+            if !((i == 0 && c == '0') || (i == 1 && c == 'x') || (i == 1 && c == 'X')) {
+                return false;
+            }
+        } else {*/
+        if !(('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) {
+            return false;
+        }
+        //}
+    }
+    true
+}
+
+fn eth_checksum(address: &[u8]) -> bool {
+    let _address = address.to_ascii_lowercase();
+    let address_hash = Keccak256::hash(_address.as_slice());
+    let address_hash_bytes: Vec<char> = address_hash.encode_hex();
+    let address_hash_bytes = address_hash_bytes.as_slice();
+    // println!("checksum2 address_hash {:?}", &address_hash);
+    // println!("checksum2 address_hash_bytes {:?}", address_hash_bytes);
+
+    for (index, x) in address.iter().enumerate() {
+        let c = address_hash_bytes[index];
+        let n = c.to_digit(16).unwrap();
+
+        let a = *x;
+        let mut _tmp = a.clone();
+        if n > 7 {
+            _tmp.make_ascii_uppercase();
+            if _tmp != a {
+                return false;
+            }
+        } else {
+            _tmp.make_ascii_lowercase();
+            if _tmp != a {
+                return false;
+            }
+        }
+    }
+    // println!("true");
+    return true;
+    // return str::from_utf8(b"aaa").unwrap();
 }

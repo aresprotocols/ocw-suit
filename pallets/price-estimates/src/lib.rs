@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// mod tests;
-mod types;
+mod tests;
+pub mod types;
+
 use frame_system::{
     offchain::{
         AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer,
@@ -9,8 +10,9 @@ use frame_system::{
     },
     pallet_prelude::*,
 };
+
 use types::{
-    eth_checksum, AccountParticipateEstimates, ChooseWinnersPayload, EstimatesState,
+    is_hex_address, AccountParticipateEstimates, ChooseWinnersPayload, EstimatesState,
     SymbolEstimatesConfig,
 };
 
@@ -285,13 +287,11 @@ pub mod pallet {
             eth_address: Vec<u8>,
         ) -> DispatchResult {
             let caller = ensure_signed(origin.clone())?;
-            // let _eth = eth_address.as_slice();
-            // let eth_tmp = eth_checksum(_eth);
-            // let eth_input = str::from_utf8(_eth).unwrap();
-            // ensure!(
-            //     eth_tmp.eq_ignore_ascii_case(eth_input),
-            //     Error::<T, I>::EthInvalid
-            // );
+
+            let mut bytes = [0u8; 40];
+            let r = hex::encode_to_slice(&eth_address, &mut bytes);
+            ensure!(r.is_ok(), Error::<T, I>::EthInvalid);
+            ensure!(is_hex_address(&bytes), Error::<T, I>::EthInvalid);
 
             let zero = <BalanceOf<T, I>>::from(0u32);
             /*let config = */

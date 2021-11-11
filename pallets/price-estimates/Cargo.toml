@@ -29,13 +29,14 @@ frame-system = { version = "4.0.0-dev", default-features = false, git = 'https:/
 frame-support = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git',tag = 'monthly-2021-09+1'}
 pallet-ocw =  {default-features = false, path = '../pallet-ocw'}
-#rust-crypto = "^0.2"
+hex = { version = "0.4", default-features = false }
 # -- snip --
 
 [features]
 default = ['std']
 runtime-benchmarks = ['frame-benchmarking']
 std = [
+    'hex/std',
     'sp-io/std',
     'codec/std',
     'frame-support/std',
