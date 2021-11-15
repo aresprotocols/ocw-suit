@@ -2,6 +2,7 @@
 use super::*;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::{Saturating, Zero};
+use frame_support::sp_runtime::Percent;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
@@ -182,31 +183,111 @@ impl Default for PurchasedAvgPriceData
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct AresPriceData<T:Config>
-    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          u64: From<<T as frame_system::Config>::BlockNumber>,
+pub struct AresPriceData<AccountId, BlockNumber>
+    // where sp_runtime::AccountId32: From<AccountId>,
+    //       u64: From<BlockNumber>,
 {
     pub price: u64,
-    pub account_id: T::AccountId,
-    pub create_bn: T::BlockNumber,
+    pub account_id: AccountId,
+    pub create_bn: BlockNumber,
     pub fraction_len: FractionLength,
     pub raw_number: JsonNumberValue,
 }
 
-impl <T:Config> AresPriceData<T>
-    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          u64: From<<T as frame_system::Config>::BlockNumber>,
-{
-    pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-        Self {
-            price: param.0,
-            account_id: param.1,
-            create_bn: param.2,
-            fraction_len: param.3,
-            raw_number: param.4,
-        }
-    }
-}
+
+// impl <T: Config > AresPriceData<T>
+//     where sp_runtime::AccountId32: From<T::AccountId>,
+//           u64: From<T::BlockNumber>,
+// {
+//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
+//         Self {
+//             price: param.0,
+//             account_id: param.1,
+//             create_bn: param.2,
+//             fraction_len: param.3,
+//             raw_number: param.4,
+//         }
+//     }
+// }
+
+// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+// pub struct AresPriceData2<AccountId, BlockNumber>
+//     where sp_runtime::AccountId32: From<AccountId>,
+//           u64: From<BlockNumber>,
+// {
+//     pub price: u64,
+//     pub account_id: AccountId,
+//     pub create_bn: BlockNumber,
+//     pub fraction_len: FractionLength,
+//     pub raw_number: JsonNumberValue,
+// }
+//
+// impl <T: Config > AresPriceData2<T::AccountId, T::BlockNumber>
+// {
+//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
+//         Self {
+//             price: param.0,
+//             account_id: param.1,
+//             create_bn: param.2,
+//             fraction_len: param.3,
+//             raw_number: param.4,
+//         }
+//     }
+// }
+
+// pub struct AresPriceData3<T: Config>
+// {
+// }
+// impl <T: Config > AresPriceData3<T>
+// {
+//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
+//     }
+// }
+
+
+// trait IFromPriceData <AccountId,BlockNumber>  {
+//     fn from_tuple(param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> Self;
+// }
+
+// impl <T: Config> IFromPriceData<T::AccountId, T::BlockNumber> for AresPriceData2<T::AccountId, T::BlockNumber> {
+//     fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, u32, JsonNumberValue)) -> Self {
+//         todo!()
+//     }
+// }
+
+
+
+// impl <T: Config, AccountId, BlockNumber> AresPriceData<AccountId, BlockNumber, T>
+//     where sp_runtime::AccountId32: From<AccountId>,
+//           u64: From<BlockNumber>,
+//            AccountId: From<<T as frame_system::Config>::AccountId>,
+//            BlockNumber: From<<T as frame_system::Config>::BlockNumber>,
+// {
+//     pub fn from_tuple(param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> Self {
+//         Self {
+//             price: param.0,
+//             account_id: param.1,
+//             create_bn: param.2,
+//             fraction_len: param.3,
+//             raw_number: param.4,
+//         }
+//     }
+// }
+
+// impl <T: Config> AresPriceData<T::AccountId, T::BlockNumber>
+//     where sp_runtime::AccountId32: From<T::AccountId>,
+//           u64: From<T::BlockNumber>,
+// {
+//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
+//         Self {
+//             price: param.0,
+//             account_id: param.1,
+//             create_bn: param.2,
+//             fraction_len: param.3,
+//             raw_number: param.4,
+//         }
+//     }
+// }
 
 // warp NumberValue
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -324,3 +405,35 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
     }
 }
 
+// The following code for `per check` functionable
+//
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum PerCheckStatus {
+    Review,
+    Prohibit,
+    Pass,
+}
+
+impl Default for PerCheckStatus {
+    fn default() -> Self { Self::Prohibit }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PerCehckTaskConfig {
+    pub check_token_list: Vec<Vec<u8>>,
+    pub allowable_offset: u8,
+    pub max_repeat_times: u8,
+    pub pass_percent: Percent,
+}
+
+impl Default for PerCehckTaskConfig
+{
+    fn default() -> Self {
+        Self {
+            check_token_list: Vec::new(),
+            allowable_offset: 10,
+            max_repeat_times: 5,
+            pass_percent: Percent::from_percent(100),
+        }
+    }
+}

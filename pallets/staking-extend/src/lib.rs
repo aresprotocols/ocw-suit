@@ -6,11 +6,11 @@
 pub use pallet::*;
 use frame_election_provider_support::onchain;
 
-// #[cfg(test)]
-// mod mock;
-//
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -36,7 +36,7 @@ pub mod pallet {
 
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
-		type DebugError: Debug;
+		// type DebugError: Debug;
 
 		type OnChainAccuracy: PerThing128;
 		type ElectionProvider: frame_election_provider_support::ElectionProvider<
@@ -73,29 +73,42 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
+	impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber> for Pallet<T>
+		where <<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId: PartialEq<<T as frame_system::Config>::AccountId>
+	{
 		const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 
-		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
+		{
 			// submit 3 times. 3% , 2/3 10 block submit.
 			let result = T::DataProvider::targets(maybe_max_len);
-			log::info!("******* LINDEBUG:: new targets:: == {:?}", result);
+			log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
 
 			// check current validator
 			let current_validators = T::ValidatorSet::validators();
-			log::info!("******* LINDEBUG:: current validator:: == {:?}", &current_validators);
+			log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
 
-			// if result.is_ok() {
-			// 	let mut new_target = result.clone().unwrap();
-			// 	new_target.retain(|target_acc|{
-			// 		current_validators.iter().any(|current_acc|{
-			// 			!(current_acc == target_acc)
-			// 		})
-			// 	});
-			// 	log::info!("******* LINDEBUG:: new validator:: == {:?}", &new_target);
-			// }
+			//
+			let mut old_target_list = Vec::new();
 
-			result
+			if result.is_ok() {
+				let mut new_target = result.clone().unwrap();
+				new_target.retain(|target_acc|{
+					!current_validators.iter().any(|current_acc|{
+						let is_exists = &current_acc == &target_acc;
+						log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
+						log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
+						if is_exists {
+							old_target_list.push(target_acc.clone());
+						}
+						is_exists
+					})
+				});
+				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
+			}
+
+			Ok(old_target_list)
+			// result
 		}
 
 		fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
@@ -104,13 +117,13 @@ pub mod pallet {
 
 		fn desired_targets() -> data_provider::Result<u32> {
 			let result = T::DataProvider::desired_targets();
-			log::info!("******* LINDEBUG:: desired_targets:: == {:?}", result);
+			log::info!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}", result);
 			result
 		}
 
 		fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
 			let result = T::DataProvider::next_election_prediction(now);
-			log::info!("******* LINDEBUG:: next_election_prediction:: == {:?}", result);
+			log::info!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}", result);
 			result
 		}
 	}

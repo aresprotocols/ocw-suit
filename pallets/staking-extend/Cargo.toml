@@ -7,7 +7,7 @@ name = 'staking-extend'
 publish = false
 homepage = "https://github.com/aresprotocols"
 repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.0.2'
+version = '3.0.3'
 readme = 'README.md'
 
 [package.metadata.docs.rs]
@@ -28,6 +28,7 @@ pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "ht
 pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
 
@@ -51,6 +52,7 @@ std = [
     "pallet-authorship/std",
     "pallet-session/std",
     "frame-election-provider-support/std",
+    "pallet-election-provider-multi-phase/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
 

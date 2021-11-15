@@ -19,7 +19,7 @@ use crate::*;
 use crate as ares_ocw_worker;
 use codec::Decode;
 use super::Event as AresOcwEvent;
-use frame_support::{assert_ok, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild, PalletId};
+use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild, PalletId};
 // use frame_support::{
 //     assert_noop, assert_ok, ord_parameter_types, parameter_types,
 //     traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
@@ -50,9 +50,6 @@ use sp_runtime::{
         IdentifyAccount, Verify,
     },
 };
-
-
-
 
 use sp_core::sr25519::Public as Public;
 // use pallet_session::historical as pallet_session_historical;
@@ -401,6 +398,9 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
     ){}
     fn on_disabled(_: usize) {}
 }
+
+
+mod test_IOcwPerCheck;
 
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {
@@ -1800,7 +1800,7 @@ fn test_abnormal_price_despose () {
         // price, account, bolcknumber, FractionLength, JsonNumberValue
         // Vec<(u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)>,
         assert_eq!(vec![
-            AresPriceData::from_tuple((2000, Default::default(), BN, 4, Default::default()))
+            ares_price_data_from_tuple((2000, Default::default(), BN, 4, Default::default()))
         ], AresOcw::ares_abnormal_prices(price_key.clone()));
 
 
@@ -1951,7 +1951,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
         AresOcw::add_price(Default::default(), number1.toPrice(4), price_key.clone(), 4, number1.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(4), Default::default(), BN, 4, number1.clone()))
+            ares_price_data_from_tuple((number1.toPrice(4), Default::default(), BN, 4, number1.clone()))
         ], btc_price_list);
         let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(bet_avg_price, (0, 0));
@@ -1959,17 +1959,17 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
         AresOcw::add_price(Default::default(), number2.toPrice(4), price_key.clone(), 4, number2.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(4),Default::default(), BN, 4, number1.clone())),
-            AresPriceData::from_tuple((number2.toPrice(4),Default::default(), BN, 4, number2.clone()))
+            ares_price_data_from_tuple((number1.toPrice(4),Default::default(), BN, 4, number1.clone())),
+            ares_price_data_from_tuple((number2.toPrice(4),Default::default(), BN, 4, number2.clone()))
         ], btc_price_list);
 
         // When fraction length change, list will be update new fraction.
         AresOcw::add_price(Default::default(), number3.toPrice(3), price_key.clone(), 3, number3.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(3),Default::default(), BN, 3, number1.clone())),
-            AresPriceData::from_tuple((number2.toPrice(3),Default::default(), BN, 3, number2.clone())),
-            AresPriceData::from_tuple((number3.toPrice(3),Default::default(), BN, 3, number3.clone())),
+            ares_price_data_from_tuple((number1.toPrice(3),Default::default(), BN, 3, number1.clone())),
+            ares_price_data_from_tuple((number2.toPrice(3),Default::default(), BN, 3, number2.clone())),
+            ares_price_data_from_tuple((number3.toPrice(3),Default::default(), BN, 3, number3.clone())),
         ], btc_price_list);
 
 
@@ -2796,8 +2796,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get save price
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // if parse version change
@@ -2808,8 +2808,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Other price request get in
@@ -2820,8 +2820,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Other price request fraction number change.
@@ -2832,8 +2832,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Current price request fraction number change. (xxx_price)
@@ -2996,6 +2996,16 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 
     t.into()
+}
+
+fn ares_price_data_from_tuple (param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> AresPriceData<AccountId, BlockNumber> {
+    AresPriceData {
+        price: param.0,
+        account_id: param.1,
+        create_bn: param.2,
+        fraction_len: param.3,
+        raw_number: param.4,
+    }
 }
 
 
