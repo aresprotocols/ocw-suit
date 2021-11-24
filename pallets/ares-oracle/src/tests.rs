@@ -77,8 +77,8 @@ pub type BlockNumber = u64;
 pub type AskPeriodNum = u64;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
-use ocw_finance::types::*;
-use ocw_finance::traits::*;
+use oracle_finance::types::*;
+use oracle_finance::traits::*;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
@@ -94,7 +94,7 @@ frame_support::construct_runtime!(
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OcwFinance: ocw_finance::{Pallet, Call, Storage, Event<T>},
+		OcwFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -106,7 +106,7 @@ parameter_types! {
 	pub const RewardSlot: AskPeriodNum = 1;
 }
 
-impl ocw_finance::Config for Test {
+impl oracle_finance::Config for Test {
     type Event = Event;
     type PalletId = AresFinancePalletId;
     type Currency = pallet_balances::Pallet<Self>;
@@ -2976,7 +2976,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         balances: vec![(AccountId::from_raw([1;32]), 100000_000000000000), ],
     }.assimilate_storage(&mut t).unwrap();
 
-    ocw_finance::GenesisConfig::<Test> {
+    oracle_finance::GenesisConfig::<Test> {
         _pt: Default::default()
     }.assimilate_storage(&mut t).unwrap();
 

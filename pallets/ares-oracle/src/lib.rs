@@ -99,8 +99,8 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
     use sp_core::crypto::UncheckedFrom;
-    use ocw_finance::traits::*;
-    use ocw_finance::types::{BalanceOf, OcwPaymentResult};
+    use oracle_finance::traits::*;
+    use oracle_finance::types::{BalanceOf, OcwPaymentResult};
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
 
@@ -120,7 +120,7 @@ pub mod pallet {
 
     /// This pallet's configuration trait
     #[pallet::config]
-    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + ocw_finance::Config
+    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + oracle_finance::Config
     where
         sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
         u64: From<<Self as frame_system::Config>::BlockNumber>,
@@ -790,11 +790,11 @@ pub mod pallet {
                 let priority_num: u64 = T::UnsignedPriority::get();
 
                 // let perfix_v8 = Self::make_transaction_tag_prefix_with_public_account(
-                //     "pallet-ocw::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
+                //     "ares-oracle::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
                 //     payload.public.clone()
                 // );
-                // let perfix_str: &'static str = sp_std::str::from_utf8("pallet-ocw::validate_transaction_parameters_of_purchased_price").unwrap();
-                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
+                // let perfix_str: &'static str = sp_std::str::from_utf8("ares-oracle::validate_transaction_parameters_of_purchased_price").unwrap();
+                ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_purchased_price")
                     .priority(priority_num.saturating_add(1))
                     .and_provides(payload.public.clone())
                     // .and_provides(&payload.block_number)
@@ -831,7 +831,7 @@ pub mod pallet {
                 }
 
                 let priority_num: u64 = T::UnsignedPriority::get();
-                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_force_clear_purchased")
+                ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_force_clear_purchased")
                     .priority(priority_num.saturating_add(2))
                     .and_provides(&payload.block_number) // next_unsigned_at
                     .longevity(5)
@@ -1121,8 +1121,8 @@ use types::*;
 use hex;
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::pallet_prelude::StorageMap;
-use ocw_finance::types::BalanceOf;
-use ocw_finance::traits::{IForReporter, IForPrice};
+use oracle_finance::types::BalanceOf;
+use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
 
@@ -2681,7 +2681,7 @@ where
             return InvalidTransaction::Future.into();
         }
 
-        ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_ares")
+        ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_ares")
             .priority(T::UnsignedPriority::get())
             .and_provides(block_number) // next_unsigned_at
             .longevity(5)
