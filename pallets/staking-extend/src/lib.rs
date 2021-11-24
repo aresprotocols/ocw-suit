@@ -80,36 +80,42 @@ pub mod pallet {
 
 		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
 		{
-			// submit 3 times. 3% , 2/3 10 block submit.
-			let result = T::DataProvider::targets(maybe_max_len);
-			log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
-
-			// check current validator
-			let current_validators = T::ValidatorSet::validators();
-			log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
-
-			//
-			let mut old_target_list = Vec::new();
-
-			if result.is_ok() {
-				let mut new_target = result.clone().unwrap();
-				new_target.retain(|target_acc|{
-					!current_validators.iter().any(|current_acc|{
-						let is_exists = &current_acc == &target_acc;
-						log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
-						log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
-						if is_exists {
-							old_target_list.push(target_acc.clone());
-						}
-						is_exists
-					})
-				});
-				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
-			}
-
-			Ok(old_target_list)
-			// result
+			T::DataProvider::targets(maybe_max_len)
 		}
+
+		// TODO:: kami:: develop for new feature, don't remove blew.
+		// fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
+		// {
+		// 	// submit 3 times. 3% , 2/3 10 block submit.
+		// 	let result = T::DataProvider::targets(maybe_max_len);
+		// 	log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
+		//
+		// 	// check current validator
+		// 	let current_validators = T::ValidatorSet::validators();
+		// 	log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
+		//
+		// 	//
+		// 	let mut old_target_list = Vec::new();
+		//
+		// 	if result.is_ok() {
+		// 		let mut new_target = result.clone().unwrap();
+		// 		new_target.retain(|target_acc|{
+		// 			!current_validators.iter().any(|current_acc|{
+		// 				let is_exists = &current_acc == &target_acc;
+		// 				log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
+		// 				log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
+		// 				if is_exists {
+		// 					old_target_list.push(target_acc.clone());
+		// 				}
+		// 				is_exists
+		// 			})
+		// 		});
+		// 		log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
+		// 	}
+		//
+		// 	Ok(old_target_list)
+		// 	// result
+		// }
 
 		fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 			T::DataProvider::voters(maybe_max_len)
