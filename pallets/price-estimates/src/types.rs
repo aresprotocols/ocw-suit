@@ -1,5 +1,5 @@
 use frame_system::offchain::{SignedPayload, SigningTypes};
-use pallet_ocw::types::FractionLength;
+use ares_oracle::types::FractionLength;
 use sp_runtime::Permill;
 use super::*;
 // use crypto::{digest::Digest, sha3::Sha3};

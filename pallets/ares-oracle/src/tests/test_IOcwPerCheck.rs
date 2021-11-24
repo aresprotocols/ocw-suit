@@ -79,6 +79,5 @@ fn test_take_price_for_per_check() {
         let current_bn = 1;
         System::set_block_number(current_bn);
 
-
     });
 }
