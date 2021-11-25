@@ -28,8 +28,9 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, git = 'h
 frame-system = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
 frame-support = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git',tag = 'monthly-2021-09+1'}
-pallet-ocw =  {default-features = false, path = '../pallet-ocw'}
+ares-oracle =  {default-features = false, path = '../ares-oracle' }
 hex = { version = "0.4", default-features = false }
+#rust-crypto = "^0.2"
 # -- snip --
 
 [features]
@@ -43,6 +44,6 @@ std = [
     'frame-system/std',
     'frame-benchmarking/std',
     "sp-runtime/std",
-    "pallet-ocw/std",
+    "ares-oracle/std",
 ]
 try-runtime = ['frame-support/try-runtime']

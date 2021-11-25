@@ -19,7 +19,7 @@ use crate::*;
 use crate as ares_ocw_worker;
 use codec::Decode;
 use super::Event as AresOcwEvent;
-use frame_support::{assert_ok, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild, PalletId};
+use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types, ConsensusEngineId, traits::GenesisBuild, PalletId};
 // use frame_support::{
 //     assert_noop, assert_ok, ord_parameter_types, parameter_types,
 //     traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
@@ -51,9 +51,6 @@ use sp_runtime::{
     },
 };
 
-
-
-
 use sp_core::sr25519::Public as Public;
 // use pallet_session::historical as pallet_session_historical;
 use frame_support::traits::{FindAuthor, VerifySeal, Len, ExtrinsicCall, OnInitialize};
@@ -80,8 +77,8 @@ pub type BlockNumber = u64;
 pub type AskPeriodNum = u64;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
-use ocw_finance::types::*;
-use ocw_finance::traits::*;
+use oracle_finance::types::*;
+use oracle_finance::traits::*;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
@@ -97,7 +94,7 @@ frame_support::construct_runtime!(
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OcwFinance: ocw_finance::{Pallet, Call, Storage, Event<T>},
+		OcwFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -109,7 +106,7 @@ parameter_types! {
 	pub const RewardSlot: AskPeriodNum = 1;
 }
 
-impl ocw_finance::Config for Test {
+impl oracle_finance::Config for Test {
     type Event = Event;
     type PalletId = AresFinancePalletId;
     type Currency = pallet_balances::Pallet<Self>;
@@ -402,6 +399,9 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
     fn on_disabled(_: usize) {}
 }
 
+
+mod test_IOcwPerCheck;
+
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {
     let mut t = new_test_ext();
@@ -509,7 +509,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -558,7 +559,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(request_acc.clone());
         let purchased_key = purchased_key_option.unwrap();
-        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
 
         AresOcw::save_fetch_purchased_price_and_send_payload_signed(1, public_key_1.into_account()).unwrap();
@@ -589,7 +590,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -619,7 +621,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -676,7 +679,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -801,7 +805,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -839,7 +844,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
         let purchased_key = purchased_key_option.unwrap();
-        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
         AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
@@ -999,7 +1004,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -1031,7 +1037,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
         let purchased_key = purchased_key_option.unwrap();
-        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
         AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
@@ -1069,7 +1075,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -1082,7 +1089,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.into_account());
         let purchased_key = purchased_key_option.unwrap();
-        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
         AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_2.into_account()).unwrap();
@@ -1120,7 +1127,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -1133,7 +1141,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.into_account());
         let purchased_key = purchased_key_option.unwrap();
-        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4)]);
+        assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
         AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_3.into_account()).unwrap();
@@ -1258,8 +1266,8 @@ fn test_submit_ask_price() {
         // println!("purchased_key.raw_source_keys = {:?}", &purchased_key);
 
         assert_eq!(purchased_key.raw_source_keys, vec![
-            ("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4),
-            ("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4),
+            ("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4),
+            ("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4),
         ]);
 
         let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
@@ -1575,8 +1583,8 @@ fn test_fetch_purchased_request_keys() {
 
         // Get purchased request list
         let mut expect_format: Vec<(Vec<u8>, Vec<u8>, FractionLength)> = Vec::new();
-        expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4));
-        expect_format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4));
+        expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4));
+        expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4));
 
         let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([1;32]));
         let purchased_key = purchased_key_option.unwrap();
@@ -1800,7 +1808,7 @@ fn test_abnormal_price_despose () {
         // price, account, bolcknumber, FractionLength, JsonNumberValue
         // Vec<(u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)>,
         assert_eq!(vec![
-            AresPriceData::from_tuple((2000, Default::default(), BN, 4, Default::default()))
+            ares_price_data_from_tuple((2000, Default::default(), BN, 4, Default::default()))
         ], AresOcw::ares_abnormal_prices(price_key.clone()));
 
 
@@ -1951,7 +1959,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
         AresOcw::add_price(Default::default(), number1.toPrice(4), price_key.clone(), 4, number1.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(4), Default::default(), BN, 4, number1.clone()))
+            ares_price_data_from_tuple((number1.toPrice(4), Default::default(), BN, 4, number1.clone()))
         ], btc_price_list);
         let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(bet_avg_price, (0, 0));
@@ -1959,17 +1967,17 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
         AresOcw::add_price(Default::default(), number2.toPrice(4), price_key.clone(), 4, number2.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(4),Default::default(), BN, 4, number1.clone())),
-            AresPriceData::from_tuple((number2.toPrice(4),Default::default(), BN, 4, number2.clone()))
+            ares_price_data_from_tuple((number1.toPrice(4),Default::default(), BN, 4, number1.clone())),
+            ares_price_data_from_tuple((number2.toPrice(4),Default::default(), BN, 4, number2.clone()))
         ], btc_price_list);
 
         // When fraction length change, list will be update new fraction.
         AresOcw::add_price(Default::default(), number3.toPrice(3), price_key.clone(), 3, number3.clone(), 4);
         let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((number1.toPrice(3),Default::default(), BN, 3, number1.clone())),
-            AresPriceData::from_tuple((number2.toPrice(3),Default::default(), BN, 3, number2.clone())),
-            AresPriceData::from_tuple((number3.toPrice(3),Default::default(), BN, 3, number3.clone())),
+            ares_price_data_from_tuple((number1.toPrice(3),Default::default(), BN, 3, number1.clone())),
+            ares_price_data_from_tuple((number2.toPrice(3),Default::default(), BN, 3, number2.clone())),
+            ares_price_data_from_tuple((number3.toPrice(3),Default::default(), BN, 3, number3.clone())),
         ], btc_price_list);
 
 
@@ -2014,14 +2022,14 @@ fn bulk_parse_price_ares_works() {
     // Bulk parse
     // defined parse format
     let mut format = Vec::new();
-    format.push((toVec("btc_price"), toVec("btcusdt"), FRACTION_NUM_2));
-    format.push((toVec("eth_price"), toVec("ethusdt"), FRACTION_NUM_3));
-    format.push((toVec("dot_price"), toVec("dotusdt"), FRACTION_NUM_4));
-    format.push((toVec("xrp_price"), toVec("xrpusdt"), FRACTION_NUM_5));
+    format.push((toVec("btc_price"), toVec("btc"), FRACTION_NUM_2));
+    format.push((toVec("eth_price"), toVec("eth"), FRACTION_NUM_3));
+    format.push((toVec("dot_price"), toVec("dot"), FRACTION_NUM_4));
+    format.push((toVec("xrp_price"), toVec("xrp"), FRACTION_NUM_5));
     // xxx_price not exist, so what up ?
-    format.push((toVec("xxx_price"), toVec("xxxusdt"), FRACTION_NUM_6));
+    format.push((toVec("xxx_price"), toVec("xxx"), FRACTION_NUM_6));
 
-    let result_bulk_parse = AresOcw::bulk_parse_price_of_ares(get_are_json_of_bulk(), format);
+    let result_bulk_parse = AresOcw::bulk_parse_price_of_ares(get_are_json_of_bulk(), toVec("usdt"), format);
 
     let test_number_value = NumberValue {
         integer: 0,
@@ -2066,14 +2074,14 @@ fn bulk_parse_price_ares_works() {
     // Bulk parse
     // defined parse format
     let mut format = Vec::new();
-    format.push((toVec("btc_price"), toVec("btcusdt"), FRACTION_NUM_2));
-    format.push((toVec("eth_price"), toVec("ethusdt"), FRACTION_NUM_3));
-    format.push((toVec("dot_price"), toVec("dotusdt"), FRACTION_NUM_4));
-    format.push((toVec("xrp_price"), toVec("xrpusdt"), FRACTION_NUM_5));
+    format.push((toVec("btc_price"), toVec("btc"), FRACTION_NUM_2));
+    format.push((toVec("eth_price"), toVec("eth"), FRACTION_NUM_3));
+    format.push((toVec("dot_price"), toVec("dot"), FRACTION_NUM_4));
+    format.push((toVec("xrp_price"), toVec("xrp"), FRACTION_NUM_5));
     // xxx_price not exist, so what up ?
-    format.push((toVec("xxx_price"), toVec("xxxusdt"), FRACTION_NUM_6));
+    format.push((toVec("xxx_price"), toVec("xxx"), FRACTION_NUM_6));
 
-    let result_bulk_parse = AresOcw::bulk_parse_price_of_ares(get_are_json_of_bulk_of_xxxusdt_is_0(), format);
+    let result_bulk_parse = AresOcw::bulk_parse_price_of_ares(get_are_json_of_bulk_of_xxxusdt_is_0(), toVec("usdt"), format);
 
     let mut bulk_expected = Vec::new();
     bulk_expected.push((toVec("btc_price"), Some(5026137), FRACTION_NUM_2, NumberValue {
@@ -2245,7 +2253,7 @@ fn test_make_bulk_price_format_data () {
     t.register_extension(OffchainWorkerExt::new(offchain));
 
     let mut expect_format = Vec::new();
-    expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4, 1));
+    expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4, 1));
 
     t.execute_with(|| {
         let price_format = AresOcw::make_bulk_price_format_data(1);
@@ -2254,8 +2262,8 @@ fn test_make_bulk_price_format_data () {
 
     // When block number is 2
     let mut expect_format = Vec::new();
-    expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4, 1));
-    expect_format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4, 2));
+    expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4, 1));
+    expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4, 2));
     t.execute_with(|| {
         let price_format = AresOcw::make_bulk_price_format_data(2);
         assert_eq!(expect_format, price_format);
@@ -2263,8 +2271,8 @@ fn test_make_bulk_price_format_data () {
 
     // When block number is 3
     let mut expect_format = Vec::new();
-    expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4, 1));
-    expect_format.push(("dot_price".as_bytes().to_vec(), "dotusdt".as_bytes().to_vec(), 4, 3));
+    expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4, 1));
+    expect_format.push(("dot_price".as_bytes().to_vec(), "dot".as_bytes().to_vec(), 4, 3));
     t.execute_with(|| {
         let price_format = AresOcw::make_bulk_price_format_data(3);
         assert_eq!(expect_format, price_format);
@@ -2272,9 +2280,9 @@ fn test_make_bulk_price_format_data () {
 
     // When block number is 4
     let mut expect_format = Vec::new();
-    expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4, 1));
-    expect_format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4, 2));
-    expect_format.push(("xrp_price".as_bytes().to_vec(), "xrpusdt".as_bytes().to_vec(), 4, 4));
+    expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4, 1));
+    expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4, 2));
+    expect_format.push(("xrp_price".as_bytes().to_vec(), "xrp".as_bytes().to_vec(), 4, 4));
     t.execute_with(|| {
         let price_format = AresOcw::make_bulk_price_format_data(4);
         assert_eq!(expect_format, price_format);
@@ -2282,7 +2290,7 @@ fn test_make_bulk_price_format_data () {
 
     // When block number is 5
     let mut expect_format = Vec::new();
-    expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4, 1));
+    expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4, 1));
     t.execute_with(|| {
         let price_format = AresOcw::make_bulk_price_format_data(1);
         assert_eq!(expect_format, price_format);
@@ -2314,20 +2322,24 @@ fn make_bulk_price_request_url () {
     let mut t = new_test_ext();
     t.execute_with(|| {
         let mut expect_format = Vec::new();
-        expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4));
-        expect_format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4));
+        expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4));
+        expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4));
 
         let bulk_request = AresOcw::make_bulk_price_request_url(expect_format);
-        assert_eq!("http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt".as_bytes().to_vec(), bulk_request);
+        // assert_eq!("http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt".as_bytes().to_vec(), bulk_request);
+        assert_eq!(("http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth".as_bytes().to_vec(), toVec("usdt")), bulk_request);
+
 
         let mut expect_format = Vec::new();
-        expect_format.push(("btc_price".as_bytes().to_vec(), "btcusdt".as_bytes().to_vec(), 4));
-        expect_format.push(("eth_price".as_bytes().to_vec(), "ethusdt".as_bytes().to_vec(), 4));
-        expect_format.push(("btc_price".as_bytes().to_vec(), "dotusdt".as_bytes().to_vec(), 4));
-        expect_format.push(("eth_price".as_bytes().to_vec(), "xrpusdt".as_bytes().to_vec(), 4));
+        expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4));
+        expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4));
+        expect_format.push(("btc_price".as_bytes().to_vec(), "dot".as_bytes().to_vec(), 4));
+        expect_format.push(("eth_price".as_bytes().to_vec(), "xrp".as_bytes().to_vec(), 4));
 
         let bulk_request = AresOcw::make_bulk_price_request_url(expect_format);
-        assert_eq!("http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".as_bytes().to_vec(), bulk_request);
+        // assert_eq!("http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".as_bytes().to_vec(), bulk_request);
+        assert_eq!(("http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth_dot_xrp".as_bytes().to_vec(), toVec("usdt")), bulk_request);
+
     });
 }
 
@@ -2360,7 +2372,8 @@ fn save_fetch_ares_price_and_send_payload_signed() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -2450,8 +2463,8 @@ fn test_increase_jump_block_number() {
 
 
         let mut expect_format = Vec::new();
-        expect_format.push((toVec("btc_price"), toVec("btcusdt"), 4, 1)); // (1,0)
-        expect_format.push((toVec("eth_price"), toVec("ethusdt"), 4, 2)); // (2,0)
+        expect_format.push((toVec("btc_price"), toVec("btc"), 4, 1)); // (1,0)
+        expect_format.push((toVec("eth_price"), toVec("eth"), 4, 2)); // (2,0)
         let price_format = AresOcw::make_bulk_price_format_data(2);
         assert_eq!(expect_format, price_format);
 
@@ -2463,14 +2476,14 @@ fn test_increase_jump_block_number() {
         assert_eq!(1, AresOcw::get_jump_block_number(toVec("eth_price")));
 
         let mut expect_format = Vec::new();
-        expect_format.push((toVec("btc_price"), toVec("btcusdt"), 4, 1)); // (1,0)
+        expect_format.push((toVec("btc_price"), toVec("btc"), 4, 1)); // (1,0)
         let price_format = AresOcw::make_bulk_price_format_data(2);
         assert_eq!(expect_format, price_format);
 
         let mut expect_format = Vec::new();
-        expect_format.push((toVec("btc_price"), toVec("btcusdt"), 4, 1));
-        expect_format.push((toVec("eth_price"), toVec("ethusdt"), 4, 2)); // (2,0)
-        expect_format.push((toVec("dot_price"), toVec("dotusdt"), 4, 3));
+        expect_format.push((toVec("btc_price"), toVec("btc"), 4, 1));
+        expect_format.push((toVec("eth_price"), toVec("eth"), 4, 2)); // (2,0)
+        expect_format.push((toVec("dot_price"), toVec("dot"), 4, 3));
         let price_format = AresOcw::make_bulk_price_format_data(3);
         assert_eq!(expect_format, price_format);
 
@@ -2562,7 +2575,8 @@ fn test_jump_block_submit() {
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
         // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt_xrpusdt".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -2608,7 +2622,8 @@ fn test_jump_block_submit() {
 
     let padding_request = testing::PendingRequest {
         method: "GET".into(),
-        uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt".into(),
+        // uri: "http://127.0.0.1:5566/api/getBulkPrices?symbol=btcusdt_ethusdt_dotusdt".into(),
+        uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth_dot".into(),
         response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
         sent: true,
         ..Default::default()
@@ -2768,7 +2783,7 @@ fn test_request_propose_submit_and_revoke_propose() {
         let tmp_result = AresOcw::prices_requests();
         // price_key are same will be update .
         // println!("== {:?}", sp_std::str::from_utf8( &tmp_result[3].1) );
-        assert_eq!(tmp_result[3], (toVec("xrp_price"), toVec("xrpusdt"), 2, 4, 4));
+        assert_eq!(tmp_result[3], (toVec("xrp_price"), toVec("xrp"), 2, 4, 4));
 
 
     });
@@ -2796,8 +2811,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get save price
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // if parse version change
@@ -2808,8 +2823,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Other price request get in
@@ -2820,8 +2835,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Other price request fraction number change.
@@ -2832,8 +2847,8 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         // Get old price list, Unaffected
         let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
         assert_eq!(vec![
-            AresPriceData::from_tuple((8888,Default::default(), 3, 4, Default::default())),
-            AresPriceData::from_tuple((7777,Default::default(), 3, 4, Default::default()))
+            ares_price_data_from_tuple((8888,Default::default(), 3, 4, Default::default())),
+            ares_price_data_from_tuple((7777,Default::default(), 3, 4, Default::default()))
         ], btc_price_list);
 
         // Current price request fraction number change. (xxx_price)
@@ -2976,7 +2991,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         balances: vec![(AccountId::from_raw([1;32]), 100000_000000000000), ],
     }.assimilate_storage(&mut t).unwrap();
 
-    ocw_finance::GenesisConfig::<Test> {
+    oracle_finance::GenesisConfig::<Test> {
         _pt: Default::default()
     }.assimilate_storage(&mut t).unwrap();
 
@@ -2986,16 +3001,26 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         price_allowable_offset: 10u8,
         price_pool_depth: 3u32,
         price_requests: vec![
-            (toVec("btc_price"), toVec("btcusdt"), 2u32, 4u32, 1u8),
-            (toVec("eth_price"), toVec("ethusdt"), 2u32, 4u32, 2u8),
-            (toVec("dot_price"), toVec("dotusdt"), 2u32, 4u32, 3u8),
-            (toVec("xrp_price"), toVec("xrpusdt"), 2u32, 4u32, 4u8),
+            (toVec("btc_price"), toVec("btc"), 2u32, 4u32, 1u8),
+            (toVec("eth_price"), toVec("eth"), 2u32, 4u32, 2u8),
+            (toVec("dot_price"), toVec("dot"), 2u32, 4u32, 3u8),
+            (toVec("xrp_price"), toVec("xrp"), 2u32, 4u32, 4u8),
         ]
     }.assimilate_storage(&mut t).unwrap();
 
 
 
     t.into()
+}
+
+fn ares_price_data_from_tuple (param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> AresPriceData<AccountId, BlockNumber> {
+    AresPriceData {
+        price: param.0,
+        account_id: param.1,
+        create_bn: param.2,
+        fraction_len: param.3,
+        raw_number: param.4,
+    }
 }
 
 

@@ -1,6 +1,6 @@
 [package]
-name = "pallet-ocw"
-version = "3.2.8"
+name = "ares-oracle"
+version = "3.3.1"
 authors = ["Ares Technologies <linhai@cancanyou.com>"]
 edition = "2018"
 license = "Unlicense"
@@ -30,7 +30,7 @@ serde_json = { version = '1.0.67', default-features = false, features = ['alloc'
 pallet-aura = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
-ocw-finance = { version = "3.0.1", default-features = false, path="../ocw-finance" }
+oracle-finance = { version = "3.0.1", default-features = false, path= "../oracle-finance" }
 pallet-balances = {  version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 
 [dev-dependencies]
@@ -60,6 +60,6 @@ std = [
 	"pallet-session/std",
 	"sp-consensus-aura/std",
 	"pallet-balances/std",
-	"ocw-finance/std",
+	"oracle-finance/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

@@ -1,4 +1,4 @@
-use crate as ocw_finance;
+use crate as oracle_finance;
 use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
 use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
 use frame_support::{
@@ -38,7 +38,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OcwFinance: ocw_finance::{Pallet, Call, Storage, Event<T>},
+		OcwFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -90,7 +90,7 @@ parameter_types! {
 	pub const RewardSlot: AskPeriodNum = 1;
 }
 
-impl ocw_finance::Config for Test {
+impl oracle_finance::Config for Test {
 	type Event = Event;
 	type PalletId = AresFinancePalletId;
 	type Currency = pallet_balances::Pallet<Self>;

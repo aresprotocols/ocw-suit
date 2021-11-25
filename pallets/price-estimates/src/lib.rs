@@ -42,7 +42,8 @@ use sp_runtime::{
     AccountId32, Perbill, Permill, RuntimeAppPublic, RuntimeDebug,
 };
 
-use pallet_ocw::{types::FractionLength, AvgPrice};
+use ares_oracle::{types::FractionLength};
+use ares_oracle::traits::AvgPrice;
 
 type BalanceOf<T, I = ()> =
     <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;

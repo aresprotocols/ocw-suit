@@ -24,6 +24,7 @@ use sp_std::{prelude::*, str};
 mod tests;
 
 pub mod aura_handler;
+pub mod validator_pre_check;
 
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 // pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
@@ -98,12 +99,13 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
     use sp_core::crypto::UncheckedFrom;
-    use ocw_finance::traits::*;
-    use ocw_finance::types::{BalanceOf, OcwPaymentResult};
+    use oracle_finance::traits::*;
+    use oracle_finance::types::{BalanceOf, OcwPaymentResult};
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
 
     #[pallet::error]
+    #[derive(PartialEq, Eq)]
     pub enum Error<T> {
         //
         SubmitThresholdRangeError,
@@ -113,11 +115,12 @@ pub mod pallet {
         InsufficientMaxFee,
         PayToPurchaseFeeFailed,
         // InsufficientCountOfValidators,
+        PerCheckTaskAlreadyExists,
     }
 
     /// This pallet's configuration trait
     #[pallet::config]
-    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + ocw_finance::Config
+    pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + oracle_finance::Config
     where
         sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
         u64: From<<Self as frame_system::Config>::BlockNumber>,
@@ -787,11 +790,11 @@ pub mod pallet {
                 let priority_num: u64 = T::UnsignedPriority::get();
 
                 // let perfix_v8 = Self::make_transaction_tag_prefix_with_public_account(
-                //     "pallet-ocw::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
+                //     "ares-oracle::validate_transaction_parameters_of_purchased_price".as_bytes().to_vec(),
                 //     payload.public.clone()
                 // );
-                // let perfix_str: &'static str = sp_std::str::from_utf8("pallet-ocw::validate_transaction_parameters_of_purchased_price").unwrap();
-                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_purchased_price")
+                // let perfix_str: &'static str = sp_std::str::from_utf8("ares-oracle::validate_transaction_parameters_of_purchased_price").unwrap();
+                ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_purchased_price")
                     .priority(priority_num.saturating_add(1))
                     .and_provides(payload.public.clone())
                     // .and_provides(&payload.block_number)
@@ -828,7 +831,7 @@ pub mod pallet {
                 }
 
                 let priority_num: u64 = T::UnsignedPriority::get();
-                ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_force_clear_purchased")
+                ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_force_clear_purchased")
                     .priority(priority_num.saturating_add(2))
                     .and_provides(&payload.block_number) // next_unsigned_at
                     .longevity(5)
@@ -875,7 +878,7 @@ pub mod pallet {
         Vec<u8>, // purchased_id,
         Blake2_128Concat,
         Vec<u8>, // price_key,,
-        Vec<AresPriceData<T>>,
+        Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
         // Vec<AresPrice<T>>,
         ValueQuery,
     >;
@@ -934,7 +937,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         Vec<u8>,
-        Vec<AresPriceData<T>>,
+        Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
         ValueQuery,
     >;
 
@@ -953,7 +956,7 @@ pub mod pallet {
         //     FractionLength,
         //     JsonNumberValue,
         // )>,
-        Vec<AresPriceData<T>>,
+        Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
         ValueQuery,
     >;
 
@@ -997,6 +1000,43 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn jump_block_number)]
     pub(super) type JumpBlockNumber<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, u64>;
+
+
+    // ---
+
+    // PerCheckResult
+    #[pallet::storage]
+    #[pallet::getter(fn per_check_result)]
+    pub(super) type PerCheckResult<T: Config> = StorageDoubleMap<
+        _,
+        Blake2_128Concat,
+        T::AccountId,
+        Blake2_128Concat,
+        T::BlockNumber,
+        PerCheckStatus,
+        ValueQuery,
+    >;
+
+    // FinalPerCheckResult
+    #[pallet::storage]
+    #[pallet::getter(fn final_per_check_result)]
+    pub(super) type FinalPerCheckResult<T: Config> = StorageMap<_,
+        Blake2_128Concat,
+        T::AccountId,
+        Option<(T::BlockNumber, PerCheckStatus)>
+    >;
+
+    // PerCheckTaskList
+    #[pallet::storage]
+    #[pallet::getter(fn per_check_task_list)]
+    pub(super) type PerCheckTaskList<T: Config> = StorageValue<_,
+        Vec<(T::AccountId, T::BlockNumber)>,
+        ValueQuery
+    >;
+
+
+
+    // ---
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config>
@@ -1074,14 +1114,17 @@ pub mod pallet {
 }
 
 pub mod types;
+pub mod traits;
 pub mod crypto2;
 
 use types::*;
 use hex;
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::pallet_prelude::StorageMap;
-use ocw_finance::types::BalanceOf;
-use ocw_finance::traits::{IForReporter, IForPrice};
+use oracle_finance::types::BalanceOf;
+use oracle_finance::traits::{IForReporter, IForPrice};
+use crate::traits::*;
+use frame_support::weights::Weight;
 
 
 impl<T: Config> Pallet<T>
@@ -1358,7 +1401,7 @@ where
             return Ok(());
         }
 
-        let fetch_http_reesult = Self::fetch_bulk_price_with_http(block_number, account_id.clone(), purchased_key.clone().raw_source_keys,2)
+        let fetch_http_reesult = Self::fetch_bulk_price_with_http(purchased_key.clone().raw_source_keys)
             .ok();
 
 
@@ -1438,13 +1481,8 @@ where
         let (format_arr, jump_block) =
             Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
 
-        // let (price_result, jump_block) =
-        //     Self::fetch_bulk_price_with_http(block_number, account_id.clone(), format_arr,2)
-        //         .ok()
-        //         .unwrap();
-
         let price_result =
-            Self::fetch_bulk_price_with_http(block_number, account_id.clone(), format_arr,2)
+            Self::fetch_bulk_price_with_http(format_arr)
                 .ok();
 
         if price_result.is_none() {
@@ -1509,17 +1547,21 @@ where
     }
 
     //
-    fn make_bulk_price_request_url(format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>) -> Vec<u8> {
+    fn make_bulk_price_request_url(format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>) -> (Vec<u8>, Vec<u8>) {
         // "http://141.164.58.241:5566/api/getBulkPrices".as_bytes().to_vec()
+        // let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
+        //     "/api/getBulkPrices".as_bytes().to_vec(),
+        // );
         let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
-            "/api/getBulkPrices".as_bytes().to_vec(),
+            "/api/getBulkCurrencyPrices?currency=usdt".as_bytes().to_vec(),
         );
+
         let mut request_url = Vec::new();
         for (_, extract_key, _) in format {
             if request_url.len() == 0 {
                 request_url = [
                     raw_request_url.clone(),
-                    "?symbol=".as_bytes().to_vec(),
+                    "&symbol=".as_bytes().to_vec(),
                     extract_key,
                 ]
                 .concat();
@@ -1527,7 +1569,7 @@ where
                 request_url = [request_url, "_".as_bytes().to_vec(), extract_key].concat();
             }
         }
-        request_url
+        (request_url, "usdt".as_bytes().to_vec())
     }
 
     // Use to filter out those format_data of price that need to jump block.
@@ -1671,37 +1713,18 @@ where
 
     //
     fn fetch_bulk_price_with_http(
-        block_number: T::BlockNumber,
-        account_id: T::AccountId,
         format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
-        version_num: u8,
     ) -> Result<
-        // (
-        //     Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)>,
-        //     // Vec<PricePayloadSubJumpBlock>,
-        // ),
         Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)>,
         http::Error,
     > {
-        // Get current available price list.
-        // let format_arr = Self::make_bulk_price_format_data(block_number);
-
-        // Filter format arr, separate jump block data.
-        // let (format_arr, jump_arr) =
-        //     Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
-
         // make request url
-        let request_url = Self::make_bulk_price_request_url(format_arr.clone());
+        let (request_url, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
         let request_url = sp_std::str::from_utf8(&request_url).unwrap();
 
         // request and return http body.
         if "" == request_url {
             log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ Ares http requests cannot be empty.");
-            // return Ok(
-            //     (
-            //         Vec::new(),
-            //         // jump_arr,
-            //     ));
             return Ok(Vec::new());
         }
         log::info!(
@@ -1739,11 +1762,7 @@ where
             );
             http::Error::Unknown
         })?;
-        // Ok((
-        //     Self::bulk_parse_price_of_ares(body_str, format_arr),
-        //     // jump_arr,
-        // ))
-        Ok(Self::bulk_parse_price_of_ares(body_str, format_arr))
+        Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
     }
 
     // /// Fetch current price and return the result in cents.
@@ -1870,6 +1889,7 @@ where
     /// format: ()
     fn bulk_parse_price_of_ares(
         price_str: &str,
+        base_coin: Vec<u8>,
         format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
     ) -> Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)> {
         let val = lite_json::parse_json(price_str);
@@ -1893,7 +1913,8 @@ where
                         // println!("v_data = {:?}", v_data);
 
                         for (price_key, extract_key, fraction_length) in format {
-                            let extract_key = sp_std::str::from_utf8(&extract_key).unwrap();
+                            let new_extract_key = [extract_key, base_coin.clone()].concat();
+                            let extract_key = sp_std::str::from_utf8(&new_extract_key).unwrap();
                             let extract_price_grp = Self::extract_bulk_price_by_json_value(
                                 v_data.clone(),
                                 extract_key,
@@ -2169,7 +2190,7 @@ where
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         } else {
             // push a new value.
-            let mut new_price: Vec<AresPriceData<T>> = Vec::new();
+            let mut new_price: Vec<AresPriceData<T::AccountId, T::BlockNumber>> = Vec::new();
             // new_price.push((
             //     price.clone(),
             //     who.clone(),
@@ -2275,7 +2296,7 @@ where
         purchased_id_list
     }
 
-    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T>>, reached_type: u8)
+    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>, reached_type: u8)
         -> Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)>
     {
 
@@ -2438,7 +2459,7 @@ where
     }
 
     /// Calculate current average price. // fraction_length: FractionLength
-    fn average_price(prices_info: Vec<AresPriceData<T>>, kind: u8) -> Option<(u64, FractionLength)> {
+    fn average_price(prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>, kind: u8) -> Option<(u64, FractionLength)> {
 
         let mut fraction_length_of_pool: FractionLength = 0;
         // Check and get fraction_length.
@@ -2666,7 +2687,7 @@ where
             return InvalidTransaction::Future.into();
         }
 
-        ValidTransaction::with_tag_prefix("pallet-ocw::validate_transaction_parameters_of_ares")
+        ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_ares")
             .priority(T::UnsignedPriority::get())
             .and_provides(block_number) // next_unsigned_at
             .longevity(5)
@@ -2726,11 +2747,6 @@ impl fmt::Debug for LocalPriceRequestStorage {
     }
 }
 
-pub trait AvgPrice {
-    fn price(
-        symbol: Vec<u8>
-    ) -> Result<(u64, FractionLength),()>;
-}
 
 impl<T: Config> AvgPrice for Pallet<T>
     where
@@ -2740,5 +2756,55 @@ impl<T: Config> AvgPrice for Pallet<T>
 
     fn price(symbol: Vec<u8>) -> Result<(u64, FractionLength),()> {
         AresAvgPrice::<T>::try_get(symbol)
+    }
+}
+
+impl <T: Config> IOcwPerCheck<T::AccountId, T::BlockNumber, Error<T>> for Pallet<T>
+    where sp_runtime::AccountId32: From<T::AccountId>,
+      u64: From<T::BlockNumber>,
+{
+    //
+    fn has_per_check_task() -> bool {
+        <PerCheckTaskList<T>>::get().len() > 0
+    }
+
+    //
+    fn check_and_clean_obsolete_task() -> Weight {
+        todo!()
+    }
+
+    // Obtain a set of price data according to the task configuration structure.
+    fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<AresPriceData<T::AccountId, T::BlockNumber>> {
+
+        // let mut raw_price_source_list = Self::get_raw_price_source_list();
+        // raw_price_source_list.retain(|x| {
+        //         check_config.check_token_list.clone().iter().any(|check_price_key| check_price_key == x.0)
+        // });
+        // let request_param_arr = raw_price_source_list.into_iter()
+        // // check_config
+        // Self::fetch_bulk_price_with_http(raw_price_source_list);
+        todo!()
+    }
+
+    // Record the per check results and add them to the storage structure.
+    fn save_per_check_result(acc: T::AccountId, bn: T::BlockNumber, round: u8, result: bool ) {
+        todo!()
+    }
+
+    //
+    fn get_per_check_status(acc: T::AccountId) -> Option<PerCheckStatus> {
+        todo!()
+    }
+
+    //
+    fn create_pre_check_task(acc: T::AccountId, bn: T::BlockNumber) -> Result<(), Error<T>> {
+        let mut task_list = <PerCheckTaskList<T>>::get();
+        let exists = task_list.iter().any(|(old_acc, _)|{ &acc == old_acc }) ;
+        if exists {
+            return Err(Error::PerCheckTaskAlreadyExists)
+        }
+        task_list.push((acc, bn));
+        <PerCheckTaskList<T>>::put(task_list);
+        Ok(())
     }
 }
