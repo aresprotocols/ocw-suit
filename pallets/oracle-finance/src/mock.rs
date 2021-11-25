@@ -1,4 +1,4 @@
-use crate as ocw_finance;
+use crate as oracle_finance;
 use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
 use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
 use frame_support::{

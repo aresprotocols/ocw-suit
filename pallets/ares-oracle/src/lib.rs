@@ -1547,17 +1547,21 @@ where
     }
 
     //
-    fn make_bulk_price_request_url(format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>) -> Vec<u8> {
+    fn make_bulk_price_request_url(format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>) -> (Vec<u8>, Vec<u8>) {
         // "http://141.164.58.241:5566/api/getBulkPrices".as_bytes().to_vec()
+        // let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
+        //     "/api/getBulkPrices".as_bytes().to_vec(),
+        // );
         let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
-            "/api/getBulkPrices".as_bytes().to_vec(),
+            "/api/getBulkCurrencyPrices?currency=usdt".as_bytes().to_vec(),
         );
+
         let mut request_url = Vec::new();
         for (_, extract_key, _) in format {
             if request_url.len() == 0 {
                 request_url = [
                     raw_request_url.clone(),
-                    "?symbol=".as_bytes().to_vec(),
+                    "&symbol=".as_bytes().to_vec(),
                     extract_key,
                 ]
                 .concat();
@@ -1565,7 +1569,7 @@ where
                 request_url = [request_url, "_".as_bytes().to_vec(), extract_key].concat();
             }
         }
-        request_url
+        (request_url, "usdt".as_bytes().to_vec())
     }
 
     // Use to filter out those format_data of price that need to jump block.
@@ -1715,7 +1719,7 @@ where
         http::Error,
     > {
         // make request url
-        let request_url = Self::make_bulk_price_request_url(format_arr.clone());
+        let (request_url, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
         let request_url = sp_std::str::from_utf8(&request_url).unwrap();
 
         // request and return http body.
@@ -1758,7 +1762,7 @@ where
             );
             http::Error::Unknown
         })?;
-        Ok(Self::bulk_parse_price_of_ares(body_str, format_arr))
+        Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
     }
 
     // /// Fetch current price and return the result in cents.
@@ -1885,6 +1889,7 @@ where
     /// format: ()
     fn bulk_parse_price_of_ares(
         price_str: &str,
+        base_coin: Vec<u8>,
         format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
     ) -> Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)> {
         let val = lite_json::parse_json(price_str);
@@ -1908,7 +1913,8 @@ where
                         // println!("v_data = {:?}", v_data);
 
                         for (price_key, extract_key, fraction_length) in format {
-                            let extract_key = sp_std::str::from_utf8(&extract_key).unwrap();
+                            let new_extract_key = [extract_key, base_coin.clone()].concat();
+                            let extract_key = sp_std::str::from_utf8(&new_extract_key).unwrap();
                             let extract_price_grp = Self::extract_bulk_price_by_json_value(
                                 v_data.clone(),
                                 extract_key,
