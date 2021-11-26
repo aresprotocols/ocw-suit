@@ -182,6 +182,13 @@ impl Default for PurchasedAvgPriceData
     }
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+pub struct PerCheckStruct {
+    pub price_key: Vec<u8>,
+    pub number_val: JsonNumberValue,
+    pub max_offset: Percent,
+}
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AresPriceData<AccountId, BlockNumber>
     // where sp_runtime::AccountId32: From<AccountId>,
@@ -421,9 +428,9 @@ impl Default for PerCheckStatus {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PerCehckTaskConfig {
     pub check_token_list: Vec<Vec<u8>>,
-    pub allowable_offset: u8,
-    pub max_repeat_times: u8,
-    pub pass_percent: Percent,
+    pub allowable_offset: Percent,
+    // pub max_repeat_times: u8, // The current version is forbidden first.
+    // pub pass_percent: Percent, // The current version is forbidden first.
 }
 
 impl Default for PerCehckTaskConfig
@@ -431,9 +438,9 @@ impl Default for PerCehckTaskConfig
     fn default() -> Self {
         Self {
             check_token_list: Vec::new(),
-            allowable_offset: 10,
-            max_repeat_times: 5,
-            pass_percent: Percent::from_percent(100),
+            allowable_offset: Percent::from_percent(0),
+            // max_repeat_times: 5,
+            // pass_percent: Percent::from_percent(100),
         }
     }
 }

@@ -400,7 +400,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 }
 
 
-mod test_IOcwPerCheck;
+mod test_IAresOraclePerCheck;
 
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {
@@ -3001,14 +3001,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         price_allowable_offset: 10u8,
         price_pool_depth: 3u32,
         price_requests: vec![
+            // price , key sign, version, fraction_length, request interval.
             (toVec("btc_price"), toVec("btc"), 2u32, 4u32, 1u8),
             (toVec("eth_price"), toVec("eth"), 2u32, 4u32, 2u8),
             (toVec("dot_price"), toVec("dot"), 2u32, 4u32, 3u8),
             (toVec("xrp_price"), toVec("xrp"), 2u32, 4u32, 4u8),
         ]
     }.assimilate_storage(&mut t).unwrap();
-
-
 
     t.into()
 }

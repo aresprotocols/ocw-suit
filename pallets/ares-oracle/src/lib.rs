@@ -1004,18 +1004,18 @@ pub mod pallet {
 
     // ---
 
-    // PerCheckResult
-    #[pallet::storage]
-    #[pallet::getter(fn per_check_result)]
-    pub(super) type PerCheckResult<T: Config> = StorageDoubleMap<
-        _,
-        Blake2_128Concat,
-        T::AccountId,
-        Blake2_128Concat,
-        T::BlockNumber,
-        PerCheckStatus,
-        ValueQuery,
-    >;
+    // // PerCheckResult
+    // #[pallet::storage]
+    // #[pallet::getter(fn per_check_result)]
+    // pub(super) type PerCheckResult<T: Config> = StorageDoubleMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     Blake2_128Concat,
+    //     T::BlockNumber,
+    //     PerCheckStatus,
+    //     ValueQuery,
+    // >;
 
     // FinalPerCheckResult
     #[pallet::storage]
@@ -1033,8 +1033,6 @@ pub mod pallet {
         Vec<(T::AccountId, T::BlockNumber)>,
         ValueQuery
     >;
-
-
 
     // ---
 
@@ -1125,6 +1123,7 @@ use oracle_finance::types::BalanceOf;
 use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
+use frame_support::sp_runtime::Percent;
 
 
 impl<T: Config> Pallet<T>
@@ -2759,41 +2758,100 @@ impl<T: Config> AvgPrice for Pallet<T>
     }
 }
 
-impl <T: Config> IOcwPerCheck<T::AccountId, T::BlockNumber, Error<T>> for Pallet<T>
+impl <T: Config> IAresOraclePerCheck<T::AccountId, T::BlockNumber, Error<T>> for Pallet<T>
     where sp_runtime::AccountId32: From<T::AccountId>,
       u64: From<T::BlockNumber>,
 {
     //
-    fn has_per_check_task() -> bool {
-        <PerCheckTaskList<T>>::get().len() > 0
+    fn has_per_check_task(acc: T::AccountId) -> bool {
+        if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
+        // TODO:: to dev maximum_due
+        let task_list = <PerCheckTaskList<T>>::get();
+        task_list.iter().any(|(sotrage_acc, bn)|{
+            &acc == sotrage_acc
+        })
     }
 
     //
-    fn check_and_clean_obsolete_task() -> Weight {
-        todo!()
+    fn check_and_clean_obsolete_task(maximum_due: T::BlockNumber) -> Weight {
+        let mut old_task_list = <PerCheckTaskList<T>>::get();
+        if old_task_list.len() > 0 {
+            let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
+            let old_count = old_task_list.len();
+            old_task_list.retain(|(acc, bn)|{
+                    let duration_bn = current_block_num - *bn;
+                    duration_bn <= maximum_due
+            });
+            if old_count > old_task_list.len() {
+                <PerCheckTaskList<T>>::put(old_task_list);
+            }
+        }
+        0
     }
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<AresPriceData<T::AccountId, T::BlockNumber>> {
+    fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<PerCheckStruct> {
 
-        // let mut raw_price_source_list = Self::get_raw_price_source_list();
-        // raw_price_source_list.retain(|x| {
-        //         check_config.check_token_list.clone().iter().any(|check_price_key| check_price_key == x.0)
-        // });
-        // let request_param_arr = raw_price_source_list.into_iter()
+        let mut raw_price_source_list = Self::get_raw_price_source_list();
+        raw_price_source_list.retain(|x| {
+                check_config.check_token_list.clone()
+                    .iter()
+                    .any(|check_price_key| {
+                        // println!("check_price_key == &x.0, {:?} == {:?}", sp_std::str::from_utf8(check_price_key), sp_std::str::from_utf8(&x.0)) ;
+                        check_price_key == &x.0
+                    })
+        });
+
+        let format_data: Vec<(Vec<u8>, Vec<u8>, FractionLength)> = raw_price_source_list.into_iter().map(|(price_key, parse_key, _version, fraction_len, _request_interval)|{
+            (price_key, parse_key, fraction_len)
+        }).collect();
+
+        // println!("raw_price_source_list = {:?}", &format_data);
         // // check_config
-        // Self::fetch_bulk_price_with_http(raw_price_source_list);
-        todo!()
+        let reponse_result= Self::fetch_bulk_price_with_http(format_data);
+        let reponse_result = reponse_result.unwrap_or(Vec::new());
+
+        reponse_result.into_iter().map(|(price_key,parse_key,fraction_len, number_val )|{
+            let number_val = JsonNumberValue::new(number_val);
+            PerCheckStruct {
+                price_key,
+                number_val,
+                max_offset: check_config.allowable_offset.clone()
+            }
+        }).collect()
     }
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(acc: T::AccountId, bn: T::BlockNumber, round: u8, result: bool ) {
-        todo!()
+    fn save_per_check_result(acc: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PerCheckStruct> ) {
+        // get avg price.
+        let check_result = per_check_list.iter().all(|checked_struct| {
+            // Check price key exists.
+            if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
+                return false;
+            }
+            // Get avg price struct.
+            let (avg_price_val, avg_fraction_len) = <AresAvgPrice<T>>::get(&checked_struct.price_key);
+
+            let max_price = checked_struct.number_val.toPrice(avg_fraction_len).max(avg_price_val);
+            let min_price = checked_struct.number_val.toPrice(avg_fraction_len).min(avg_price_val);
+            // println!("max_price={}, min_price={}", max_price, min_price);
+            let diff = max_price - min_price;
+            // println!("diff <= checked_struct.max_offset * avg_price_val = {} <= {}", diff, checked_struct.max_offset * avg_price_val);
+            diff <= checked_struct.max_offset * avg_price_val
+        });
+
+        let mut per_checkstatus = PerCheckStatus::Prohibit;
+        if check_result {
+            per_checkstatus = PerCheckStatus::Pass;
+        }
+
+        <FinalPerCheckResult<T>>::insert(acc, Some((bn, per_checkstatus)));
     }
 
     //
-    fn get_per_check_status(acc: T::AccountId) -> Option<PerCheckStatus> {
-        todo!()
+    fn get_per_check_status(acc: T::AccountId) -> Option<(T::BlockNumber, PerCheckStatus)> {
+        <FinalPerCheckResult<T>>::get(acc).unwrap_or(None)
+
     }
 
     //
