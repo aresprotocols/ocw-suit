@@ -201,10 +201,10 @@ pub mod pallet {
                         log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
                         // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
                         if Self::are_block_author_and_sotre_key_the_same(author.clone()) {
-                            log::info!("🚅 @ Ares call [1] ares-price-worker.");
+                            log::debug!("🚅 @ Ares call [1] ares-price-worker.");
                             // Try to get ares price.
                             match Self::ares_price_worker(block_number.clone(), author.clone()) {
-                                Ok(v) => log::info!("🚅 @ Ares OCW price acquisition completed."),
+                                Ok(v) => log::debug!("🚅 @ Ares OCW price acquisition completed."),
                                 Err(e) => log::warn!(
                                     target: "pallet::ocw::offchain_worker",
                                     "❗ Ares price has a problem : {:?}",
@@ -216,9 +216,9 @@ pub mod pallet {
 
                     if control_setting.open_paid_price_reporter {
                         if let Some(keystore_validator) = Self::keystore_validator_member() {
-                            log::info!("🚅 @ Ares call [2] ares-purchased-checker.");
+                            log::debug!("🚅 @ Ares call [2] ares-purchased-checker.");
                             match Self::ares_purchased_checker(block_number.clone(), keystore_validator) {
-                                Ok(v) => log::info!("🚅 % Ares OCW purchased checker completed."),
+                                Ok(v) => log::debug!("🚅 % Ares OCW purchased checker completed."),
                                 Err(e) => log::warn!(
                                     target: "pallet::ocw::offchain_worker",
                                     "❗ Ares purchased price has a problem : {:?}",
@@ -234,9 +234,9 @@ pub mod pallet {
             if control_setting.open_paid_price_reporter {
 
                 if let Some(keystore_validator) = Self::keystore_validator_member() {
-                    log::info!("🚅 @ Ares call [3] ares-purchased-worker.");
+                    log::debug!("🚅 @ Ares call [3] ares-purchased-worker.");
                     match Self::ares_purchased_worker(block_number.clone(), keystore_validator) {
-                        Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
+                        Ok(v) => log::debug!("🚅 ~ Ares OCW purchased price acquisition completed."),
                         Err(e) => log::warn!(
                             target: "pallet::ocw::offchain_worker",
                             "❗ Ares purchased price has a problem : {:?}",
@@ -425,7 +425,7 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             ensure_none(origin)?;
 
-            log::info!(
+            log::debug!(
                 "🚅 Pre submit price payload on block {:?}",
                 <system::Pallet<T>>::block_number()
             );
@@ -454,7 +454,7 @@ pub mod pallet {
                 event_result.push((price_key, price, fraction_length));
             }
 
-            log::info!(
+            log::debug!(
                 "🚅 Submit price list on chain, count = {:?}",
                 price_key_list.len()
             );
@@ -473,7 +473,7 @@ pub mod pallet {
                 }
             }
 
-            log::info!(
+            log::debug!(
                 "🚅 Submit jump block list on chain, count = {:?}",
                 jump_block.len()
             );
@@ -725,7 +725,7 @@ pub mod pallet {
             if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
                 call
             {
-                log::info!(
+                log::debug!(
                     "🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
                     payload.block_number.clone(),
                     <system::Pallet<T>>::block_number(),
@@ -763,7 +763,7 @@ pub mod pallet {
                 call
             {
                 // submit_purchased_price_unsigned_with_signed_payload
-                log::info!(
+                log::debug!(
                     "🚅 Validate purchased price payload data, on block: {:?} ",
                     <system::Pallet<T>>::block_number()
                 );
@@ -806,7 +806,7 @@ pub mod pallet {
                 call
             {
                 // submit_forced_clear_purchased_price_payload_signed
-                log::info!(
+                log::debug!(
                     "🚅 Validate forced clear purchased price payload data, on block: {:?} ",
                     <system::Pallet<T>>::block_number()
                 );
@@ -1313,7 +1313,7 @@ where
     {
         let force_request_list = Self::get_expired_purchased_transactions();
 
-        log::info!("🚅 Force request list length: {:?} .", &force_request_list.len());
+        log::debug!("🚅 Force request list length: {:?} .", &force_request_list.len());
         if force_request_list.len() > 0 {
             // send force clear transaction
             // -- Sign using any account
@@ -1426,7 +1426,7 @@ where
             }
         }
 
-        log::info!("🚅 fetch purchased price count: {:?}", price_list.len());
+        log::debug!("🚅 fetch purchased price count: {:?}", price_list.len());
 
         if price_list.len() > 0  {
             // -- Sign using any account
@@ -1507,7 +1507,7 @@ where
             }
         }
 
-        log::info!("🚅 fetch price count: {:?}, jump block count: {:?}", price_list.len(), jump_block.len());
+        log::debug!("🚅 fetch price count: {:?}, jump block count: {:?}", price_list.len(), jump_block.len());
 
         if price_list.len() > 0 || jump_block.len() > 0 {
             // -- Sign using any account
@@ -1707,7 +1707,7 @@ where
                 }
             }
         }
-        log::info!("🚅 Ares will be request list count {:?}", format.len());
+        log::debug!("🚅 Ares will be request list count {:?}", format.len());
         format
     }
 
