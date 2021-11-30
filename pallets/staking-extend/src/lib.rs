@@ -5,6 +5,10 @@
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use pallet::*;
 use frame_election_provider_support::onchain;
+use frame_support::traits::{Get, EstimateNextSessionRotation};
+use pallet_session::{ShouldEndSession, PeriodicSessions};
+use frame_support::sp_std::marker::PhantomData;
+use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
 
 #[cfg(test)]
 mod mock;
@@ -23,6 +27,7 @@ pub mod pallet {
 	use frame_support::traits::{ValidatorSet, FindAuthor};
 	use frame_support::sp_std::fmt::Debug;
 	use frame_election_provider_support::{data_provider, VoteWeight, ElectionDataProvider, Supports, ElectionProvider, onchain, PerThing128};
+	use crate::IStakingNpos;
 	// frame-election-provider-support
 
 	// type Aura<T> = pallet_aura::Pallet<T>;
@@ -37,6 +42,7 @@ pub mod pallet {
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
 		// type DebugError: Debug;
+		type IStakingNpos: IStakingNpos<<Self as frame_system::Config>::AccountId, Self::BlockNumber>;
 
 		type OnChainAccuracy: PerThing128;
 		type ElectionProvider: frame_election_provider_support::ElectionProvider<
@@ -123,13 +129,13 @@ pub mod pallet {
 
 		fn desired_targets() -> data_provider::Result<u32> {
 			let result = T::DataProvider::desired_targets();
-			log::info!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}", result);
+			log::debug!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}", result);
 			result
 		}
 
 		fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
 			let result = T::DataProvider::next_election_prediction(now);
-			log::info!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}", result);
+			log::debug!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}", result);
 			result
 		}
 	}
@@ -153,4 +159,66 @@ impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type BlockNumber = T::BlockNumber;
 	type Accuracy = T::OnChainAccuracy;
 	type DataProvider = T::DataProvider;
+}
+
+
+impl<T: Config> Pallet<T> {
+	// pub fn hello() {
+	// 	println!("HELLO");
+	// 	let nops_list = T::IStakingNpos::new_npos();
+	// 	println!("nops_list = {:?}" ,nops_list);
+	// }
+}
+
+pub trait IStakingNpos<ValicatorId, BlockNumber>: frame_system::Config {
+	fn current_staking_era() -> u32;
+	fn near_era_change(leading_period: BlockNumber) -> bool;
+	fn old_npos() -> Vec<ValicatorId> ;
+	fn pending_npos() -> Vec<ValicatorId> ;
+}
+
+
+impl<T: Config> IStakingNpos<<T as frame_system::Config>::AccountId, T::BlockNumber> for T
+	where T: pallet_staking::Config + pallet_session::Config,
+{
+
+	//
+	fn near_era_change(leading_period: T::BlockNumber) -> bool {
+		let current_blocknum = <frame_system::Pallet<T>>::block_number();
+		let per_era: T::BlockNumber = T::SessionsPerEra::get().into();
+		let session_length = T::NextSessionRotation::average_session_length();
+		let round_num = session_length * per_era ;
+		// println!("current_blocknum = {:?} , leading_period = {:?}, per_era = {:?}, session_length = {:?}, current_staking = {:?}, xx = {:?}", current_blocknum, leading_period, per_era, session_length, current_staking, xx);
+		(current_blocknum + (leading_period * session_length )) % round_num == session_length
+	}
+
+	fn current_staking_era() -> u32 {
+		pallet_staking::CurrentEra::<T>::get().unwrap_or(0)
+
+	}
+
+	fn old_npos() -> Vec<<T as frame_system::Config>::AccountId> {
+		// get current era
+		let current_era = Self::current_staking_era();
+		pallet_staking::ErasStakers::<T>::iter_key_prefix(current_era)
+			.into_iter()
+			.map(|acc| acc)
+			.collect()
+	}
+
+	fn pending_npos() -> Vec<<T as frame_system::Config>::AccountId> {
+		let current_npos_list = Self::old_npos();
+		// Make list diff
+		let mut target_npos_list = <pallet_staking::Pallet<T>>::get_npos_targets();
+		target_npos_list.retain(|target_acc|{
+			!current_npos_list.iter().any(|current_acc|{
+				&current_acc == &target_acc
+				// let is_exists = &current_acc == &target_acc;
+				// println!("staking_extend current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
+				// println!("staking_extend Result = {:?} ", &is_exists);
+				// is_exists
+			})
+		});
+		target_npos_list
+	}
 }
