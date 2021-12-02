@@ -5,10 +5,11 @@
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use pallet::*;
 use frame_election_provider_support::onchain;
-use frame_support::traits::{Get, EstimateNextSessionRotation};
+use frame_support::traits::{Get, EstimateNextSessionRotation, OneSessionHandler};
 use pallet_session::{ShouldEndSession, PeriodicSessions};
 use frame_support::sp_std::marker::PhantomData;
 use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
+use frame_support::sp_runtime::RuntimeAppPublic;
 
 #[cfg(test)]
 mod mock;
@@ -38,6 +39,13 @@ pub mod pallet {
 		// type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type ValidatorId: IsType<<Self as frame_system::Config>::AccountId>  + Encode + Debug + PartialEq;
 		type ValidatorSet: ValidatorSet<Self::ValidatorId>;
+
+		type AuthorityId: Member
+		+ Parameter
+		+ RuntimeAppPublic
+		+ Default
+		+ Ord
+		+ MaybeSerializeDeserialize;
 
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
@@ -170,19 +178,18 @@ impl<T: Config> Pallet<T> {
 	// }
 }
 
-pub trait IStakingNpos<ValicatorId, BlockNumber>: frame_system::Config {
+pub trait IStakingNpos<ValidatorId, BlockNumber>: frame_system::Config {
 	fn current_staking_era() -> u32;
 	fn near_era_change(leading_period: BlockNumber) -> bool;
-	fn old_npos() -> Vec<ValicatorId> ;
-	fn pending_npos() -> Vec<ValicatorId> ;
+	fn old_npos() -> Vec<ValidatorId> ;
+	fn pending_npos() -> Vec<ValidatorId> ;
 }
 
 
 impl<T: Config> IStakingNpos<<T as frame_system::Config>::AccountId, T::BlockNumber> for T
-	where T: pallet_staking::Config + pallet_session::Config,
+	where T: pallet_staking::Config + pallet_authority_discovery::Config,
 {
 
-	//
 	fn near_era_change(leading_period: T::BlockNumber) -> bool {
 		let current_blocknum = <frame_system::Pallet<T>>::block_number();
 		let per_era: T::BlockNumber = T::SessionsPerEra::get().into();
@@ -194,7 +201,6 @@ impl<T: Config> IStakingNpos<<T as frame_system::Config>::AccountId, T::BlockNum
 
 	fn current_staking_era() -> u32 {
 		pallet_staking::CurrentEra::<T>::get().unwrap_or(0)
-
 	}
 
 	fn old_npos() -> Vec<<T as frame_system::Config>::AccountId> {
@@ -219,6 +225,69 @@ impl<T: Config> IStakingNpos<<T as frame_system::Config>::AccountId, T::BlockNum
 				// is_exists
 			})
 		});
+
+		if target_npos_list.len() > 0 {
+			// let keys_public_id = <pallet_session::Pallet<T>>::NextKeys::<T>::get(target_npos_list[0]);
+			// <pallet_session::Pallet<T>>::
+			// let keys_public_id = pallet_session::NextKeys::<T>::get(target_npos_list[0]);
+			// let keys_public_id = <pallet_session::Pallet<T>>::nextKeys(target_npos_list[0]);
+			// let keys_public_id = <pallet_session::Pallet<T>>::next_keys(target_npos_list[0]);
+
+			let keys_public_id = <pallet_authority_discovery::Pallet<T>>::next_authorities();
+			// println!("keys_public_id = {:}", keys_public_id);
+		}
+
 		target_npos_list
+	}
+}
+
+
+
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T>
+{
+	type Public = T::AuthorityId;
+}
+
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
+{
+	type Key = T::AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where
+			I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
+	{
+		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
+
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
+		where
+			I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
+	{
+		// instant changes
+		// if changed {
+		//     let next_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
+		//     let last_authorities = Self::authorities();
+		//     // if next_authorities != last_authorities {
+		//     //     Self::change_authorities(next_authorities);
+		//     // }
+		//     log::info!("*** LINDEBUG:: last_authorities == {:?}", last_authorities);
+		//     log::info!("*** LINDEBUG:: validators == {:?}", validators);
+		//     log::info!("*** LINDEBUG:: queued_validators == {:?}", queued_validators);
+		// }
+
+		let last_authorities = Self::authorities();
+		log::info!("*** LINDEBUG:: last_authorities == {:?}", last_authorities);
+		log::info!("*** LINDEBUG:: validators == {:?}", validators);
+		log::info!("*** LINDEBUG:: queued_validators == {:?}", queued_validators);
+	}
+
+	fn on_disabled(i: usize) {
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			AURA_ENGINE_ID,
+			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
+		);
+
+		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 }

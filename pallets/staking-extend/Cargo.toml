@@ -38,6 +38,8 @@ pallet-balances = { version = "4.0.0-dev", default-features = false, git = "http
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 
 [dev-dependencies.serde]
 version = '1.0.126'
@@ -61,6 +63,8 @@ std = [
     "pallet-session/std",
     "pallet-staking/std",
     "sp-staking/std",
+    "sp-consensus-aura/std",
+    "pallet-authority-discovery/std",
     "frame-election-provider-support/std",
     "pallet-election-provider-multi-phase/std",
 ]

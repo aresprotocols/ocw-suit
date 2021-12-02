@@ -18,7 +18,6 @@ use frame_system as system;
 use frame_election_provider_support;
 // use pallet_balances;
 // use pallet_balances::{BalanceLock, Error as BalancesError};
-use sp_core::H256;
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
 use frame_election_provider_support::{ElectionProvider, onchain, data_provider, VoteWeight, Supports, Support};
@@ -28,7 +27,8 @@ use frame_support::pallet_prelude::PhantomData;
 use std::borrow::BorrowMut;
 use std::{cell::RefCell, collections::HashSet};
 use pallet_staking::{StakerStatus, EraIndex};
-
+// use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_core::{H256};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -91,6 +91,7 @@ frame_support::construct_runtime!(
 
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config},
 
 		// ElectionProviderMultiPhase: pallet_election_provider_multi_phase::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
@@ -164,6 +165,7 @@ parameter_types! {
 impl crate::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorSet = TestValidatorSet;
+	type AuthorityId = UintAuthorityId;
 	type DataProvider = Staking  ;// TestStakingDataProvider;
 	// type DebugError = <<Self as staking_extend::Config>::ElectionProvider as ElectionProvider<<Self as frame_system::Config>::AccountId, <Self as frame_system::Config>::BlockNumber>>::Error;
 	type ElectionProvider = TestElectionProvider<member_extend::Pallet<Self>>;
@@ -177,14 +179,23 @@ impl crate::Config for Test {
 parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
+	pub const MaxAuthorities: u32 = 100;
 	pub static Period: BlockNumber = 5;
 	pub static Offset: BlockNumber = 0;
 }
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub other: OtherSessionHandler,
+		pub dummy: OtherSessionHandler,
+		pub authority_discovery: AuthorityDiscovery,
 	}
 }
+
+// impl From<UintAuthorityId> for SessionKeys {
+// 	fn from(dummy: UintAuthorityId, authority_discovery: ) -> Self {
+// 		Self { dummy , authority_discovery}
+// 	}
+// }
+
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
@@ -201,6 +212,10 @@ impl pallet_session::Config for Test {
 impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
+}
+
+impl pallet_authority_discovery::Config for Test {
+	type MaxAuthorities = MaxAuthorities;
 }
 
 parameter_types! {

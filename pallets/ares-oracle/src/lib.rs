@@ -16,7 +16,7 @@ use sp_runtime::{
 };
 use sp_std::vec::Vec;
 
-use frame_support::traits::{FindAuthor, Get, ValidatorSet};
+use frame_support::traits::{FindAuthor, Get, ValidatorSet, OneSessionHandler};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
 
@@ -90,7 +90,7 @@ use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
-use sp_consensus_aura::AURA_ENGINE_ID;
+use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
 use sp_runtime::offchain::storage::StorageValueRef;
 
 #[frame_support::pallet]
@@ -1123,7 +1123,7 @@ use oracle_finance::types::BalanceOf;
 use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
-use frame_support::sp_runtime::Percent;
+use frame_support::sp_runtime::{Percent, DigestItem};
 
 
 impl<T: Config> Pallet<T>
@@ -2866,3 +2866,6 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::BlockNumber, Error<T>> for
         Ok(())
     }
 }
+
+
+

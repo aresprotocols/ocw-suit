@@ -108,7 +108,6 @@ impl fmt::Debug for PurchasedSourceRawKeys {
     }
 }
 
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
