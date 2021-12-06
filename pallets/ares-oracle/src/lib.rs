@@ -224,7 +224,8 @@ pub mod pallet {
                                 pending_npos.into_iter().any(|(stash_id, auth_id)| {
                                     // for v3.4.x --
                                     if !Self::has_per_check_task(stash_id.clone()) && auth_id.is_some() {
-                                        Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);
+                                        // Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);\
+                                        Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number);
                                     }
                                     false
                                 });
@@ -502,11 +503,14 @@ pub mod pallet {
         #[pallet::weight(1000)]
         pub fn submit_create_pre_check_task (
             origin: OriginFor<T>,
-            price_payload: PricePayload<T::Public, T::BlockNumber>,
+            percheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
             _signature: T::Signature,
-        ) -> DispatchResultWithPostInfo {
+        ) -> DispatchResult {
             ensure_none(origin)?;
-            Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);
+            let result = Self::create_pre_check_task(percheck_payload.stash, percheck_payload.auth, percheck_payload.block_number);
+
+            ensure!(result.is_ok(), result.err().unwrap());
+
             // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
@@ -747,9 +751,7 @@ pub mod pallet {
         type Call = Call<T>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-            if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
-                call
-            {
+            if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
                 log::debug!(
                     "🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
                     payload.block_number.clone(),
@@ -787,9 +789,7 @@ pub mod pallet {
                     &payload.block_number,
                     payload.price.to_vec(),
                 )
-            } else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) =
-                call
-            {
+            } else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
                 // submit_purchased_price_unsigned_with_signed_payload
                 log::debug!(
                     "🚅 Validate purchased price payload data, on block: {:?} ",
@@ -833,9 +833,7 @@ pub mod pallet {
                     .propagate(true)
                     .build()
 
-            } else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) =
-                call
-            {
+            } else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) = call  {
                 // submit_forced_clear_purchased_price_payload_signed
                 log::debug!(
                     "🚅 Validate forced clear purchased price payload data, on block: {:?} ",
@@ -871,7 +869,43 @@ pub mod pallet {
                     .longevity(5)
                     .propagate(true)
                     .build()
+            } else if let Call::submit_create_pre_check_task(ref payload, ref signature) = call {
+                log::debug!(
+                    "🚅 Validate submit_create_pre_check_task, on block: {:?}/{:?}, author: {:?} ",
+                    payload.block_number.clone(),
+                    <system::Pallet<T>>::block_number(),
+                    payload.public.clone()
+                );
 
+                let sign_accoount = <T as SigningTypes>::Public::into_account(payload.public.clone());
+                if ! Self::is_validator_member(sign_accoount.clone().into()) {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
+                    );
+                    // log::warn!(
+                    //     "❗Author are not validator. disable refuse account: {:?}", sign_accoount.clone()
+                    // );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Signature invalid. `InvalidTransaction` on price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_create_pre_check_task")
+                    .priority(T::UnsignedPriority::get())
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
             } else {
                 InvalidTransaction::Call.into()
             }
@@ -1475,10 +1509,8 @@ where
             // sign_public_keys.push(new_account.into());
 
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-
             // Singer
             let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PurchasedPricePayload {
@@ -1496,6 +1528,37 @@ where
                 )?;
             result.map_err(|()| "⛔ Unable to submit transaction")?;
         }
+        Ok(())
+    }
+
+    fn save_create_pre_check_task(
+        account_id: T::AccountId,
+        stash_id: T::AccountId,
+        auth_id: T::AuthorityAres,
+        block_number: T::BlockNumber) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+        let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+        // Singer
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| PerCheckPayload {
+                    stash: stash_id.clone(),
+                    auth: auth_id.clone(),
+                    block_number,
+                    public: account.public.clone(),
+                },
+                |payload, signature| {
+                    Call::submit_create_pre_check_task(payload, signature)
+                },
+            )
+            .ok_or(
+                "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+            )?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
         Ok(())
     }
 
@@ -2808,6 +2871,7 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNum
         })
     }
 
+    //
     fn is_authority_set_has_task(auth_list: Vec<T::AuthorityAres>) -> bool {
         if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
         let task_list = <PerCheckTaskList<T>>::get();
@@ -2868,7 +2932,7 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(acc: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PerCheckStruct> ) {
+    fn save_per_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PerCheckStruct> ) {
         // get avg price.
         let check_result = per_check_list.iter().all(|checked_struct| {
             // Check price key exists.
@@ -2891,13 +2955,12 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             per_checkstatus = PerCheckStatus::Pass;
         }
 
-        <FinalPerCheckResult<T>>::insert(acc, Some((bn, per_checkstatus)));
+        <FinalPerCheckResult<T>>::insert(stash, Some((bn, per_checkstatus)));
     }
 
     //
-    fn get_per_check_status(acc: T::AccountId) -> Option<(T::BlockNumber, PerCheckStatus)> {
-        <FinalPerCheckResult<T>>::get(acc).unwrap_or(None)
-
+    fn get_per_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PerCheckStatus)> {
+        <FinalPerCheckResult<T>>::get(stash).unwrap_or(None)
     }
 
     //

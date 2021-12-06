@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
+// mod tests; // linhai hide it
 pub mod types;
 
 use frame_system::{

@@ -391,17 +391,20 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::B
     }
 }
 
-/// data required to submit a transaction.
+/// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PerCheckPayload<Public, BlockNumber> {
+pub struct PerCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
+    pub stash: AccountId,
+    pub auth: AuthorityId,
     pub block_number: BlockNumber,
-    // price_key,price_val, fraction len
-    pub price: Vec<PricePayloadSubPrice>,
-    pub jump_block: Vec<PricePayloadSubJumpBlock>,
     pub public: Public,
 }
 
-impl<T: SigningTypes> PerCheckPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes + Config > SignedPayload<T> for PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
+    where
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+{
     fn public(&self) -> T::Public {
         self.public.clone()
     }

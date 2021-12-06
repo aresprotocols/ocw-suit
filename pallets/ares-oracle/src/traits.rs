@@ -22,9 +22,9 @@ pub trait IAresOraclePerCheck <AccountId, AuthorityId, BlockNumber, Error>
     fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<PerCheckStruct>;
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(acc: AccountId, bn: BlockNumber, per_check_list: Vec<PerCheckStruct>);
+    fn save_per_check_result(stash: AccountId, bn: BlockNumber, per_check_list: Vec<PerCheckStruct>);
 
-    fn get_per_check_status(acc: AccountId) -> Option<(BlockNumber, PerCheckStatus)> ;
+    fn get_per_check_status(stash: AccountId) -> Option<(BlockNumber, PerCheckStatus)> ;
 
-    fn create_pre_check_task(acc: AccountId, auth: AuthorityId, bn: BlockNumber) -> Result<(), Error>;
+    fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> Result<(), Error>;
 }
