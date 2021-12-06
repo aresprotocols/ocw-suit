@@ -269,9 +269,10 @@ ord_parameter_types! {
 	pub const Six: u64 = 6;
 }
 
+
 impl Config for Test {
     type Event = Event;
-    type AuthorityId = crypto::OcwAuthId<Self>;
+    type OffchainAppCrypto = crypto::OcwAuthId<Self>;
     type AuthorityAres = crypto::AuthorityId;
     type Call = Call;
     // type ValidatorSet = Historical;
@@ -291,6 +292,8 @@ impl Config for Test {
 
     type AuthorityCount = TestAuthorityCount;
     type OcwFinanceHandler = OcwFinance;
+
+    type AresIStakingNpos = ();
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

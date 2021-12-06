@@ -8,10 +8,12 @@ pub trait AvgPrice {
     ) -> Result<(u64, FractionLength),()>;
 }
 
-pub trait IAresOraclePerCheck <AccountId, BlockNumber, Error>
+pub trait IAresOraclePerCheck <AccountId, AuthorityId, BlockNumber, Error>
 {
     //
-    fn has_per_check_task(acc: AccountId) -> bool;
+    fn has_per_check_task(stash: AccountId) -> bool;
+
+    fn is_authority_set_has_task(auth_list: Vec<AuthorityId>) -> bool;
 
     //
     fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
@@ -24,5 +26,5 @@ pub trait IAresOraclePerCheck <AccountId, BlockNumber, Error>
 
     fn get_per_check_status(acc: AccountId) -> Option<(BlockNumber, PerCheckStatus)> ;
 
-    fn create_pre_check_task(acc: AccountId, bn: BlockNumber) -> Result<(), Error>;
+    fn create_pre_check_task(acc: AccountId, auth: AuthorityId, bn: BlockNumber) -> Result<(), Error>;
 }

@@ -1,5 +1,6 @@
 use super::*;
 use sp_runtime::Percent;
+use crate::crypto2::AuraAuthId;
 
 #[test]
 fn test_create_pre_check_task() {
@@ -7,20 +8,23 @@ fn test_create_pre_check_task() {
     t.execute_with(|| {
         let current_bn = 1;
         System::set_block_number(current_bn);
-        let acc_1 = AccountId::from_raw([1;32]).into_account();
-        assert_ok!(AresOcw::create_pre_check_task(acc_1, current_bn));
-        assert_eq!(<PerCheckTaskList<Test>>::get()[0], (acc_1, current_bn));
+
+        let stash_1 = AccountId::from_raw([1;32]).into_account();
+        let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
+
+        assert_ok!(AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn));
+        assert_eq!(<PerCheckTaskList<Test>>::get()[0], (stash_1.clone(), auth_1.clone(), current_bn));
 
         assert_noop!(
-			AresOcw::create_pre_check_task(acc_1, current_bn),
+			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn),
 			Error::<Test>::PerCheckTaskAlreadyExists
 		);
         assert_noop!(
-			AresOcw::create_pre_check_task(acc_1, current_bn + 1 ),
+			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn + 1 ),
 			Error::<Test>::PerCheckTaskAlreadyExists
 		);
         assert_noop!(
-			AresOcw::create_pre_check_task(acc_1, current_bn + 2 ),
+			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn + 2 ),
 			Error::<Test>::PerCheckTaskAlreadyExists
 		);
     });
@@ -33,13 +37,39 @@ fn test_has_per_check_task() {
         let current_bn = 1;
         System::set_block_number(current_bn);
 
-        let acc_1 = AccountId::from_raw([1;32]).into_account();
-        let acc_2 = AccountId::from_raw([2;32]).into_account();
+        let stash_1 = AccountId::from_raw([1;32]).into_account();
+        let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
 
-        assert!(!AresOcw::has_per_check_task(acc_1));
-        assert_ok!(AresOcw::create_pre_check_task(acc_1, current_bn));
-        assert!(AresOcw::has_per_check_task(acc_1));
-        assert!(!AresOcw::has_per_check_task(acc_2));
+        let stash_2 = AccountId::from_raw([2;32]).into_account();
+
+        assert!(!AresOcw::has_per_check_task(stash_1));
+        assert_ok!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
+        assert!(AresOcw::has_per_check_task(stash_1));
+        assert!(!AresOcw::has_per_check_task(stash_2));
+    });
+}
+
+#[test]
+fn test_is_authority_set_has_task() {
+    let mut t = new_test_ext();
+    t.execute_with(|| {
+        let current_bn = 1;
+        System::set_block_number(current_bn);
+
+        let stash_1 = AccountId::from_raw([1;32]).into_account();
+        let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
+
+        assert!(!AresOcw::has_per_check_task(stash_1));
+        assert_ok!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
+
+        // Make Auth id set
+        let auth_list = vec![
+            <Test as crate::Config>::AuthorityAres::unchecked_from([103;32]),
+            <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]),
+            <Test as crate::Config>::AuthorityAres::unchecked_from([102;32]),
+        ];
+
+        assert!(AresOcw::is_authority_set_has_task(auth_list));
     });
 }
 

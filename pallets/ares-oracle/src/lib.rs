@@ -26,9 +26,6 @@ mod tests;
 pub mod aura_handler;
 pub mod validator_pre_check;
 
-/// The keys can be inserted manually via RPC (see `author_insertKey`).
-// pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
-pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
@@ -38,6 +35,10 @@ pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 pub const PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP: u8 = 1;
 pub const PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN: u8 = 2;
 
+
+/// The keys can be inserted manually via RPC (see `author_insertKey`).
+// pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
+pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
 /// the types with this pallet-specific identifier.
 pub mod crypto {
     use super::KEY_TYPE;
@@ -103,6 +104,8 @@ pub mod pallet {
     use oracle_finance::types::{BalanceOf, OcwPaymentResult};
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
+    use staking_extend::IStakingNpos;
+
 
     #[pallet::error]
     #[derive(PartialEq, Eq)]
@@ -126,7 +129,7 @@ pub mod pallet {
         u64: From<<Self as frame_system::Config>::BlockNumber>,
     {
         /// The identifier type for an offchain worker.
-        type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+        type OffchainAppCrypto: AppCrypto<Self::Public, Self::Signature>;
 
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -167,6 +170,8 @@ pub mod pallet {
         type AuthorityCount: ValidatorCount;
 
         type OcwFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
+
+        type AresIStakingNpos: IStakingNpos<Self::AuthorityAres, Self::BlockNumber, StashId = <Self as frame_system::Config>::AccountId> ;
     }
 
     pub trait ValidatorCount {
@@ -190,13 +195,14 @@ pub mod pallet {
 
             let control_setting = <OcwControlSetting<T>>::get();
 
+            // T::AuthorityAres::unchecked_from()
+
             let block_author = Self::get_block_author();
             match block_author {
                 None => {
                     log::warn!(target: "pallet::ocw::offchain_worker", "❗ Not found author.");
                 }
                 Some(author) => {
-
                     if control_setting.open_free_price_reporter {
                         log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
                         // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
@@ -210,6 +216,19 @@ pub mod pallet {
                                     "❗ Ares price has a problem : {:?}",
                                     e
                                 ),
+                            }
+                            // Do you need to scan pre-validator data
+                            if T::AresIStakingNpos::near_era_change(2u32.into()) {
+                                log::debug!(" **** T::AresIStakingNpos::near_era_change is near will get data.");
+                                let pending_npos = T::AresIStakingNpos::pending_npos();
+                                pending_npos.into_iter().any(|(stash_id, auth_id)| {
+                                    // for v3.4.x --
+                                    if !Self::has_per_check_task(stash_id.clone()) && auth_id.is_some() {
+                                        Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);
+                                    }
+                                    false
+                                });
+
                             }
                         }
                     }
@@ -245,27 +264,26 @@ pub mod pallet {
                     }
                 }
 
-                // let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
-                // if let Some(keystore_account) = local_keys.get(0) {
-                //     let mut a = [0u8; 32];
-                //     a[..].copy_from_slice(&keystore_account.to_raw_vec());
-                //     // let local_account32 = AccountId32::new(a);
-                //     // // local_account32.
-                //     // let local_account: T::AccountId = local_account32.into();
-                //     let new_account = sp_core::sr25519::Public::from_raw(a);
-                //     let local_account: T::AccountId = new_account.into();
-                //     if Self::is_validator_member(local_account.clone().into()) {
-                //         log::info!("🚅 @ Ares call [3] ares-purchased-worker.");
-                //         match Self::ares_purchased_worker(block_number.clone(), local_account) {
-                //             Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
-                //             Err(e) => log::warn!(
-                //                 target: "pallet::ocw::offchain_worker",
-                //                 "❗ Ares purchased price has a problem : {:?}",
-                //                 e
-                //             ),
-                //         }
-                //     }
-                // }
+                // A(a,b), B, -->
+                // for v3.4.x . TO
+                if Self::is_authority_set_has_task(T::AuthorityAres::all()) {
+                    // check authority id is own.
+                    // Self::create_pre_check_task(stash_id.clone(), block_number);
+                    log::debug!(" ********* is_authority_set_has_task Is Running!!!  ");
+                    let mut token_list = Vec::new();
+                    token_list.push("eth-usdt".as_bytes().to_vec());
+                    token_list.push("btc-usdt".as_bytes().to_vec());
+                    let check_config = PerCehckTaskConfig{
+                        check_token_list: token_list,
+                        allowable_offset: Percent::from_percent(10)
+                    };
+
+                    // get check result
+                    let take_price_list = Self::take_price_for_per_check(check_config);
+                    log::debug!(" ******* take_price_list = {:?}", take_price_list);
+
+                }
+
             }
         }
     }
@@ -289,12 +307,6 @@ pub mod pallet {
             let submit_threshold =purchased_default.submit_threshold;
             let max_duration = purchased_default.max_duration;
             let request_keys = Self::extract_purchased_request(request_keys);
-            // println!("KEYS len = {:?} ", request_keys.len());
-            // println!("KEYS len 1 = {:?} ", sp_std::str::from_utf8(&request_keys[0]));
-            // println!("KEYS len 2 = {:?} ", sp_std::str::from_utf8(&request_keys[1]));
-
-            // let offer = Self::calculate_purchased_amount(purchased_default.unit_price, &request_keys);  // purchased_default.unit_price.saturating_mul(request_keys.len() as u64);
-
             let offer = T::OcwFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
             if offer > max_fee {
                 return Err(Error::<T>::InsufficientMaxFee.into());
@@ -317,6 +329,7 @@ pub mod pallet {
             // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
+
 
         #[pallet::weight(0)]
         pub fn submit_forced_clear_purchased_price_payload_signed (
@@ -483,6 +496,18 @@ pub mod pallet {
                 jump_block,
                 price_payload.public.clone().into_account(),
             ));
+            Ok(().into())
+        }
+
+        #[pallet::weight(1000)]
+        pub fn submit_create_pre_check_task (
+            origin: OriginFor<T>,
+            price_payload: PricePayload<T::Public, T::BlockNumber>,
+            _signature: T::Signature,
+        ) -> DispatchResultWithPostInfo {
+            ensure_none(origin)?;
+            Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);
+            // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
 
@@ -745,7 +770,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -777,7 +805,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -820,7 +851,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -1030,7 +1064,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn per_check_task_list)]
     pub(super) type PerCheckTaskList<T: Config> = StorageValue<_,
-        Vec<(T::AccountId, T::BlockNumber)>,
+        Vec<(T::AccountId, T::AuthorityAres, T::BlockNumber)>,
         ValueQuery
     >;
 
@@ -1288,19 +1322,18 @@ where
         serde_json::from_str(price_json_str).ok()
     }
 
-    // Get the number of cycles required to loop the array lenght.
-    // If round_num = 0 returns the maximum value of u8
-    fn get_number_of_cycles(vec_len: u8, round_num: u8) -> u8 {
-        if round_num == 0 {
-            return u8::MAX;
-        }
-        let mut round_offset = 0u8;
-        if vec_len % round_num != 0 {
-            round_offset = 1u8;
-        }
-        vec_len / round_num + round_offset
-    }
-
+    // // Get the number of cycles required to loop the array lenght.
+    // // If round_num = 0 returns the maximum value of u8
+    // fn get_number_of_cycles(vec_len: u8, round_num: u8) -> u8 {
+    //     if round_num == 0 {
+    //         return u8::MAX;
+    //     }
+    //     let mut round_offset = 0u8;
+    //     if vec_len % round_num != 0 {
+    //         round_offset = 1u8;
+    //     }
+    //     vec_len / round_num + round_offset
+    // }
 
     fn save_forced_clear_purchased_price_payload_signed(
         block_number: T::BlockNumber,
@@ -1330,7 +1363,8 @@ where
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PurchasedForceCleanPayload {
@@ -1443,7 +1477,8 @@ where
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PurchasedPricePayload {
@@ -1524,7 +1559,8 @@ where
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PricePayload {
@@ -2758,17 +2794,27 @@ impl<T: Config> AvgPrice for Pallet<T>
     }
 }
 
-impl <T: Config> IAresOraclePerCheck<T::AccountId, T::BlockNumber, Error<T>> for Pallet<T>
+impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNumber, Error<T>> for Pallet<T>
     where sp_runtime::AccountId32: From<T::AccountId>,
       u64: From<T::BlockNumber>,
 {
     //
-    fn has_per_check_task(acc: T::AccountId) -> bool {
+    fn has_per_check_task(stash: T::AccountId) -> bool {
         if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
         // TODO:: to dev maximum_due
         let task_list = <PerCheckTaskList<T>>::get();
-        task_list.iter().any(|(sotrage_acc, bn)|{
-            &acc == sotrage_acc
+        task_list.iter().any(|(storage_stash, _, _,)|{
+            &stash == storage_stash
+        })
+    }
+
+    fn is_authority_set_has_task(auth_list: Vec<T::AuthorityAres>) -> bool {
+        if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
+        let task_list = <PerCheckTaskList<T>>::get();
+        task_list.iter().any(|(_, storage_auth, _,)|{
+            auth_list.iter().any(|x|{
+                x == storage_auth
+            })
         })
     }
 
@@ -2778,7 +2824,7 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::BlockNumber, Error<T>> for
         if old_task_list.len() > 0 {
             let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
             let old_count = old_task_list.len();
-            old_task_list.retain(|(acc, bn)|{
+            old_task_list.retain(|(_, _, bn)|{
                     let duration_bn = current_block_num - *bn;
                     duration_bn <= maximum_due
             });
@@ -2855,13 +2901,13 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::BlockNumber, Error<T>> for
     }
 
     //
-    fn create_pre_check_task(acc: T::AccountId, bn: T::BlockNumber) -> Result<(), Error<T>> {
+    fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> Result<(), Error<T>> {
         let mut task_list = <PerCheckTaskList<T>>::get();
-        let exists = task_list.iter().any(|(old_acc, _)|{ &acc == old_acc }) ;
+        let exists = task_list.iter().any(|(old_acc, _, _)|{ &stash == old_acc }) ;
         if exists {
             return Err(Error::PerCheckTaskAlreadyExists)
         }
-        task_list.push((acc, bn));
+        task_list.push((stash, auth, bn));
         <PerCheckTaskList<T>>::put(task_list);
         Ok(())
     }

@@ -181,7 +181,7 @@ impl Default for PurchasedAvgPriceData
     }
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PerCheckStruct {
     pub price_key: Vec<u8>,
     pub number_val: JsonNumberValue,
@@ -390,6 +390,23 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::B
         self.public.clone()
     }
 }
+
+/// data required to submit a transaction.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PerCheckPayload<Public, BlockNumber> {
+    pub block_number: BlockNumber,
+    // price_key,price_val, fraction len
+    pub price: Vec<PricePayloadSubPrice>,
+    pub jump_block: Vec<PricePayloadSubJumpBlock>,
+    pub public: Public,
+}
+
+impl<T: SigningTypes> PerCheckPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue);

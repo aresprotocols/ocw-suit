@@ -7,7 +7,7 @@ name = 'staking-extend'
 publish = false
 homepage = "https://github.com/aresprotocols"
 repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.0.3'
+version = '3.0.4'
 readme = 'README.md'
 
 [package.metadata.docs.rs]
@@ -25,7 +25,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, git = "https://githu
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, path = "../session" }
 pallet-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1"  }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
@@ -33,13 +33,14 @@ pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
 
-[dev-dependencies]
+
 pallet-balances = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+#sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+#[dev-dependencies]
 
 [dev-dependencies.serde]
 version = '1.0.126'
@@ -63,7 +64,8 @@ std = [
     "pallet-session/std",
     "pallet-staking/std",
     "sp-staking/std",
-    "sp-consensus-aura/std",
+#    "sp-consensus-aura/std",
+#    "pallet-timestamp/std",
     "pallet-authority-discovery/std",
     "frame-election-provider-support/std",
     "pallet-election-provider-multi-phase/std",

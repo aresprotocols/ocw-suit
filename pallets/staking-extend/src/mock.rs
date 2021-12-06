@@ -1,6 +1,6 @@
 use crate as member_extend;
 use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
-use frame_support::sp_runtime::traits::{IdentifyAccount, Verify, Convert};
+use frame_support::sp_runtime::traits::{IdentifyAccount, Verify, Convert, OpaqueKeys};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
@@ -47,27 +47,42 @@ thread_local! {
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+	type Public = UintAuthorityId;
+	// type Public = <Test as crate::Config>::AuthorityId;
+}
+
 impl OneSessionHandler<AccountId> for OtherSessionHandler {
+	// type Key = <Test as crate::Config>::AuthorityId;//
 	type Key = UintAuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(_: I)
 		where
-			I: Iterator<Item = (&'a AccountId, Self::Key)>,
+			I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
 			AccountId: 'a,
 	{
+		// println!(" Debug . on_genesis_session ");
 	}
 
-	fn on_new_session<'a, I: 'a>(_: bool, validators: I, _: I)
+	fn on_new_session<'a, I: 'a>(_: bool, validators: I, queued_validators: I)
 		where
-			I: Iterator<Item = (&'a AccountId, Self::Key)>,
+			I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
 			AccountId: 'a,
 	{
+		// println!(" Debug . on_new_session ");
+		// let current_validators = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		let next_authorities = queued_validators.map(|(_, k)| k).collect::<Vec<_>>();
+		// println!("*** LINDEBUG:: current_validators == {:?}", current_validators);
+		// println!("*** LINDEBUG:: next_authorities == {:?}", next_authorities);
+
 		SESSION.with(|x| {
 			*x.borrow_mut() = (validators.map(|x| x.0.clone()).collect(), HashSet::new())
 		});
 	}
 
 	fn on_disabled(validator_index: usize) {
+		// println!(" Debug . on_disabled ");
 		SESSION.with(|d| {
 			let mut d = d.borrow_mut();
 			let value = d.0[validator_index];
@@ -76,9 +91,6 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 	}
 }
 
-impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
-	type Public = UintAuthorityId;
-}
 
 // -------------------------
 
@@ -165,12 +177,18 @@ parameter_types! {
 impl crate::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorSet = TestValidatorSet;
+
+	// type WithSessionHandler = OtherSessionHandler ;
+	// type AuthorityId = <OtherSessionHandler as OneSessionHandler<AccountId>>::Key;
 	type AuthorityId = UintAuthorityId;
+
+	// type StashId = AccountId;// <Self as frame_system::Config>::AccountId;
+	// type IStakingNpos = Self;
 	type DataProvider = Staking  ;// TestStakingDataProvider;
 	// type DebugError = <<Self as staking_extend::Config>::ElectionProvider as ElectionProvider<<Self as frame_system::Config>::AccountId, <Self as frame_system::Config>::BlockNumber>>::Error;
 	type ElectionProvider = TestElectionProvider<member_extend::Pallet<Self>>;
 	type OnChainAccuracy = Perbill;
-	type IStakingNpos = Self;
+
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
 		OnChainConfig<member_extend::Pallet<Self>>,
 	>;
@@ -183,24 +201,25 @@ parameter_types! {
 	pub static Period: BlockNumber = 5;
 	pub static Offset: BlockNumber = 0;
 }
+
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
 		pub dummy: OtherSessionHandler,
-		pub authority_discovery: AuthorityDiscovery,
 	}
 }
 
-// impl From<UintAuthorityId> for SessionKeys {
-// 	fn from(dummy: UintAuthorityId, authority_discovery: ) -> Self {
-// 		Self { dummy , authority_discovery}
-// 	}
-// }
+impl From<UintAuthorityId> for SessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
+	}
+}
 
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionHandler = (OtherSessionHandler,);
+	// type SessionHandler = (StakingExtend,); // (OtherSessionHandler,); // (StakingExtend); // (OtherSessionHandler,);
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
