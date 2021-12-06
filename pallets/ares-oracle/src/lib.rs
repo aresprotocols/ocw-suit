@@ -56,10 +56,10 @@ pub mod crypto {
     pub struct OcwAuthId<T>(PhantomData<T>);
 
     impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -67,11 +67,11 @@ pub mod crypto {
     }
 
     impl<T: pallet::Config>
-        frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -1035,6 +1035,9 @@ pub mod pallet {
     >;
 
 
+    #[pallet::storage]
+    #[pallet::getter(fn symbol_fraction)]
+    pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, FractionLength>;
 
     // ---
 
@@ -1093,6 +1096,11 @@ pub mod pallet {
         fn build(&self) {
             if !self.price_requests.is_empty() {
                 PricesRequests::<T>::put(&self.price_requests);
+                self.price_requests
+                    .iter()
+                    .for_each(|(symbol, _, _, fractionLength, _)| {
+                        SymbolFraction::<T>::insert(symbol, fractionLength);
+                    })
             }
             if self.price_pool_depth > 0 {
                 PricePoolDepth::<T>::put(&self.price_pool_depth);
@@ -2706,9 +2714,9 @@ where
         <PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone()).into_iter()
             .any(|(acc, _)| {
                 T::OcwFinanceHandler::record_submit_point(acc,
-                                                   purchase_id.clone(),
-                                                   request_mission.create_bn,
-                                                   request_mission.request_keys.len() as u32);
+                                                          purchase_id.clone(),
+                                                          request_mission.create_bn,
+                                                          request_mission.request_keys.len() as u32);
                 false
             });
         Ok(())
@@ -2716,8 +2724,8 @@ where
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(de)?;
     Ok(s.as_bytes().to_vec())
@@ -2748,14 +2756,17 @@ impl fmt::Debug for LocalPriceRequestStorage {
 }
 
 
-impl<T: Config> AvgPrice for Pallet<T>
+impl<T: Config> SymbolInfo for Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
         u64: From<<T as frame_system::Config>::BlockNumber>,
 {
-
-    fn price(symbol: Vec<u8>) -> Result<(u64, FractionLength),()> {
+    fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
         AresAvgPrice::<T>::try_get(symbol)
+    }
+
+    fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
+        SymbolFraction::<T>::get(symbol)
     }
 }
 

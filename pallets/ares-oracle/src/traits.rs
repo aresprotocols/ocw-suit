@@ -1,10 +1,10 @@
 use super::*;
 use frame_support::weights::Weight;
 
-pub trait AvgPrice {
-    fn price(
-        symbol: Vec<u8>
-    ) -> Result<(u64, FractionLength),()>;
+pub trait SymbolInfo {
+    fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()>;
+
+    fn fraction(symbol: &Vec<u8>) -> Option<FractionLength>;
 }
 
 pub trait IOcwPerCheck <AccountId, BlockNumber, Error>

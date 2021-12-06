@@ -8,5 +8,5 @@ members = [
     "pallets/member-extend",
     "pallets/challenge",
     "pallets/collective",
-    "pallets/price-estimates"
+    "pallets/price-estimates",
 ]
