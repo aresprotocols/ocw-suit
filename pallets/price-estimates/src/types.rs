@@ -1,12 +1,25 @@
 use super::*;
 use frame_system::offchain::{SignedPayload, SigningTypes};
 use hex::ToHex;
-use pallet_ocw::types::FractionLength;
+use ares_oracle::types::FractionLength;
 use sp_runtime::{
     traits::{Hash, Keccak256},
     Permill,
 };
 use sp_std::str;
+
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+pub enum MultiplierOption {
+    Base1,
+    Base2,
+    Base5,
+}
+
+impl Default for MultiplierOption {
+    fn default() -> Self {
+        MultiplierOption::Base1
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum EstimatesState {
@@ -25,42 +38,72 @@ impl Default for EstimatesState {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+pub enum EstimatesType {
+    DEVIATION,
+
+    RANGE,
+}
+
+impl Default for EstimatesType {
+    fn default() -> Self {
+        EstimatesType::DEVIATION
+    }
+}
+
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug)]
 pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
     pub symbol: Vec<u8>,
 
-    ///
+    pub estimates_type: EstimatesType,
+
+    /// Round ID
     pub id: u64,
 
     /// Price per entry.
-    pub price: Balance,
+    pub ticket_price: Balance,
+
+    pub symbol_completed_price: u64,
+
+    pub symbol_fraction: FractionLength,
+
     /// Starting block of the estimates.
     pub start: BlockNumber,
-    /// Length of the estimates (start + length = end).
-    pub length: BlockNumber,
+    /// ending block of the estimates
+    pub end: BlockNumber,
     /// Delay for payout the winner of the estimates. (start + length + delay = payout).
-    pub delay: BlockNumber,
+    pub distribute: BlockNumber,
 
-    pub deviation: Permill,
+    pub deviation: Option<Permill>,
 
-    pub state: EstimatesState,
+    pub range: Option<Vec<u64>>,
 
     pub total_reward: Balance,
+
+    pub state: EstimatesState,
 }
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug)]
-pub struct AccountParticipateEstimates<Account> {
+pub struct AccountParticipateEstimates<Account, BlockNumber> {
     pub account: Account,
 
-    pub estimates: u64,
+    pub end: BlockNumber,
 
-    pub eth_address: Option<Vec<u8>>,
+    pub estimates: Option<u64>,
+
+    pub range_index: Option<u8>,
+
+    pub bsc_address: Option<Vec<u8>>,
+
+    pub multiplier: MultiplierOption,
+
+    pub reward: u128,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ChooseWinnersPayload<Public, AccountId, BlockNumber> {
     pub block_number: BlockNumber,
-    pub winners: Vec<AccountParticipateEstimates<AccountId>>,
+    pub winners: Vec<AccountParticipateEstimates<AccountId, BlockNumber>>,
     pub public: Public,
     pub estimates_id: u64,
     pub symbol: Vec<u8>,
@@ -68,7 +111,7 @@ pub struct ChooseWinnersPayload<Public, AccountId, BlockNumber> {
 }
 
 impl<T: SigningTypes> SignedPayload<T>
-    for ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>
+for ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>
 {
     fn public(&self) -> T::Public {
         self.public.clone()
@@ -145,3 +188,8 @@ fn eth_checksum(address: &[u8]) -> bool {
     return true;
     // return str::from_utf8(b"aaa").unwrap();
 }
+
+// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+// pub struct A {
+//     pub aa: u64
+// }
