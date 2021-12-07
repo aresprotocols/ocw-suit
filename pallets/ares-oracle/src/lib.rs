@@ -104,7 +104,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
     use staking_extend::IStakingNpos;
-    use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PerCheckStruct};
+    use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct};
 
 
     #[pallet::error]
@@ -224,7 +224,13 @@ pub mod pallet {
                                 pending_npos.into_iter().any(|(stash_id, auth_id)| {
                                     // for v3.4.x --
                                     log::debug!(" **** T::AresIStakingNpos:: RUN 2 has pending stash stash_id = {:?} ", stash_id.clone());
-                                    if !Self::has_per_check_task(stash_id.clone()) && auth_id.is_some() {
+                                    if auth_id.is_none() {
+                                        log::warn!(
+                                            target: "pallet::ocw::offchain_worker",
+                                            "❗ Staking authority is not set, you can use RPC author_insertKey fill that.",
+                                        )
+                                    }
+                                    if !Self::has_pre_check_task(stash_id.clone()) && auth_id.is_some() {
                                         log::debug!(" **** T::AresIStakingNpos:: RUN 2.1 auth_id = {:?}", auth_id.clone());
                                         // Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);\
                                         Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number);
@@ -269,12 +275,11 @@ pub mod pallet {
                     }
                 }
 
-                // A(a,b), B, -->
                 // for v3.4.x . TO
-                if Self::is_authority_set_has_task(T::AuthorityAres::all()) {
+                if let Some((stash, auth, _)) = Self::get_pre_task_by_authority_set(T::AuthorityAres::all()) {
                     // check authority id is own.
                     // Self::create_pre_check_task(stash_id.clone(), block_number);
-                    log::debug!(" ********* is_authority_set_has_task Is Running!!!  ");
+                    log::debug!(" ********* get_pre_task_by_authority_set Is Running!!!  ");
                     let mut token_list = Vec::new();
                     token_list.push("eth-usdt".as_bytes().to_vec());
                     token_list.push("btc-usdt".as_bytes().to_vec());
@@ -285,10 +290,10 @@ pub mod pallet {
 
                     // get check result
                     let take_price_list = Self::take_price_for_per_check(check_config);
-                    log::debug!(" ******* take_price_list = {:?}", take_price_list);
+                    log::debug!(" ******* take_price_list = {:?}", &take_price_list);
 
+                    Self::save_offchain_pre_check_result(stash, auth, block_number, take_price_list);
                 }
-
             }
         }
     }
@@ -504,17 +509,34 @@ pub mod pallet {
             Ok(().into())
         }
 
-        #[pallet::weight(1000)]
+        #[pallet::weight(0)]
         pub fn submit_create_pre_check_task (
             origin: OriginFor<T>,
-            percheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
+            precheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
             _signature: T::Signature,
         ) -> DispatchResult {
             ensure_none(origin)?;
-            let result = Self::create_pre_check_task(percheck_payload.stash, percheck_payload.auth, percheck_payload.block_number);
+            let result = Self::create_pre_check_task(precheck_payload.stash, precheck_payload.auth, precheck_payload.block_number);
 
             ensure!(result, Error::<T>::PerCheckTaskAlreadyExists );
 
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn submit_offchain_pre_check_result (
+            origin: OriginFor<T>,
+            preresult_payload: PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
+            _signature: T::Signature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
+
+            log::debug!(" ------ debug . on RUN A4");
+            Self::save_pre_check_result(
+                preresult_payload.stash,
+                preresult_payload.block_number,
+                preresult_payload.per_check_list
+            );
             Ok(().into())
         }
 
@@ -909,7 +931,59 @@ pub mod pallet {
                     .longevity(5)
                     .propagate(true)
                     .build()
+            } else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
+                log::debug!(
+                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}",
+                    payload.block_number.clone(),
+                    <system::Pallet<T>>::block_number(),
+                    payload.stash.clone(),
+                    payload.auth.clone(),
+                    payload.public.clone()
+                );
+
+                log::debug!(" ------ debug . on RUN A1");
+                // check stash status
+                let mut auth_list = Vec::new();
+                auth_list.push(payload.auth.clone());
+                if let Some((s_stash, _, _)) = Self::get_pre_task_by_authority_set(auth_list) {
+                    if &s_stash != &payload.stash {
+                        log::error!(
+                            target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                            "⛔️ Stash account is inconsistent!"
+                        );
+                        return InvalidTransaction::BadProof.into();
+                    }
+                }else{
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                        "⛔️ Could not find the pre-check task!"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                log::debug!(" ------ debug . on RUN A2");
+                //
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                        "⛔️ Signature invalid. `InvalidTransaction` on price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                log::debug!(" ------ debug . on RUN A3");
+                //
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_offchain_pre_check_result")
+                    .priority(T::UnsignedPriority::get())
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
             } else {
+                //
                 InvalidTransaction::Call.into()
             }
         }
@@ -1084,7 +1158,7 @@ pub mod pallet {
     //     T::AccountId,
     //     Blake2_128Concat,
     //     T::BlockNumber,
-    //     PerCheckStatus,
+    //     PreCheckStatus,
     //     ValueQuery,
     // >;
 
@@ -1094,13 +1168,13 @@ pub mod pallet {
     pub(super) type FinalPerCheckResult<T: Config> = StorageMap<_,
         Blake2_128Concat,
         T::AccountId,
-        Option<(T::BlockNumber, PerCheckStatus)>
+        Option<(T::BlockNumber, PreCheckStatus)>
     >;
 
-    // PerCheckTaskList
+    // PreCheckTaskList
     #[pallet::storage]
     #[pallet::getter(fn per_check_task_list)]
-    pub(super) type PerCheckTaskList<T: Config> = StorageValue<_,
+    pub(super) type PreCheckTaskList<T: Config> = StorageValue<_,
         Vec<(T::AccountId, T::AuthorityAres, T::BlockNumber)>,
         ValueQuery
     >;
@@ -1205,7 +1279,8 @@ use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
 use frame_support::sp_runtime::{Percent, DigestItem};
-use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PerCheckStruct, PerCheckStatus};
+use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct, PreCheckStatus};
+
 
 
 impl<T: Config> Pallet<T>
@@ -1442,7 +1517,7 @@ where
         assert!(32 == encode_data.len());
         let raw_data = encode_data.try_into();
         let raw_data = raw_data.unwrap();
-        let new_account = T::AuthorityAres::unchecked_from(raw_data);
+        // let new_account = T::AuthorityAres::unchecked_from(raw_data);
         let new_account = sp_core::sr25519::Public::from_raw(raw_data);
         sign_public_keys.push(new_account.into());
         sign_public_keys
@@ -1542,6 +1617,47 @@ where
                 )?;
             result.map_err(|()| "⛔ Unable to submit transaction")?;
         }
+        Ok(())
+    }
+
+
+    fn save_offchain_pre_check_result(
+        stash_id: T::AccountId,
+        auth_id: T::AuthorityAres,
+        block_number: T::BlockNumber,
+        per_check_list: Vec<PreCheckStruct>) -> Result<(), &'static str>  where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+        // let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+
+        let mut tmp_raw = [0u8; 32];
+        tmp_raw[..].copy_from_slice(&auth_id.to_raw_vec());
+
+        let mut sign_public_keys:Vec<<T as SigningTypes>::Public> = Vec::new();
+        let new_account = sp_core::sr25519::Public::from_raw(tmp_raw);
+        // let new_account = auth_id.Public
+        sign_public_keys.push(new_account.into());
+
+        // Singer
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| PreCheckResultPayload {
+                    stash: stash_id.clone(),
+                    auth: auth_id.clone(),
+                    block_number,
+                    per_check_list: per_check_list.clone(),
+                    public: account.public.clone(),
+                },
+                |payload, signature| {
+                    Call::submit_offchain_pre_check_result(payload, signature)
+                },
+            )
+            .ok_or(
+                "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+            )?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
         Ok(())
     }
 
@@ -2879,29 +2995,49 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
       u64: From<T::BlockNumber>,
 {
     //
-    fn has_per_check_task(stash: T::AccountId) -> bool {
-        if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
+    fn has_pre_check_task(stash: T::AccountId) -> bool {
+        if let Some((_, check_status)) = Self::get_pre_check_status(stash.clone()) {
+            match check_status {
+                PreCheckStatus::Review => { return true ;}
+                PreCheckStatus::Pass => { return true; }
+                _ => {}
+            }
+        }
+        if <PreCheckTaskList<T>>::get().len() < 0 { return false; }
         // TODO:: to dev maximum_due
-        let task_list = <PerCheckTaskList<T>>::get();
+        let task_list = <PreCheckTaskList<T>>::get();
         task_list.iter().any(|(storage_stash, _, _,)|{
             &stash == storage_stash
         })
     }
 
     //
-    fn is_authority_set_has_task(auth_list: Vec<T::AuthorityAres>) -> bool {
-        if <PerCheckTaskList<T>>::get().len() < 0 { return false; }
-        let task_list = <PerCheckTaskList<T>>::get();
-        task_list.iter().any(|(_, storage_auth, _,)|{
-            auth_list.iter().any(|x|{
-                x == storage_auth
-            })
-        })
+    fn get_pre_task_by_authority_set(auth_list: Vec<T::AuthorityAres>) -> Option<(T::AccountId, T::AuthorityAres, T::BlockNumber)> {
+        let task_list = <PreCheckTaskList<T>>::get();
+        for (stash, auth, bn ) in task_list {
+            if auth_list.iter().any(|x|{
+                x == &auth
+            }) {
+                // Check status
+                match Self::get_pre_check_status(stash.clone()) {
+                    None => {}
+                    Some((_, pre_status)) => {
+                        match pre_status {
+                            PreCheckStatus::Review => {
+                                return Some((stash, auth, bn));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     //
     fn check_and_clean_obsolete_task(maximum_due: T::BlockNumber) -> Weight {
-        let mut old_task_list = <PerCheckTaskList<T>>::get();
+        let mut old_task_list = <PreCheckTaskList<T>>::get();
         if old_task_list.len() > 0 {
             let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
             let old_count = old_task_list.len();
@@ -2910,14 +3046,14 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
                     duration_bn <= maximum_due
             });
             if old_count > old_task_list.len() {
-                <PerCheckTaskList<T>>::put(old_task_list);
+                <PreCheckTaskList<T>>::put(old_task_list);
             }
         }
         0
     }
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PerCheckStruct> {
+    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
 
         let mut raw_price_source_list = Self::get_raw_price_source_list();
         raw_price_source_list.retain(|x| {
@@ -2933,14 +3069,13 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             (price_key, parse_key, fraction_len)
         }).collect();
 
-        // println!("raw_price_source_list = {:?}", &format_data);
         // // check_config
         let reponse_result= Self::fetch_bulk_price_with_http(format_data);
         let reponse_result = reponse_result.unwrap_or(Vec::new());
 
         reponse_result.into_iter().map(|(price_key,parse_key,fraction_len, number_val )|{
             let number_val = JsonNumberValue::new(number_val);
-            PerCheckStruct {
+            PreCheckStruct {
                 price_key,
                 number_val,
                 max_offset: check_config.allowable_offset.clone()
@@ -2949,7 +3084,7 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PerCheckStruct> ) {
+    fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PreCheckStruct> ) {
         // get avg price.
         let check_result = per_check_list.iter().all(|checked_struct| {
             // Check price key exists.
@@ -2967,28 +3102,35 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             diff <= checked_struct.max_offset * avg_price_val
         });
 
-        let mut per_checkstatus = PerCheckStatus::Prohibit;
+        let mut per_checkstatus = PreCheckStatus::Prohibit;
         if check_result {
-            per_checkstatus = PerCheckStatus::Pass;
+            per_checkstatus = PreCheckStatus::Pass;
         }
 
-        <FinalPerCheckResult<T>>::insert(stash, Some((bn, per_checkstatus)));
+        log::debug!(" ------ debug . on RUN A5");
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus)));
+        let mut task_list = <PreCheckTaskList<T>>::get();
+        task_list.retain(|(old_acc, _, _)|{ &stash != old_acc }) ;
+        <PreCheckTaskList<T>>::put(task_list);
+
+        log::debug!(" ------ debug . on RUN A6");
     }
 
     //
-    fn get_per_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PerCheckStatus)> {
+    fn get_pre_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PreCheckStatus)> {
         <FinalPerCheckResult<T>>::get(stash).unwrap_or(None)
     }
 
     //
     fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> bool {
-        let mut task_list = <PerCheckTaskList<T>>::get();
+        let mut task_list = <PreCheckTaskList<T>>::get();
         let exists = task_list.iter().any(|(old_acc, _, _)|{ &stash == old_acc }) ;
         if exists {
             return false;
         }
-        task_list.push((stash, auth, bn));
-        <PerCheckTaskList<T>>::put(task_list);
+        task_list.push((stash.clone(), auth, bn));
+        <PreCheckTaskList<T>>::put(task_list);
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, PreCheckStatus::Review)));
         true
     }
 }

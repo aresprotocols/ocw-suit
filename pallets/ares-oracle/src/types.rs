@@ -357,6 +357,27 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PerCheckPayload<T::Public, 
 
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
+    pub stash: AccountId,
+    pub auth: AuthorityId,
+    pub block_number: BlockNumber,
+    pub per_check_list: Vec<PreCheckStruct>,
+    pub public: Public,
+}
+
+impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
+    where
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+{
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
+
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue);
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]

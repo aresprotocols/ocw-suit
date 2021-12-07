@@ -63,7 +63,7 @@ impl Default for JsonNumberValue {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PerCheckStruct {
+pub struct PreCheckStruct {
     pub price_key: Vec<u8>,
     pub number_val: JsonNumberValue,
     pub max_offset: Percent,
@@ -72,13 +72,13 @@ pub struct PerCheckStruct {
 // The following code for `per check` functionable
 //
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum PerCheckStatus {
+pub enum PreCheckStatus {
     Review,
     Prohibit,
     Pass,
 }
 
-impl Default for PerCheckStatus {
+impl Default for PreCheckStatus {
     fn default() -> Self { Self::Prohibit }
 }
 
@@ -105,47 +105,47 @@ impl Default for PreCheckTaskConfig
 pub trait IAresOraclePreCheck <AccountId, AuthorityId, BlockNumber>
 {
     //
-    fn has_per_check_task(stash: AccountId) -> bool;
+    fn has_pre_check_task(stash: AccountId) -> bool;
 
     //
-    fn is_authority_set_has_task(auth_list: Vec<AuthorityId>) -> bool;
+    fn get_pre_task_by_authority_set(auth_list: Vec<AuthorityId>) -> Option<(AccountId, AuthorityId, BlockNumber)>;
 
     //
     fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PerCheckStruct>;
+    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct>;
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(stash: AccountId, bn: BlockNumber, per_check_list: Vec<PerCheckStruct>);
+    fn save_pre_check_result(stash: AccountId, bn: BlockNumber, per_check_list: Vec<PreCheckStruct>);
 
     //
-    fn get_per_check_status(stash: AccountId) -> Option<(BlockNumber, PerCheckStatus)> ;
+    fn get_pre_check_status(stash: AccountId) -> Option<(BlockNumber, PreCheckStatus)> ;
 
     //
     fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> bool;
 }
 
 impl <AC,AU,B> IAresOraclePreCheck <AC,AU,B> for () {
-    fn has_per_check_task(stash: AC) -> bool {
+    fn has_pre_check_task(stash: AC) -> bool {
         false
     }
 
-    fn is_authority_set_has_task(auth_list: Vec<AU>) -> bool {
-        false
+    fn get_pre_task_by_authority_set(auth_list: Vec<AU>) -> Option<(AC, AU, B)> {
+        None
     }
 
     fn check_and_clean_obsolete_task(maximum_due: B) -> u64 {
         0
     }
 
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PerCheckStruct> {
+    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
         Vec::new()
     }
 
-    fn save_per_check_result(stash: AC, bn: B, per_check_list: Vec<PerCheckStruct>) {}
+    fn save_pre_check_result(stash: AC, bn: B, per_check_list: Vec<PreCheckStruct>) {}
 
-    fn get_per_check_status(stash: AC) -> Option<(B, PerCheckStatus)> {
+    fn get_pre_check_status(stash: AC) -> Option<(B, PreCheckStatus)> {
         None
     }
 

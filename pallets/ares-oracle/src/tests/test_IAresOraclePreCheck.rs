@@ -14,7 +14,9 @@ fn test_create_pre_check_task() {
         let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
 
         assert!(AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn));
-        assert_eq!(<PerCheckTaskList<Test>>::get()[0], (stash_1.clone(), auth_1.clone(), current_bn));
+        assert_eq!(<PreCheckTaskList<Test>>::get()[0], (stash_1.clone(), auth_1.clone(), current_bn));
+        // println!("1111{:?}", <FinalPerCheckResult<Test>>::get(stash_1.clone()));
+        assert_eq!(<FinalPerCheckResult<Test>>::get(stash_1.clone()).unwrap(), Some((1, PreCheckStatus::Review)));
 
         assert_eq!(
 			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn),
@@ -32,7 +34,7 @@ fn test_create_pre_check_task() {
 }
 
 #[test]
-fn test_has_per_check_task() {
+fn test_has_pre_check_task() {
     let mut t = new_test_ext();
     t.execute_with(|| {
         let current_bn = 1;
@@ -43,15 +45,15 @@ fn test_has_per_check_task() {
 
         let stash_2 = AccountId::from_raw([2;32]).into_account();
 
-        assert!(!AresOcw::has_per_check_task(stash_1));
+        assert!(!AresOcw::has_pre_check_task(stash_1));
         assert!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
-        assert!(AresOcw::has_per_check_task(stash_1));
-        assert!(!AresOcw::has_per_check_task(stash_2));
+        assert!(AresOcw::has_pre_check_task(stash_1));
+        assert!(!AresOcw::has_pre_check_task(stash_2));
     });
 }
 
 #[test]
-fn test_is_authority_set_has_task() {
+fn test_get_pre_task_by_authority_set() {
     let mut t = new_test_ext();
     t.execute_with(|| {
         let current_bn = 1;
@@ -60,7 +62,7 @@ fn test_is_authority_set_has_task() {
         let stash_1 = AccountId::from_raw([1;32]).into_account();
         let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
 
-        assert!(!AresOcw::has_per_check_task(stash_1));
+        assert!(!AresOcw::has_pre_check_task(stash_1));
         assert!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
 
         // Make Auth id set
@@ -70,7 +72,7 @@ fn test_is_authority_set_has_task() {
             <Test as crate::Config>::AuthorityAres::unchecked_from([102;32]),
         ];
 
-        assert!(AresOcw::is_authority_set_has_task(auth_list));
+        assert_eq!(AresOcw::get_pre_task_by_authority_set(auth_list), Some((stash_1, auth_1, current_bn)));
     });
 }
 
@@ -124,7 +126,7 @@ fn test_take_price_for_per_check() {
 
         assert_eq!(take_price_list.len() , 2);
 
-        assert_eq!(take_price_list[0], PerCheckStruct {
+        assert_eq!(take_price_list[0], PreCheckStruct {
             price_key: toVec("btc_price"),
             number_val: JsonNumberValue {
                 integer: 50261,
@@ -135,7 +137,7 @@ fn test_take_price_for_per_check() {
             max_offset: check_config.allowable_offset.clone(),
         });
 
-        assert_eq!(take_price_list[1], PerCheckStruct {
+        assert_eq!(take_price_list[1], PreCheckStruct {
             price_key: toVec("eth_price"),
             number_val: JsonNumberValue {
                 integer: 3107,
@@ -149,7 +151,7 @@ fn test_take_price_for_per_check() {
 }
 
 #[test]
-fn save_per_check_result_for_success() {
+fn save_pre_check_result_for_success() {
     let mut t = new_test_ext();
 
     const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
@@ -202,24 +204,24 @@ fn save_per_check_result_for_success() {
         <AresAvgPrice<Test>>::insert(toVec("eth_price"), (31077100 + Percent::from_percent(9) * 31077100, 4));
 
         // check before status
-        let get_status: Option<(BlockNumber, PerCheckStatus)>
-            = AresOcw::get_per_check_status(candidate_account);
+        let get_status: Option<(BlockNumber, PreCheckStatus)>
+            = AresOcw::get_pre_check_status(candidate_account);
         assert_eq!(get_status, None);
 
         // Check price
-        AresOcw::save_per_check_result(candidate_account, current_bn, take_price_list);
+        AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list);
 
         //
-        let get_status: Option<(BlockNumber, PerCheckStatus)>
-            = AresOcw::get_per_check_status(candidate_account);
-        assert_eq!(get_status, Some((current_bn, PerCheckStatus::Pass)));
+        let get_status: Option<(BlockNumber, PreCheckStatus)>
+            = AresOcw::get_pre_check_status(candidate_account);
+        assert_eq!(get_status, Some((current_bn, PreCheckStatus::Pass)));
 
     });
 }
 
 
 #[test]
-fn save_per_check_result_for_prohibit() {
+fn save_pre_check_result_for_prohibit() {
     let mut t = new_test_ext();
 
     const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
@@ -272,17 +274,17 @@ fn save_per_check_result_for_prohibit() {
         <AresAvgPrice<Test>>::insert(toVec("eth_price"), (31077100 + Percent::from_percent(11) * 31077100, 4));
 
         // check before status
-        let get_status: Option<(BlockNumber, PerCheckStatus)>
-            = AresOcw::get_per_check_status(candidate_account);
+        let get_status: Option<(BlockNumber, PreCheckStatus)>
+            = AresOcw::get_pre_check_status(candidate_account);
         assert_eq!(get_status, None);
 
         // Check price
-        AresOcw::save_per_check_result(candidate_account, current_bn, take_price_list);
+        AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list);
 
         //
-        let get_status: Option<(BlockNumber, PerCheckStatus)>
-            = AresOcw::get_per_check_status(candidate_account);
-        assert_eq!(get_status, Some((current_bn, PerCheckStatus::Prohibit)));
+        let get_status: Option<(BlockNumber, PreCheckStatus)>
+            = AresOcw::get_pre_check_status(candidate_account);
+        assert_eq!(get_status, Some((current_bn, PreCheckStatus::Prohibit)));
 
     });
 }

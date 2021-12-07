@@ -36,7 +36,7 @@ pub mod pallet {
 	use frame_support::sp_std::fmt::Debug;
 	use frame_election_provider_support::{data_provider, VoteWeight, ElectionDataProvider, Supports, ElectionProvider, onchain, PerThing128};
 	use crate::IStakingNpos;
-	use ares_oracle_provider_support::{IAresOraclePreCheck, PerCheckStatus};
+	use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 	// frame-election-provider-support
 
 	// type Aura<T> = pallet_aura::Pallet<T>;
@@ -143,8 +143,8 @@ pub mod pallet {
 				new_target.retain(|target_acc|{
 					let is_new_target = !current_validators.iter().any(|current_acc|{
 						let is_exists = &current_acc == &target_acc;
-						log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
-						log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
+						// log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
+						// log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
 						if is_exists {
 							old_target_list.push(target_acc.clone());
 						}
@@ -154,16 +154,16 @@ pub mod pallet {
 					if is_new_target {
 						// check pre-price has success.
 						log::debug!(target: "staking_extend", "New target check RUN 0  ");
-						if let Some((_, new_target_status)) = T::AresOraclePreCheck::get_per_check_status(target_acc.clone()) {
+						if let Some((_, new_target_status)) = T::AresOraclePreCheck::get_pre_check_status(target_acc.clone()) {
 							log::debug!(target: "staking_extend", "New target check RUN 1  ");
 							match new_target_status {
-								PerCheckStatus::Review => {
+								PreCheckStatus::Review => {
 									log::debug!(target: "staking_extend", "New target check RUN 1.1-Review  ");
 								}
-								PerCheckStatus::Prohibit => {
+								PreCheckStatus::Prohibit => {
 									log::debug!(target: "staking_extend", "New target check RUN 1.2-Prohibit  ");
 								}
-								PerCheckStatus::Pass => {
+								PreCheckStatus::Pass => {
 									log::debug!(target: "staking_extend", "New target check RUN 1.3-Pass  ");
 									old_target_list.push(target_acc.clone());
 								}
