@@ -24,7 +24,6 @@ use sp_std::{prelude::*, str};
 mod tests;
 
 pub mod aura_handler;
-pub mod validator_pre_check;
 
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
@@ -57,10 +56,10 @@ pub mod crypto {
     pub struct OcwAuthId<T>(PhantomData<T>);
 
     impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -68,11 +67,11 @@ pub mod crypto {
     }
 
     impl<T: pallet::Config>
-        frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-        for OcwAuthId<T>
-    where
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+    frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+    for OcwAuthId<T>
+        where
+            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+            u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type RuntimeAppPublic = Public;
         type GenericSignature = sp_core::sr25519::Signature;
@@ -105,6 +104,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
     use staking_extend::IStakingNpos;
+    use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PerCheckStruct};
 
 
     #[pallet::error]
@@ -219,13 +219,17 @@ pub mod pallet {
                             }
                             // Do you need to scan pre-validator data
                             if T::AresIStakingNpos::near_era_change(2u32.into()) {
-                                log::debug!(" **** T::AresIStakingNpos::near_era_change is near will get data.");
+                                log::debug!(" **** T::AresIStakingNpos::near_era_change is near will get data. RUN 1 ");
                                 let pending_npos = T::AresIStakingNpos::pending_npos();
                                 pending_npos.into_iter().any(|(stash_id, auth_id)| {
                                     // for v3.4.x --
+                                    log::debug!(" **** T::AresIStakingNpos:: RUN 2 has pending stash stash_id = {:?} ", stash_id.clone());
                                     if !Self::has_per_check_task(stash_id.clone()) && auth_id.is_some() {
+                                        log::debug!(" **** T::AresIStakingNpos:: RUN 2.1 auth_id = {:?}", auth_id.clone());
                                         // Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);\
                                         Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number);
+                                    }else{
+                                        log::debug!(" **** T::AresIStakingNpos:: RUN 2.2");
                                     }
                                     false
                                 });
@@ -274,7 +278,7 @@ pub mod pallet {
                     let mut token_list = Vec::new();
                     token_list.push("eth-usdt".as_bytes().to_vec());
                     token_list.push("btc-usdt".as_bytes().to_vec());
-                    let check_config = PerCehckTaskConfig{
+                    let check_config = PreCheckTaskConfig{
                         check_token_list: token_list,
                         allowable_offset: Percent::from_percent(10)
                     };
@@ -509,9 +513,8 @@ pub mod pallet {
             ensure_none(origin)?;
             let result = Self::create_pre_check_task(percheck_payload.stash, percheck_payload.auth, percheck_payload.block_number);
 
-            ensure!(result.is_ok(), result.err().unwrap());
+            ensure!(result, Error::<T>::PerCheckTaskAlreadyExists );
 
-            // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
 
@@ -1102,6 +1105,11 @@ pub mod pallet {
         ValueQuery
     >;
 
+
+    #[pallet::storage]
+    #[pallet::getter(fn symbol_fraction)]
+    pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, FractionLength>;
+
     // ---
 
     #[pallet::genesis_config]
@@ -1159,6 +1167,11 @@ pub mod pallet {
         fn build(&self) {
             if !self.price_requests.is_empty() {
                 PricesRequests::<T>::put(&self.price_requests);
+                self.price_requests
+                    .iter()
+                    .for_each(|(symbol, _, _, fractionLength, _)| {
+                        SymbolFraction::<T>::insert(symbol, fractionLength);
+                    })
             }
             if self.price_pool_depth > 0 {
                 PricePoolDepth::<T>::put(&self.price_pool_depth);
@@ -1192,6 +1205,7 @@ use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
 use frame_support::sp_runtime::{Percent, DigestItem};
+use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PerCheckStruct, PerCheckStatus};
 
 
 impl<T: Config> Pallet<T>
@@ -2804,9 +2818,9 @@ where
         <PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone()).into_iter()
             .any(|(acc, _)| {
                 T::OcwFinanceHandler::record_submit_point(acc,
-                                                   purchase_id.clone(),
-                                                   request_mission.create_bn,
-                                                   request_mission.request_keys.len() as u32);
+                                                          purchase_id.clone(),
+                                                          request_mission.create_bn,
+                                                          request_mission.request_keys.len() as u32);
                 false
             });
         Ok(())
@@ -2814,8 +2828,8 @@ where
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(de)?;
     Ok(s.as_bytes().to_vec())
@@ -2846,18 +2860,21 @@ impl fmt::Debug for LocalPriceRequestStorage {
 }
 
 
-impl<T: Config> AvgPrice for Pallet<T>
+impl<T: Config> SymbolInfo for Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
         u64: From<<T as frame_system::Config>::BlockNumber>,
 {
-
-    fn price(symbol: Vec<u8>) -> Result<(u64, FractionLength),()> {
+    fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
         AresAvgPrice::<T>::try_get(symbol)
+    }
+
+    fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
+        SymbolFraction::<T>::get(symbol)
     }
 }
 
-impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNumber, Error<T>> for Pallet<T>
+impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumber> for Pallet<T>
     where sp_runtime::AccountId32: From<T::AccountId>,
       u64: From<T::BlockNumber>,
 {
@@ -2900,7 +2917,7 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<PerCheckStruct> {
+    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PerCheckStruct> {
 
         let mut raw_price_source_list = Self::get_raw_price_source_list();
         raw_price_source_list.retain(|x| {
@@ -2964,15 +2981,15 @@ impl <T: Config> IAresOraclePerCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     //
-    fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> Result<(), Error<T>> {
+    fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> bool {
         let mut task_list = <PerCheckTaskList<T>>::get();
         let exists = task_list.iter().any(|(old_acc, _, _)|{ &stash == old_acc }) ;
         if exists {
-            return Err(Error::PerCheckTaskAlreadyExists)
+            return false;
         }
         task_list.push((stash, auth, bn));
         <PerCheckTaskList<T>>::put(task_list);
-        Ok(())
+        true
     }
 }
 

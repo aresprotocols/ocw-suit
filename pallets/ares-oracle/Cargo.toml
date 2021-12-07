@@ -33,6 +33,7 @@ sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'h
 pallet-balances = {  version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 oracle-finance = { version = "3.0.1", default-features = false, path= "../oracle-finance" }
 staking-extend = { version = "3.0.4", default-features = false, path= "../staking-extend" }
+ares-oracle-provider-support = { version = "3.0.1", default-features = false, path= "../ares-oracle-provider-support" }
 
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
@@ -59,6 +60,7 @@ std = [
 	"serde_json/std",
 	"pallet-aura/std",
 	"pallet-session/std",
+	"ares-oracle-provider-support/std",
 	"staking-extend/std", # Ares staking
 #	"sp-staking/std",
 #	"pallet-timestamp/std",

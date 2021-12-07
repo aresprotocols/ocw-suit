@@ -403,7 +403,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 }
 
 
-mod test_IAresOraclePerCheck;
+mod test_IAresOraclePreCheck;
 
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {

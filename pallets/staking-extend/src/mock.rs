@@ -192,6 +192,8 @@ impl crate::Config for Test {
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
 		OnChainConfig<member_extend::Pallet<Self>>,
 	>;
+
+	type AresOraclePreCheck = ();
 }
 
 parameter_types! {

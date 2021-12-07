@@ -36,6 +36,7 @@ pub mod pallet {
 	use frame_support::sp_std::fmt::Debug;
 	use frame_election_provider_support::{data_provider, VoteWeight, ElectionDataProvider, Supports, ElectionProvider, onchain, PerThing128};
 	use crate::IStakingNpos;
+	use ares_oracle_provider_support::{IAresOraclePreCheck, PerCheckStatus};
 	// frame-election-provider-support
 
 	// type Aura<T> = pallet_aura::Pallet<T>;
@@ -82,7 +83,15 @@ pub mod pallet {
 			Self::BlockNumber,
 			DataProvider = Pallet<Self>,
 		>;
+
+		type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
 	}
+
+	#[pallet::error]
+	#[derive(PartialEq, Eq)]
+	pub enum Error<T> {
+	}
+
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -110,44 +119,66 @@ pub mod pallet {
 	{
 		const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 
-		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
-		{
-			T::DataProvider::targets(maybe_max_len)
-		}
-
-		// TODO:: kami:: develop for new feature, don't remove blew.
 		// fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
 		// {
-		// 	// submit 3 times. 3% , 2/3 10 block submit.
-		// 	let result = T::DataProvider::targets(maybe_max_len);
-		// 	log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
-		//
-		// 	// check current validator
-		// 	let current_validators = T::ValidatorSet::validators();
-		// 	log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
-		//
-		// 	//
-		// 	let mut old_target_list = Vec::new();
-		//
-		// 	if result.is_ok() {
-		// 		let mut new_target = result.clone().unwrap();
-		// 		new_target.retain(|target_acc|{
-		// 			!current_validators.iter().any(|current_acc|{
-		// 				let is_exists = &current_acc == &target_acc;
-		// 				log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
-		// 				log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
-		// 				if is_exists {
-		// 					old_target_list.push(target_acc.clone());
-		// 				}
-		// 				is_exists
-		// 			})
-		// 		});
-		// 		log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
-		// 	}
-		//
-		// 	Ok(old_target_list)
-		// 	// result
+		// 	T::DataProvider::targets(maybe_max_len)
 		// }
+
+		// TODO:: kami:: develop for new feature, don't remove blew.
+		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
+		{
+			//
+			let result = T::DataProvider::targets(maybe_max_len);
+			// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
+
+			// check current validator
+			let current_validators = T::ValidatorSet::validators();
+			// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
+
+			//
+			let mut old_target_list = Vec::new();
+
+			if result.is_ok() {
+				let mut new_target = result.clone().unwrap();
+				new_target.retain(|target_acc|{
+					let is_new_target = !current_validators.iter().any(|current_acc|{
+						let is_exists = &current_acc == &target_acc;
+						log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc, &target_acc);
+						log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
+						if is_exists {
+							old_target_list.push(target_acc.clone());
+						}
+						is_exists
+					});
+
+					if is_new_target {
+						// check pre-price has success.
+						log::debug!(target: "staking_extend", "New target check RUN 0  ");
+						if let Some((_, new_target_status)) = T::AresOraclePreCheck::get_per_check_status(target_acc.clone()) {
+							log::debug!(target: "staking_extend", "New target check RUN 1  ");
+							match new_target_status {
+								PerCheckStatus::Review => {
+									log::debug!(target: "staking_extend", "New target check RUN 1.1-Review  ");
+								}
+								PerCheckStatus::Prohibit => {
+									log::debug!(target: "staking_extend", "New target check RUN 1.2-Prohibit  ");
+								}
+								PerCheckStatus::Pass => {
+									log::debug!(target: "staking_extend", "New target check RUN 1.3-Pass  ");
+									old_target_list.push(target_acc.clone());
+								}
+							}
+						}
+					}
+
+					is_new_target
+				});
+				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
+			}
+
+			Ok(old_target_list)
+			// result
+		}
 
 		fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 			T::DataProvider::voters(maybe_max_len)

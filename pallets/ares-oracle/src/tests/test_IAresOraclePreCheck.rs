@@ -1,5 +1,6 @@
 use super::*;
 use sp_runtime::Percent;
+use ares_oracle_provider_support::*;
 use crate::crypto2::AuraAuthId;
 
 #[test]
@@ -12,20 +13,20 @@ fn test_create_pre_check_task() {
         let stash_1 = AccountId::from_raw([1;32]).into_account();
         let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
 
-        assert_ok!(AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn));
+        assert!(AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn));
         assert_eq!(<PerCheckTaskList<Test>>::get()[0], (stash_1.clone(), auth_1.clone(), current_bn));
 
-        assert_noop!(
+        assert_eq!(
 			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn),
-			Error::<Test>::PerCheckTaskAlreadyExists
+			false // Error::<Test>::PerCheckTaskAlreadyExists
 		);
-        assert_noop!(
+        assert_eq!(
 			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn + 1 ),
-			Error::<Test>::PerCheckTaskAlreadyExists
+			false // Error::<Test>::PerCheckTaskAlreadyExists
 		);
-        assert_noop!(
+        assert_eq!(
 			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn + 2 ),
-			Error::<Test>::PerCheckTaskAlreadyExists
+			false // Error::<Test>::PerCheckTaskAlreadyExists
 		);
     });
 }
@@ -43,7 +44,7 @@ fn test_has_per_check_task() {
         let stash_2 = AccountId::from_raw([2;32]).into_account();
 
         assert!(!AresOcw::has_per_check_task(stash_1));
-        assert_ok!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
+        assert!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
         assert!(AresOcw::has_per_check_task(stash_1));
         assert!(!AresOcw::has_per_check_task(stash_2));
     });
@@ -60,7 +61,7 @@ fn test_is_authority_set_has_task() {
         let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101;32]);
 
         assert!(!AresOcw::has_per_check_task(stash_1));
-        assert_ok!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
+        assert!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
 
         // Make Auth id set
         let auth_list = vec![
@@ -113,7 +114,7 @@ fn test_take_price_for_per_check() {
         System::set_block_number(current_bn);
 
         // create check config
-        let check_config = PerCehckTaskConfig{
+        let check_config = PreCheckTaskConfig{
             check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };
@@ -188,7 +189,7 @@ fn save_per_check_result_for_success() {
 
         // get check result
         // create check config
-        let check_config = PerCehckTaskConfig{
+        let check_config = PreCheckTaskConfig{
             check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };
@@ -258,7 +259,7 @@ fn save_per_check_result_for_prohibit() {
 
         // get check result
         // create check config
-        let check_config = PerCehckTaskConfig{
+        let check_config = PreCheckTaskConfig{
             check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };

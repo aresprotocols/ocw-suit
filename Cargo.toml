@@ -8,7 +8,7 @@ members = [
     "pallets/member-extend",
     "pallets/challenge",
     "pallets/collective",
-    "pallets/price-estimates"
+    "pallets/price-estimates",
 ]
 [patch."https://github.com/paritytech/substrate"]
 pallet-session ={path = "./pallets/session" }
