@@ -1,0 +1,32 @@
+[package]
+name = "ares-oracle-provider-support"
+version = "3.0.1"
+authors = ["Ares Technologies <linhai@cancanyou.com>"]
+edition = "2018"
+license = "Unlicense"
+homepage = "https://github.com/aresprotocols"
+repository = "https://github.com/aresprotocols/ocw-suit"
+description = "Ares price submit."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+frame-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+lite-json = { version = "0.1", default-features = false }
+
+[features]
+default = ["std"]
+
+std = [
+    "codec/std",
+    "sp-io/std",
+    "lite-json/std",
+    "frame-support/std",
+    "sp-std/std",
+]
+

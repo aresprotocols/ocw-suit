@@ -10,3 +10,6 @@ members = [
     "pallets/collective",
     "pallets/price-estimates",
 ]
+[patch."https://github.com/paritytech/substrate"]
+pallet-session ={path = "./pallets/session" }
+pallet-session-benchmarking ={path = "./pallets/session/benchmarking" }

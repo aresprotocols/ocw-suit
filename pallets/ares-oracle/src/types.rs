@@ -108,7 +108,6 @@ impl fmt::Debug for PurchasedSourceRawKeys {
     }
 }
 
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
@@ -181,6 +180,8 @@ impl Default for PurchasedAvgPriceData
         }
     }
 }
+
+
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AresPriceData<AccountId, BlockNumber>
@@ -289,57 +290,7 @@ pub struct AresPriceData<AccountId, BlockNumber>
 //     }
 // }
 
-// warp NumberValue
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct JsonNumberValue {
-    pub integer: u64,
-    pub fraction: u64,
-    pub fraction_length: u32,
-    pub exponent: u32,
-}
 
-//
-impl JsonNumberValue {
-    pub fn new(number_value: NumberValue) -> Self {
-        if number_value.integer < 0 || number_value.exponent != 0 {
-            panic!("⛔ Error source NumberValue integer or exponent.");
-        }
-        Self {
-            fraction_length: number_value.fraction_length,
-            fraction: number_value.fraction,
-            exponent: number_value.exponent as u32,
-            integer: number_value.integer as u64,
-        }
-    }
-
-    pub fn toPrice(&self, fraction_number: FractionLength) -> u64 {
-        let mut price_fraction = self.fraction;
-        if price_fraction < 10u64.pow(fraction_number) {
-            price_fraction *= 10u64.pow(
-                fraction_number
-                    .checked_sub(self.fraction_length)
-                    .unwrap_or(0),
-            );
-        }
-        let exp = self
-            .fraction_length
-            .checked_sub(fraction_number)
-            .unwrap_or(0);
-        self.integer as u64 * (10u64.pow(fraction_number)) + (price_fraction / 10_u64.pow(exp))
-    }
-}
-
-#[cfg(feature = "std")]
-impl Default for JsonNumberValue {
-    fn default() -> Self {
-        Self {
-            fraction_length: 0,
-            fraction: 0,
-            exponent: 0,
-            integer: 0,
-        }
-    }
-}
 
 /// data required to submit a transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -385,6 +336,47 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::B
     }
 }
 
+/// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PerCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
+    pub stash: AccountId,
+    pub auth: AuthorityId,
+    pub block_number: BlockNumber,
+    pub public: Public,
+}
+
+impl<T: SigningTypes + Config > SignedPayload<T> for PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
+    where
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+{
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
+    pub stash: AccountId,
+    pub auth: AuthorityId,
+    pub block_number: BlockNumber,
+    pub per_check_list: Vec<PreCheckStruct>,
+    pub public: Public,
+}
+
+impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
+    where
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+{
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
+
+
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue);
 
@@ -402,38 +394,5 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
             str::from_utf8(&self.0).map_err(|_| fmt::Error)?,
             &self.1,
         )
-    }
-}
-
-// The following code for `per check` functionable
-//
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum PerCheckStatus {
-    Review,
-    Prohibit,
-    Pass,
-}
-
-impl Default for PerCheckStatus {
-    fn default() -> Self { Self::Prohibit }
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PerCehckTaskConfig {
-    pub check_token_list: Vec<Vec<u8>>,
-    pub allowable_offset: u8,
-    pub max_repeat_times: u8,
-    pub pass_percent: Percent,
-}
-
-impl Default for PerCehckTaskConfig
-{
-    fn default() -> Self {
-        Self {
-            check_token_list: Vec::new(),
-            allowable_offset: 10,
-            max_repeat_times: 5,
-            pass_percent: Percent::from_percent(100),
-        }
     }
 }

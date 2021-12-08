@@ -1,12 +1,179 @@
-use crate::{mock::* };
+use crate::{mock::*, Config};
+use crate::IStakingNpos;
+
 use frame_support::{assert_noop, assert_ok};
 // use crate::traits::*;
 // use crate::types::*;
 use frame_support::traits::OnInitialize;
 
+use sp_runtime::{
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill
+};
+
 #[test]
-fn test_it_works_for_default_value() {
+fn test_get_pending_npos_listd() {
 	new_test_ext().execute_with(|| {
-		assert!(true);
+
+		advance_session();
+		// assert_eq!(<Test as crate::Config>::IStakingNpos::current_staking_era(), 0);
+		// assert_eq!(<Test as crate::Config>::IStakingNpos::old_npos(), vec![CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_1]) ;
+		// assert_eq!(<Test as crate::Config>::IStakingNpos::pending_npos().len(), 0) ;
+
+
+		assert_eq!(Test::current_staking_era(), 0);
+		assert_eq!(Test::old_npos(), vec![CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_1]) ;
+		assert_eq!(Test::pending_npos().len(), 0) ;
+
+		// bound new validator
+		assert_eq!(Test::current_staking_era(), 0);
+		assert_ok!(Staking::bond(
+			Origin::signed(CONST_VALIDATOR_ID_3),
+			CONST_VALIDATOR_ID_3,
+			1500,
+			pallet_staking::RewardDestination::Controller));
+		assert_ok!(Staking::validate(Origin::signed(CONST_VALIDATOR_ID_3), pallet_staking::ValidatorPrefs::default()));
+
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+
+		// Set session key
+		assert_ok!(Session::set_keys(Origin::signed(CONST_VALIDATOR_ID_3), UintAuthorityId(8).into(), vec![]));
+
+		advance_session();
+		advance_session();
+
+		//
+		assert_eq!(Test::current_staking_era(), 1);
+		assert_eq!(Test::pending_npos().len(), 1) ;
+		assert_eq!(Test::pending_npos(),
+				   vec![
+					   (CONST_VALIDATOR_ID_3, Some(UintAuthorityId(8))),
+				   ]) ;
+
+		advance_session();
+		advance_session();
+	});
+}
+
+#[test]
+fn test_calculate_near_era_change_period_eq_ear() {
+	new_test_ext().execute_with(|| {
+		advance_session(); // 1 bn = 5
+		assert!(Test::calculate_near_era_change(2, 5, 5, 1));
+
+		advance_session(); // 1
+		assert!(Test::calculate_near_era_change(2, 10, 5, 1));
+
+		advance_session(); // 1
+		assert!(Test::calculate_near_era_change(2, 15, 5, 1));
+
+		advance_session(); // 1
+		assert!(Test::calculate_near_era_change(2, 20, 5, 1));
+	});
+}
+
+#[test]
+fn test_calculate_near_era_change_period_eq_muti() {
+	new_test_ext().execute_with(|| {
+		advance_session(); // 1
+		assert!(Test::calculate_near_era_change(2, 5, 5, 2));
+
+		advance_session(); // 1
+		assert!(!Test::calculate_near_era_change(2, 10, 5, 2));
+
+		advance_session(); // 1
+		assert!(Test::calculate_near_era_change(2, 15, 5, 2));
+
+		advance_session(); // 1
+		assert!(!Test::calculate_near_era_change(2, 20, 5, 2));
+	});
+}
+
+#[test]
+fn test_calculate_near_era_change_period_eq_ear_triple() {
+	new_test_ext().execute_with(|| {
+		advance_session(); // 1 bn = 5 (period_multiple,current_bn,session_len,per_era)
+		assert!(!Test::calculate_near_era_change(2, 5, 5, 3));
+
+		advance_session(); // 1 bn = 10
+		assert!(Test::calculate_near_era_change(2, 10, 5, 3));
+
+		advance_session(); // 1 bn = 15
+		assert!(!Test::calculate_near_era_change(2, 15, 5, 3));
+
+		advance_session(); // 1 bn = 20
+		assert!(!Test::calculate_near_era_change(2, 20, 5, 3));
+	});
+}
+
+#[test]
+fn test_near_era_change() {
+	new_test_ext().execute_with(|| {
+
+		advance_session(); // 1
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 2
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 3
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 4
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 5
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 6
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 7
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 8
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 9
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(Test::near_era_change(2), "Check npos request by offchain worker.");
+
+		advance_session(); // 10
+		assert_eq!(Test::current_staking_era(), 0);
+		assert!(!Test::near_era_change(2));
+
+		println!("---- change begin");
+		advance_session(); // 11
+		assert_eq!(Test::current_staking_era(), 1);
+		assert!(!Test::near_era_change(2));
+		println!("---- change end");
+
+		advance_session(); // 12
+		assert_eq!(Test::current_staking_era(), 1);
+		assert!(!Test::near_era_change(2));
+
+		advance_session(); // 13
+		assert_eq!(Test::current_staking_era(), 1);
+		assert!(!Test::near_era_change(2));
+
 	});
 }

@@ -16,7 +16,7 @@ use sp_runtime::{
 };
 use sp_std::vec::Vec;
 
-use frame_support::traits::{FindAuthor, Get, ValidatorSet};
+use frame_support::traits::{FindAuthor, Get, ValidatorSet, OneSessionHandler};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
 
@@ -24,11 +24,7 @@ use sp_std::{prelude::*, str};
 mod tests;
 
 pub mod aura_handler;
-pub mod validator_pre_check;
 
-/// The keys can be inserted manually via RPC (see `author_insertKey`).
-// pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
-pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
@@ -38,6 +34,10 @@ pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 pub const PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP: u8 = 1;
 pub const PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN: u8 = 2;
 
+
+/// The keys can be inserted manually via RPC (see `author_insertKey`).
+// pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
+pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
 /// the types with this pallet-specific identifier.
 pub mod crypto {
     use super::KEY_TYPE;
@@ -90,7 +90,7 @@ use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
-use sp_consensus_aura::AURA_ENGINE_ID;
+use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
 use sp_runtime::offchain::storage::StorageValueRef;
 
 #[frame_support::pallet]
@@ -103,6 +103,9 @@ pub mod pallet {
     use oracle_finance::types::{BalanceOf, OcwPaymentResult};
     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
     use frame_system::{ensure_signed, ensure_none};
+    use staking_extend::IStakingNpos;
+    use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct};
+
 
     #[pallet::error]
     #[derive(PartialEq, Eq)]
@@ -116,6 +119,9 @@ pub mod pallet {
         PayToPurchaseFeeFailed,
         // InsufficientCountOfValidators,
         PerCheckTaskAlreadyExists,
+        //
+        PreCheckTokenListNotEmpty,
+
     }
 
     /// This pallet's configuration trait
@@ -126,7 +132,7 @@ pub mod pallet {
         u64: From<<Self as frame_system::Config>::BlockNumber>,
     {
         /// The identifier type for an offchain worker.
-        type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+        type OffchainAppCrypto: AppCrypto<Self::Public, Self::Signature>;
 
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -167,6 +173,8 @@ pub mod pallet {
         type AuthorityCount: ValidatorCount;
 
         type OcwFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
+
+        type AresIStakingNpos: IStakingNpos<Self::AuthorityAres, Self::BlockNumber, StashId = <Self as frame_system::Config>::AccountId> ;
     }
 
     pub trait ValidatorCount {
@@ -185,10 +193,30 @@ pub mod pallet {
         <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
         <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
     {
+
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+            log::debug!("********** on_runtime_upgrade C1 **************************************************");
+            if ConfPreCheckTokenList::<T>::get().len() == 0 {
+                log::debug!("********** on_runtime_upgrade C2 **************************************************");
+                ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
+                let session_multi: T::BlockNumber= 2u32.into();
+                ConfPreCheckSessionMulti::<T>::put(session_multi);
+                let mut token_list = Vec::new();
+                token_list.push("btc-usdt".as_bytes().to_vec());
+                token_list.push("eth-usdt".as_bytes().to_vec());
+                token_list.push("dot-usdt".as_bytes().to_vec());
+                ConfPreCheckTokenList::<T>::put(token_list);
+                return T::DbWeight::get().reads_writes(1,5);
+            }
+            0
+        }
+
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
 
             let control_setting = <OcwControlSetting<T>>::get();
+
+            // T::AuthorityAres::unchecked_from()
 
             let block_author = Self::get_block_author();
             match block_author {
@@ -196,7 +224,6 @@ pub mod pallet {
                     log::warn!(target: "pallet::ocw::offchain_worker", "❗ Not found author.");
                 }
                 Some(author) => {
-
                     if control_setting.open_free_price_reporter {
                         log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
                         // if Self::are_block_author_and_sotre_key_the_same(<pallet_authorship::Pallet<T>>::author()) {
@@ -210,6 +237,32 @@ pub mod pallet {
                                     "❗ Ares price has a problem : {:?}",
                                     e
                                 ),
+                            }
+
+                            let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
+                            // Do you need to scan pre-validator data
+                            if T::AresIStakingNpos::near_era_change(conf_session_multi) {
+                                log::debug!(" **** T::AresIStakingNpos::near_era_change is near will get data. RUN 1 ");
+                                let pending_npos = T::AresIStakingNpos::pending_npos();
+                                pending_npos.into_iter().any(|(stash_id, auth_id)| {
+                                    // for v3.4.x --
+                                    log::debug!(" **** T::AresIStakingNpos:: RUN 2 has pending stash stash_id = {:?} ", stash_id.clone());
+                                    if auth_id.is_none() {
+                                        log::warn!(
+                                            target: "pallet::ocw::offchain_worker",
+                                            "❗ Staking authority is not set, you can use RPC author_insertKey fill that.",
+                                        )
+                                    }
+                                    if !Self::has_pre_check_task(stash_id.clone()) && auth_id.is_some() {
+                                        log::debug!(" **** T::AresIStakingNpos:: RUN 2.1 auth_id = {:?}", auth_id.clone());
+                                        // Self::create_pre_check_task(stash_id.clone(), auth_id.unwrap(), block_number);\
+                                        Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number);
+                                    }else{
+                                        log::debug!(" **** T::AresIStakingNpos:: RUN 2.2");
+                                    }
+                                    false
+                                });
+
                             }
                         }
                     }
@@ -245,27 +298,30 @@ pub mod pallet {
                     }
                 }
 
-                // let local_keys: Vec<<T as Config>::AuthorityAres> = T::AuthorityAres::all();
-                // if let Some(keystore_account) = local_keys.get(0) {
-                //     let mut a = [0u8; 32];
-                //     a[..].copy_from_slice(&keystore_account.to_raw_vec());
-                //     // let local_account32 = AccountId32::new(a);
-                //     // // local_account32.
-                //     // let local_account: T::AccountId = local_account32.into();
-                //     let new_account = sp_core::sr25519::Public::from_raw(a);
-                //     let local_account: T::AccountId = new_account.into();
-                //     if Self::is_validator_member(local_account.clone().into()) {
-                //         log::info!("🚅 @ Ares call [3] ares-purchased-worker.");
-                //         match Self::ares_purchased_worker(block_number.clone(), local_account) {
-                //             Ok(v) => log::info!("🚅 ~ Ares OCW purchased price acquisition completed."),
-                //             Err(e) => log::warn!(
-                //                 target: "pallet::ocw::offchain_worker",
-                //                 "❗ Ares purchased price has a problem : {:?}",
-                //                 e
-                //             ),
-                //         }
-                //     }
-                // }
+                // for v3.4.x . TO
+                if let Some((stash, auth, _)) = Self::get_pre_task_by_authority_set(T::AuthorityAres::all()) {
+                    // check authority id is own.
+                    // Self::create_pre_check_task(stash_id.clone(), block_number);
+                    log::debug!(" ********* get_pre_task_by_authority_set Is Running!!!  ");
+
+                    // let mut token_list = Vec::new();
+                    // token_list.push("eth-usdt".as_bytes().to_vec());
+                    // token_list.push("btc-usdt".as_bytes().to_vec());
+
+                    let token_list = ConfPreCheckTokenList::<T>::get();
+                    let allowable_offset = ConfPreCheckAllowableOffset::<T>::get();
+
+                    let check_config = PreCheckTaskConfig{
+                        check_token_list: token_list,
+                        allowable_offset: allowable_offset,
+                    };
+
+                    // get check result
+                    let take_price_list = Self::take_price_for_per_check(check_config);
+                    log::debug!(" ******* take_price_list = {:?}", &take_price_list);
+
+                    Self::save_offchain_pre_check_result(stash, auth, block_number, take_price_list);
+                }
             }
         }
     }
@@ -289,12 +345,6 @@ pub mod pallet {
             let submit_threshold =purchased_default.submit_threshold;
             let max_duration = purchased_default.max_duration;
             let request_keys = Self::extract_purchased_request(request_keys);
-            // println!("KEYS len = {:?} ", request_keys.len());
-            // println!("KEYS len 1 = {:?} ", sp_std::str::from_utf8(&request_keys[0]));
-            // println!("KEYS len 2 = {:?} ", sp_std::str::from_utf8(&request_keys[1]));
-
-            // let offer = Self::calculate_purchased_amount(purchased_default.unit_price, &request_keys);  // purchased_default.unit_price.saturating_mul(request_keys.len() as u64);
-
             let offer = T::OcwFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
             if offer > max_fee {
                 return Err(Error::<T>::InsufficientMaxFee.into());
@@ -317,6 +367,7 @@ pub mod pallet {
             // Self::ask_price(who, amount, submit_threshold, max_duration, purchase_id, request_keys);
             Ok(().into())
         }
+
 
         #[pallet::weight(0)]
         pub fn submit_forced_clear_purchased_price_payload_signed (
@@ -487,6 +538,37 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
+        pub fn submit_create_pre_check_task (
+            origin: OriginFor<T>,
+            precheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
+            _signature: T::Signature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
+            let result = Self::create_pre_check_task(precheck_payload.stash, precheck_payload.auth, precheck_payload.block_number);
+
+            ensure!(result, Error::<T>::PerCheckTaskAlreadyExists );
+
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn submit_offchain_pre_check_result (
+            origin: OriginFor<T>,
+            preresult_payload: PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
+            _signature: T::Signature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
+
+            log::debug!(" ------ debug . on RUN A4");
+            Self::save_pre_check_result(
+                preresult_payload.stash,
+                preresult_payload.block_number,
+                preresult_payload.per_check_list
+            );
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
         pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
 
@@ -516,10 +598,8 @@ pub mod pallet {
             Ok(().into())
         }
 
-
-
         #[pallet::weight(0)]
-        pub fn revoke_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
+        pub fn revoke_update_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
 
             <PricesRequests<T>>::mutate(|prices_request| {
@@ -543,10 +623,10 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn request_propose(
+        pub fn update_request_propose(
             origin: OriginFor<T>,
             price_key: Vec<u8>,
-            request_url: Vec<u8>,
+            prase_token: Vec<u8>,
             parse_version: u32,
             fraction_num: FractionLength,
             request_interval: RequestInterval,
@@ -557,22 +637,22 @@ pub mod pallet {
                 let mut find_old = false;
                 for (
                     index,
-                    (old_price_key, _old_request_url, _old_parse_version, old_fraction_count, _),
+                    (old_price_key, _old_prase_token, _old_parse_version, old_fraction_count, _),
                 ) in prices_request.clone().into_iter().enumerate()
                 {
                     if &price_key == &old_price_key {
-                        if &"".as_bytes().to_vec() != &request_url {
+                        if &"".as_bytes().to_vec() != &prase_token {
                             // add input value
                             prices_request.push((
                                 price_key.clone(),
-                                request_url.clone(),
+                                prase_token.clone(),
                                 parse_version,
                                 fraction_num.clone(),
                                 request_interval.clone(),
                             ));
                             Self::deposit_event(Event::UpdatePriceRequest(
                                 price_key.clone(),
-                                request_url.clone(),
+                                prase_token.clone(),
                                 parse_version.clone(),
                                 fraction_num.clone(),
                             ));
@@ -583,7 +663,7 @@ pub mod pallet {
 
                         // check fraction number on change
                         if &old_fraction_count != &fraction_num
-                            || &"".as_bytes().to_vec() == &request_url
+                            || &"".as_bytes().to_vec() == &prase_token
                         {
                             if <AresPrice<T>>::contains_key(&price_key) {
                                 // if exists will be empty
@@ -604,14 +684,14 @@ pub mod pallet {
                 if !find_old {
                     prices_request.push((
                         price_key.clone(),
-                        request_url.clone(),
+                        prase_token.clone(),
                         parse_version.clone(),
                         fraction_num.clone(),
                         request_interval.clone(),
                     ));
                     Self::deposit_event(Event::AddPriceRequest(
                         price_key,
-                        request_url,
+                        prase_token,
                         parse_version,
                         fraction_num,
                     ));
@@ -622,7 +702,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
+        pub fn update_allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
             <PriceAllowableOffset<T>>::put(offset);
             Self::deposit_event(Event::PriceAllowableOffsetUpdate(offset));
@@ -631,7 +711,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn pool_depth_propose(origin: OriginFor<T>, depth: u32) -> DispatchResult {
+        pub fn update_pool_depth_propose(origin: OriginFor<T>, depth: u32) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
             // Judge the value must be greater than 0 and less than the maximum of U32
             assert!(depth > 0 && depth < u32::MAX, "⛔ Depth wrong value range.");
@@ -676,6 +756,37 @@ pub mod pallet {
                     });
             }
             Ok(())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_token_list(
+            origin: OriginFor<T>,
+            token_list: Vec<Vec<u8>>,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            ensure!(token_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
+            <ConfPreCheckTokenList<T>>::put(token_list);
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_session_multi(
+            origin: OriginFor<T>,
+            multi: T::BlockNumber,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            <ConfPreCheckSessionMulti<T>>::put(multi);
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_allowable_offset(
+            origin: OriginFor<T>,
+            offset: Percent,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            <ConfPreCheckAllowableOffset<T>>::put(offset);
+            Ok(().into())
         }
     }
 
@@ -722,9 +833,7 @@ pub mod pallet {
         type Call = Call<T>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-            if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) =
-                call
-            {
+            if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
                 log::debug!(
                     "🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
                     payload.block_number.clone(),
@@ -745,7 +854,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -759,9 +871,7 @@ pub mod pallet {
                     &payload.block_number,
                     payload.price.to_vec(),
                 )
-            } else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) =
-                call
-            {
+            } else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
                 // submit_purchased_price_unsigned_with_signed_payload
                 log::debug!(
                     "🚅 Validate purchased price payload data, on block: {:?} ",
@@ -777,7 +887,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -802,9 +915,7 @@ pub mod pallet {
                     .propagate(true)
                     .build()
 
-            } else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) =
-                call
-            {
+            } else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) = call  {
                 // submit_forced_clear_purchased_price_payload_signed
                 log::debug!(
                     "🚅 Validate forced clear purchased price payload data, on block: {:?} ",
@@ -820,7 +931,10 @@ pub mod pallet {
                 }
 
                 let signature_valid =
-                    SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                // let signature_valid =
+                //     SignedPayload::<T>::verify::<T::AuthorityAres>(payload, signature.clone());
 
                 if !signature_valid {
                     log::error!(
@@ -837,8 +951,96 @@ pub mod pallet {
                     .longevity(5)
                     .propagate(true)
                     .build()
+            } else if let Call::submit_create_pre_check_task(ref payload, ref signature) = call {
+                log::debug!(
+                    "🚅 Validate submit_create_pre_check_task, on block: {:?}/{:?}, author: {:?} ",
+                    payload.block_number.clone(),
+                    <system::Pallet<T>>::block_number(),
+                    payload.public.clone()
+                );
 
+                let sign_accoount = <T as SigningTypes>::Public::into_account(payload.public.clone());
+                if ! Self::is_validator_member(sign_accoount.clone().into()) {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
+                    );
+                    // log::warn!(
+                    //     "❗Author are not validator. disable refuse account: {:?}", sign_accoount.clone()
+                    // );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Signature invalid. `InvalidTransaction` on price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_create_pre_check_task")
+                    .priority(T::UnsignedPriority::get())
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
+            } else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
+                log::debug!(
+                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}",
+                    payload.block_number.clone(),
+                    <system::Pallet<T>>::block_number(),
+                    payload.stash.clone(),
+                    payload.auth.clone(),
+                    payload.public.clone()
+                );
+
+                log::debug!(" ------ debug . on RUN A1");
+                // check stash status
+                let mut auth_list = Vec::new();
+                auth_list.push(payload.auth.clone());
+                if let Some((s_stash, _, _)) = Self::get_pre_task_by_authority_set(auth_list) {
+                    if &s_stash != &payload.stash {
+                        log::error!(
+                            target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                            "⛔️ Stash account is inconsistent!"
+                        );
+                        return InvalidTransaction::BadProof.into();
+                    }
+                }else{
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                        "⛔️ Could not find the pre-check task!"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                log::debug!(" ------ debug . on RUN A2");
+                //
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
+                        "⛔️ Signature invalid. `InvalidTransaction` on price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                log::debug!(" ------ debug . on RUN A3");
+                //
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_offchain_pre_check_result")
+                    .priority(T::UnsignedPriority::get())
+                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
             } else {
+                //
                 InvalidTransaction::Call.into()
             }
         }
@@ -985,7 +1187,7 @@ pub mod pallet {
         _,
         Vec<(
             Vec<u8>, // price key
-            Vec<u8>, // request url
+            Vec<u8>, // price token
             u32,     // parse version number.
             FractionLength,
             RequestInterval,
@@ -1004,18 +1206,18 @@ pub mod pallet {
 
     // ---
 
-    // PerCheckResult
-    #[pallet::storage]
-    #[pallet::getter(fn per_check_result)]
-    pub(super) type PerCheckResult<T: Config> = StorageDoubleMap<
-        _,
-        Blake2_128Concat,
-        T::AccountId,
-        Blake2_128Concat,
-        T::BlockNumber,
-        PerCheckStatus,
-        ValueQuery,
-    >;
+    // // PerCheckResult
+    // #[pallet::storage]
+    // #[pallet::getter(fn per_check_result)]
+    // pub(super) type PerCheckResult<T: Config> = StorageDoubleMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     Blake2_128Concat,
+    //     T::BlockNumber,
+    //     PreCheckStatus,
+    //     ValueQuery,
+    // >;
 
     // FinalPerCheckResult
     #[pallet::storage]
@@ -1023,14 +1225,14 @@ pub mod pallet {
     pub(super) type FinalPerCheckResult<T: Config> = StorageMap<_,
         Blake2_128Concat,
         T::AccountId,
-        Option<(T::BlockNumber, PerCheckStatus)>
+        Option<(T::BlockNumber, PreCheckStatus)>
     >;
 
-    // PerCheckTaskList
+    // PreCheckTaskList
     #[pallet::storage]
     #[pallet::getter(fn per_check_task_list)]
-    pub(super) type PerCheckTaskList<T: Config> = StorageValue<_,
-        Vec<(T::AccountId, T::BlockNumber)>,
+    pub(super) type PreCheckTaskList<T: Config> = StorageValue<_,
+        Vec<(T::AccountId, T::AuthorityAres, T::BlockNumber)>,
         ValueQuery
     >;
 
@@ -1038,6 +1240,32 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn symbol_fraction)]
     pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, FractionLength>;
+
+
+    // pre_check_session_multi A parameter used to determine the pre-verification
+    // task a few session cycles before the validator election, the type is BlockNumber.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_session_multi)]
+    pub(super) type ConfPreCheckSessionMulti<T: Config> = StorageValue<_,
+        T::BlockNumber,
+        ValueQuery
+    >;
+
+    // pre_check_token_list is used to check the token_list with the average value on the chain.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_token_list)]
+    pub(super) type ConfPreCheckTokenList<T: Config> = StorageValue<_,
+        Vec<Vec<u8>>, // Vec<price_key>
+        ValueQuery
+    >;
+
+    // pre_check_allowable_offset is maximum allowable deviation when comparing means.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_allowable_offset)]
+    pub(super) type ConfPreCheckAllowableOffset<T: Config> = StorageValue<_,
+        Percent, //
+        ValueQuery
+    >;
 
     // ---
 
@@ -1053,6 +1281,9 @@ pub mod pallet {
         pub price_allowable_offset: u8,
         pub price_pool_depth: u32,
         pub price_requests: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>,
+        // pub pre_check_session_multi: T::BlockNumber,
+        // pub pre_check_token_list: Vec<Vec<u8>>,
+        // pub pre_check_allowable_offset: Percent,
     }
 
 
@@ -1071,6 +1302,9 @@ pub mod pallet {
                 price_allowable_offset: 10u8,
                 price_pool_depth: 10u32,
                 price_requests: Vec::new(),
+                // pre_check_session_multi: 2u32.into(),
+                // pre_check_token_list: Vec::new(),
+                // pre_check_allowable_offset: Percent::from_percent(10),
             }
         }
     }
@@ -1107,16 +1341,17 @@ pub mod pallet {
             }
             if self.request_base.len() > 0 {
                 RequestBaseOnchain::<T>::put(&self.request_base);
-                // storage write
-                // let mut storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
-                // storage_request_base.set(&self.request_base);
             }
-            PriceAllowableOffset::<T>::put(self.price_allowable_offset);
-
-            // let finance_account = <Pallet<T>>::account_id();
-            // if T::Currency::total_balance(&finance_account).is_zero() {
-            //     T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-            // }
+            PriceAllowableOffset::<T>::put(&self.price_allowable_offset);
+            // For new vesrion.
+            ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
+            let session_multi: T::BlockNumber= 2u32.into();
+            ConfPreCheckSessionMulti::<T>::put(session_multi);
+            let mut token_list = Vec::new();
+            token_list.push("btc-usdt".as_bytes().to_vec());
+            token_list.push("eth-usdt".as_bytes().to_vec());
+            token_list.push("dot-usdt".as_bytes().to_vec());
+            ConfPreCheckTokenList::<T>::put(token_list);
         }
     }
 }
@@ -1133,6 +1368,9 @@ use oracle_finance::types::BalanceOf;
 use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
+use frame_support::sp_runtime::{Percent, DigestItem};
+use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct, PreCheckStatus};
+
 
 
 impl<T: Config> Pallet<T>
@@ -1297,19 +1535,18 @@ where
         serde_json::from_str(price_json_str).ok()
     }
 
-    // Get the number of cycles required to loop the array lenght.
-    // If round_num = 0 returns the maximum value of u8
-    fn get_number_of_cycles(vec_len: u8, round_num: u8) -> u8 {
-        if round_num == 0 {
-            return u8::MAX;
-        }
-        let mut round_offset = 0u8;
-        if vec_len % round_num != 0 {
-            round_offset = 1u8;
-        }
-        vec_len / round_num + round_offset
-    }
-
+    // // Get the number of cycles required to loop the array lenght.
+    // // If round_num = 0 returns the maximum value of u8
+    // fn get_number_of_cycles(vec_len: u8, round_num: u8) -> u8 {
+    //     if round_num == 0 {
+    //         return u8::MAX;
+    //     }
+    //     let mut round_offset = 0u8;
+    //     if vec_len % round_num != 0 {
+    //         round_offset = 1u8;
+    //     }
+    //     vec_len / round_num + round_offset
+    // }
 
     fn save_forced_clear_purchased_price_payload_signed(
         block_number: T::BlockNumber,
@@ -1339,7 +1576,8 @@ where
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PurchasedForceCleanPayload {
@@ -1369,7 +1607,7 @@ where
         assert!(32 == encode_data.len());
         let raw_data = encode_data.try_into();
         let raw_data = raw_data.unwrap();
-        let new_account = T::AuthorityAres::unchecked_from(raw_data);
+        // let new_account = T::AuthorityAres::unchecked_from(raw_data);
         let new_account = sp_core::sr25519::Public::from_raw(raw_data);
         sign_public_keys.push(new_account.into());
         sign_public_keys
@@ -1450,9 +1688,8 @@ where
             // sign_public_keys.push(new_account.into());
 
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PurchasedPricePayload {
@@ -1470,6 +1707,78 @@ where
                 )?;
             result.map_err(|()| "⛔ Unable to submit transaction")?;
         }
+        Ok(())
+    }
+
+
+    fn save_offchain_pre_check_result(
+        stash_id: T::AccountId,
+        auth_id: T::AuthorityAres,
+        block_number: T::BlockNumber,
+        per_check_list: Vec<PreCheckStruct>) -> Result<(), &'static str>  where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+        // let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+
+        let mut tmp_raw = [0u8; 32];
+        tmp_raw[..].copy_from_slice(&auth_id.to_raw_vec());
+
+        let mut sign_public_keys:Vec<<T as SigningTypes>::Public> = Vec::new();
+        let new_account = sp_core::sr25519::Public::from_raw(tmp_raw);
+        // let new_account = auth_id.Public
+        sign_public_keys.push(new_account.into());
+
+        // Singer
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| PreCheckResultPayload {
+                    stash: stash_id.clone(),
+                    auth: auth_id.clone(),
+                    block_number,
+                    per_check_list: per_check_list.clone(),
+                    public: account.public.clone(),
+                },
+                |payload, signature| {
+                    Call::submit_offchain_pre_check_result(payload, signature)
+                },
+            )
+            .ok_or(
+                "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+            )?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
+        Ok(())
+    }
+
+    fn save_create_pre_check_task(
+        account_id: T::AccountId,
+        stash_id: T::AccountId,
+        auth_id: T::AuthorityAres,
+        block_number: T::BlockNumber) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public:
+            From<sp_application_crypto::sr25519::Public>,
+    {
+        let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+        // Singer
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| PerCheckPayload {
+                    stash: stash_id.clone(),
+                    auth: auth_id.clone(),
+                    block_number,
+                    public: account.public.clone(),
+                },
+                |payload, signature| {
+                    Call::submit_create_pre_check_task(payload, signature)
+                },
+            )
+            .ok_or(
+                "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+            )?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
         Ok(())
     }
 
@@ -1533,7 +1842,8 @@ where
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 
             // Singer
-            let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+            let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            // let (_, result) = Signer::<T, T::AuthorityAres>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PricePayload {
@@ -2770,52 +3080,149 @@ impl<T: Config> SymbolInfo for Pallet<T>
     }
 }
 
-impl <T: Config> IOcwPerCheck<T::AccountId, T::BlockNumber, Error<T>> for Pallet<T>
+impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumber> for Pallet<T>
     where sp_runtime::AccountId32: From<T::AccountId>,
       u64: From<T::BlockNumber>,
 {
     //
-    fn has_per_check_task() -> bool {
-        <PerCheckTaskList<T>>::get().len() > 0
+    fn has_pre_check_task(stash: T::AccountId) -> bool {
+        if let Some((_, check_status)) = Self::get_pre_check_status(stash.clone()) {
+            match check_status {
+                PreCheckStatus::Review => { return true ;}
+                PreCheckStatus::Pass => { return true; }
+                PreCheckStatus::Prohibit => { return true; }
+            }
+        }
+        if <PreCheckTaskList<T>>::get().len() < 0 { return false; }
+        let task_list = <PreCheckTaskList<T>>::get();
+        task_list.iter().any(|(storage_stash, _, _,)|{
+            &stash == storage_stash
+        })
     }
 
     //
-    fn check_and_clean_obsolete_task() -> Weight {
-        todo!()
+    fn get_pre_task_by_authority_set(auth_list: Vec<T::AuthorityAres>) -> Option<(T::AccountId, T::AuthorityAres, T::BlockNumber)> {
+        let task_list = <PreCheckTaskList<T>>::get();
+        for (stash, auth, bn ) in task_list {
+            if auth_list.iter().any(|x|{
+                x == &auth
+            }) {
+                // Check status
+                match Self::get_pre_check_status(stash.clone()) {
+                    None => {}
+                    Some((_, pre_status)) => {
+                        match pre_status {
+                            PreCheckStatus::Review => {
+                                return Some((stash, auth, bn));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    //
+    fn check_and_clean_obsolete_task(maximum_due: T::BlockNumber) -> Weight {
+        let mut old_task_list = <PreCheckTaskList<T>>::get();
+        if old_task_list.len() > 0 {
+            let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
+            let old_count = old_task_list.len();
+            old_task_list.retain(|(_, _, bn)|{
+                    let duration_bn = current_block_num - *bn;
+                    duration_bn <= maximum_due
+            });
+            if old_count > old_task_list.len() {
+                <PreCheckTaskList<T>>::put(old_task_list);
+            }
+        }
+        0
     }
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PerCehckTaskConfig) -> Vec<AresPriceData<T::AccountId, T::BlockNumber>> {
+    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
 
-        // let mut raw_price_source_list = Self::get_raw_price_source_list();
-        // raw_price_source_list.retain(|x| {
-        //         check_config.check_token_list.clone().iter().any(|check_price_key| check_price_key == x.0)
-        // });
-        // let request_param_arr = raw_price_source_list.into_iter()
+        let mut raw_price_source_list = Self::get_raw_price_source_list();
+        raw_price_source_list.retain(|x| {
+                check_config.check_token_list.clone()
+                    .iter()
+                    .any(|check_price_key| {
+                        // println!("check_price_key == &x.0, {:?} == {:?}", sp_std::str::from_utf8(check_price_key), sp_std::str::from_utf8(&x.0)) ;
+                        check_price_key == &x.0
+                    })
+        });
+
+        let format_data: Vec<(Vec<u8>, Vec<u8>, FractionLength)> = raw_price_source_list.into_iter().map(|(price_key, parse_key, _version, fraction_len, _request_interval)|{
+            (price_key, parse_key, fraction_len)
+        }).collect();
+
         // // check_config
-        // Self::fetch_bulk_price_with_http(raw_price_source_list);
-        todo!()
+        let reponse_result= Self::fetch_bulk_price_with_http(format_data);
+        let reponse_result = reponse_result.unwrap_or(Vec::new());
+
+        reponse_result.into_iter().map(|(price_key,parse_key,fraction_len, number_val )|{
+            let number_val = JsonNumberValue::new(number_val);
+            PreCheckStruct {
+                price_key,
+                number_val,
+                max_offset: check_config.allowable_offset.clone()
+            }
+        }).collect()
     }
 
     // Record the per check results and add them to the storage structure.
-    fn save_per_check_result(acc: T::AccountId, bn: T::BlockNumber, round: u8, result: bool ) {
-        todo!()
-    }
+    fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PreCheckStruct> ) {
+        // get avg price.
+        let check_result = per_check_list.iter().all(|checked_struct| {
+            // Check price key exists.
+            if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
+                return false;
+            }
+            // Get avg price struct.
+            let (avg_price_val, avg_fraction_len) = <AresAvgPrice<T>>::get(&checked_struct.price_key);
 
-    //
-    fn get_per_check_status(acc: T::AccountId) -> Option<PerCheckStatus> {
-        todo!()
-    }
+            let max_price = checked_struct.number_val.toPrice(avg_fraction_len).max(avg_price_val);
+            let min_price = checked_struct.number_val.toPrice(avg_fraction_len).min(avg_price_val);
+            // println!("max_price={}, min_price={}", max_price, min_price);
+            let diff = max_price - min_price;
+            // println!("diff <= checked_struct.max_offset * avg_price_val = {} <= {}", diff, checked_struct.max_offset * avg_price_val);
+            diff <= checked_struct.max_offset * avg_price_val
+        });
 
-    //
-    fn create_pre_check_task(acc: T::AccountId, bn: T::BlockNumber) -> Result<(), Error<T>> {
-        let mut task_list = <PerCheckTaskList<T>>::get();
-        let exists = task_list.iter().any(|(old_acc, _)|{ &acc == old_acc }) ;
-        if exists {
-            return Err(Error::PerCheckTaskAlreadyExists)
+        let mut per_checkstatus = PreCheckStatus::Prohibit;
+        if check_result {
+            per_checkstatus = PreCheckStatus::Pass;
         }
-        task_list.push((acc, bn));
-        <PerCheckTaskList<T>>::put(task_list);
-        Ok(())
+
+        log::debug!(" ------ debug . on RUN A5");
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus)));
+        let mut task_list = <PreCheckTaskList<T>>::get();
+        task_list.retain(|(old_acc, _, _)|{ &stash != old_acc }) ;
+        <PreCheckTaskList<T>>::put(task_list);
+
+        log::debug!(" ------ debug . on RUN A6");
+    }
+
+    //
+    fn get_pre_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PreCheckStatus)> {
+        <FinalPerCheckResult<T>>::get(stash).unwrap_or(None)
+    }
+
+    //
+    fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> bool {
+        let mut task_list = <PreCheckTaskList<T>>::get();
+        let exists = task_list.iter().any(|(old_acc, _, _)|{ &stash == old_acc }) ;
+        if exists {
+            return false;
+        }
+        task_list.push((stash.clone(), auth, bn));
+        <PreCheckTaskList<T>>::put(task_list);
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, PreCheckStatus::Review)));
+        true
     }
 }
+
+
+
