@@ -119,6 +119,9 @@ pub mod pallet {
         PayToPurchaseFeeFailed,
         // InsufficientCountOfValidators,
         PerCheckTaskAlreadyExists,
+        //
+        PreCheckTokenListNotEmpty,
+
     }
 
     /// This pallet's configuration trait
@@ -190,6 +193,24 @@ pub mod pallet {
         <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
         <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
     {
+
+        fn on_runtime_upgrade() -> frame_support::weights::Weight {
+            log::debug!("********** on_runtime_upgrade C1 **************************************************");
+            if ConfPreCheckTokenList::<T>::get().len() == 0 {
+                log::debug!("********** on_runtime_upgrade C2 **************************************************");
+                ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
+                let session_multi: T::BlockNumber= 2u32.into();
+                ConfPreCheckSessionMulti::<T>::put(session_multi);
+                let mut token_list = Vec::new();
+                token_list.push("btc-usdt".as_bytes().to_vec());
+                token_list.push("eth-usdt".as_bytes().to_vec());
+                token_list.push("dot-usdt".as_bytes().to_vec());
+                ConfPreCheckTokenList::<T>::put(token_list);
+                return T::DbWeight::get().reads_writes(1,5);
+            }
+            0
+        }
+
         /// You can use `Local Storage` API to coordinate runs of the worker.
         fn offchain_worker(block_number: T::BlockNumber) {
 
@@ -217,8 +238,10 @@ pub mod pallet {
                                     e
                                 ),
                             }
+
+                            let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
                             // Do you need to scan pre-validator data
-                            if T::AresIStakingNpos::near_era_change(2u32.into()) {
+                            if T::AresIStakingNpos::near_era_change(conf_session_multi) {
                                 log::debug!(" **** T::AresIStakingNpos::near_era_change is near will get data. RUN 1 ");
                                 let pending_npos = T::AresIStakingNpos::pending_npos();
                                 pending_npos.into_iter().any(|(stash_id, auth_id)| {
@@ -280,12 +303,17 @@ pub mod pallet {
                     // check authority id is own.
                     // Self::create_pre_check_task(stash_id.clone(), block_number);
                     log::debug!(" ********* get_pre_task_by_authority_set Is Running!!!  ");
-                    let mut token_list = Vec::new();
-                    token_list.push("eth-usdt".as_bytes().to_vec());
-                    token_list.push("btc-usdt".as_bytes().to_vec());
+
+                    // let mut token_list = Vec::new();
+                    // token_list.push("eth-usdt".as_bytes().to_vec());
+                    // token_list.push("btc-usdt".as_bytes().to_vec());
+
+                    let token_list = ConfPreCheckTokenList::<T>::get();
+                    let allowable_offset = ConfPreCheckAllowableOffset::<T>::get();
+
                     let check_config = PreCheckTaskConfig{
                         check_token_list: token_list,
-                        allowable_offset: Percent::from_percent(10)
+                        allowable_offset: allowable_offset,
                     };
 
                     // get check result
@@ -570,10 +598,8 @@ pub mod pallet {
             Ok(().into())
         }
 
-
-
         #[pallet::weight(0)]
-        pub fn revoke_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
+        pub fn revoke_update_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
 
             <PricesRequests<T>>::mutate(|prices_request| {
@@ -597,10 +623,10 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn request_propose(
+        pub fn update_request_propose(
             origin: OriginFor<T>,
             price_key: Vec<u8>,
-            request_url: Vec<u8>,
+            prase_token: Vec<u8>,
             parse_version: u32,
             fraction_num: FractionLength,
             request_interval: RequestInterval,
@@ -611,22 +637,22 @@ pub mod pallet {
                 let mut find_old = false;
                 for (
                     index,
-                    (old_price_key, _old_request_url, _old_parse_version, old_fraction_count, _),
+                    (old_price_key, _old_prase_token, _old_parse_version, old_fraction_count, _),
                 ) in prices_request.clone().into_iter().enumerate()
                 {
                     if &price_key == &old_price_key {
-                        if &"".as_bytes().to_vec() != &request_url {
+                        if &"".as_bytes().to_vec() != &prase_token {
                             // add input value
                             prices_request.push((
                                 price_key.clone(),
-                                request_url.clone(),
+                                prase_token.clone(),
                                 parse_version,
                                 fraction_num.clone(),
                                 request_interval.clone(),
                             ));
                             Self::deposit_event(Event::UpdatePriceRequest(
                                 price_key.clone(),
-                                request_url.clone(),
+                                prase_token.clone(),
                                 parse_version.clone(),
                                 fraction_num.clone(),
                             ));
@@ -637,7 +663,7 @@ pub mod pallet {
 
                         // check fraction number on change
                         if &old_fraction_count != &fraction_num
-                            || &"".as_bytes().to_vec() == &request_url
+                            || &"".as_bytes().to_vec() == &prase_token
                         {
                             if <AresPrice<T>>::contains_key(&price_key) {
                                 // if exists will be empty
@@ -658,14 +684,14 @@ pub mod pallet {
                 if !find_old {
                     prices_request.push((
                         price_key.clone(),
-                        request_url.clone(),
+                        prase_token.clone(),
                         parse_version.clone(),
                         fraction_num.clone(),
                         request_interval.clone(),
                     ));
                     Self::deposit_event(Event::AddPriceRequest(
                         price_key,
-                        request_url,
+                        prase_token,
                         parse_version,
                         fraction_num,
                     ));
@@ -676,7 +702,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
+        pub fn update_allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
             <PriceAllowableOffset<T>>::put(offset);
             Self::deposit_event(Event::PriceAllowableOffsetUpdate(offset));
@@ -685,7 +711,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn pool_depth_propose(origin: OriginFor<T>, depth: u32) -> DispatchResult {
+        pub fn update_pool_depth_propose(origin: OriginFor<T>, depth: u32) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
             // Judge the value must be greater than 0 and less than the maximum of U32
             assert!(depth > 0 && depth < u32::MAX, "⛔ Depth wrong value range.");
@@ -730,6 +756,37 @@ pub mod pallet {
                     });
             }
             Ok(())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_token_list(
+            origin: OriginFor<T>,
+            token_list: Vec<Vec<u8>>,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            ensure!(token_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
+            <ConfPreCheckTokenList<T>>::put(token_list);
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_session_multi(
+            origin: OriginFor<T>,
+            multi: T::BlockNumber,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            <ConfPreCheckSessionMulti<T>>::put(multi);
+            Ok(().into())
+        }
+
+        #[pallet::weight(0)]
+        pub fn update_pre_check_allowable_offset(
+            origin: OriginFor<T>,
+            offset: Percent,
+        ) -> DispatchResult {
+            T::RequestOrigin::ensure_origin(origin)?;
+            <ConfPreCheckAllowableOffset<T>>::put(offset);
+            Ok(().into())
         }
     }
 
@@ -1130,7 +1187,7 @@ pub mod pallet {
         _,
         Vec<(
             Vec<u8>, // price key
-            Vec<u8>, // request url
+            Vec<u8>, // price token
             u32,     // parse version number.
             FractionLength,
             RequestInterval,
@@ -1184,6 +1241,32 @@ pub mod pallet {
     #[pallet::getter(fn symbol_fraction)]
     pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, FractionLength>;
 
+
+    // pre_check_session_multi A parameter used to determine the pre-verification
+    // task a few session cycles before the validator election, the type is BlockNumber.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_session_multi)]
+    pub(super) type ConfPreCheckSessionMulti<T: Config> = StorageValue<_,
+        T::BlockNumber,
+        ValueQuery
+    >;
+
+    // pre_check_token_list is used to check the token_list with the average value on the chain.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_token_list)]
+    pub(super) type ConfPreCheckTokenList<T: Config> = StorageValue<_,
+        Vec<Vec<u8>>, // Vec<price_key>
+        ValueQuery
+    >;
+
+    // pre_check_allowable_offset is maximum allowable deviation when comparing means.
+    #[pallet::storage]
+    #[pallet::getter(fn conf_pre_check_allowable_offset)]
+    pub(super) type ConfPreCheckAllowableOffset<T: Config> = StorageValue<_,
+        Percent, //
+        ValueQuery
+    >;
+
     // ---
 
     #[pallet::genesis_config]
@@ -1198,6 +1281,9 @@ pub mod pallet {
         pub price_allowable_offset: u8,
         pub price_pool_depth: u32,
         pub price_requests: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>,
+        // pub pre_check_session_multi: T::BlockNumber,
+        // pub pre_check_token_list: Vec<Vec<u8>>,
+        // pub pre_check_allowable_offset: Percent,
     }
 
 
@@ -1216,6 +1302,9 @@ pub mod pallet {
                 price_allowable_offset: 10u8,
                 price_pool_depth: 10u32,
                 price_requests: Vec::new(),
+                // pre_check_session_multi: 2u32.into(),
+                // pre_check_token_list: Vec::new(),
+                // pre_check_allowable_offset: Percent::from_percent(10),
             }
         }
     }
@@ -1252,16 +1341,17 @@ pub mod pallet {
             }
             if self.request_base.len() > 0 {
                 RequestBaseOnchain::<T>::put(&self.request_base);
-                // storage write
-                // let mut storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
-                // storage_request_base.set(&self.request_base);
             }
-            PriceAllowableOffset::<T>::put(self.price_allowable_offset);
-
-            // let finance_account = <Pallet<T>>::account_id();
-            // if T::Currency::total_balance(&finance_account).is_zero() {
-            //     T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-            // }
+            PriceAllowableOffset::<T>::put(&self.price_allowable_offset);
+            // For new vesrion.
+            ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
+            let session_multi: T::BlockNumber= 2u32.into();
+            ConfPreCheckSessionMulti::<T>::put(session_multi);
+            let mut token_list = Vec::new();
+            token_list.push("btc-usdt".as_bytes().to_vec());
+            token_list.push("eth-usdt".as_bytes().to_vec());
+            token_list.push("dot-usdt".as_bytes().to_vec());
+            ConfPreCheckTokenList::<T>::put(token_list);
         }
     }
 }
@@ -3000,11 +3090,10 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             match check_status {
                 PreCheckStatus::Review => { return true ;}
                 PreCheckStatus::Pass => { return true; }
-                _ => {}
+                PreCheckStatus::Prohibit => { return true; }
             }
         }
         if <PreCheckTaskList<T>>::get().len() < 0 { return false; }
-        // TODO:: to dev maximum_due
         let task_list = <PreCheckTaskList<T>>::get();
         task_list.iter().any(|(storage_stash, _, _,)|{
             &stash == storage_stash

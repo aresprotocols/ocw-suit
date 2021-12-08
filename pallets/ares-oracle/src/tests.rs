@@ -402,8 +402,9 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
     fn on_disabled(_: usize) {}
 }
 
-
 mod test_IAresOraclePreCheck;
+mod test_RuntimeUpgrade;
+
 
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {
@@ -1851,7 +1852,7 @@ fn test_get_price_pool_depth () {
 
         // Update depth to 5
         // if parse version change
-        assert_ok!(AresOcw::pool_depth_propose(Origin::root(), 5));
+        assert_ok!(AresOcw::update_pool_depth_propose(Origin::root(), 5));
         assert_eq!(5, AresOcw::get_price_pool_depth());
         let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
         assert_eq!(bet_avg_price, (7770, 4), " Pool expansion, but average has not effect.");
@@ -1871,7 +1872,7 @@ fn test_get_price_pool_depth () {
         assert_eq!(bet_avg_price, ((5550+5350+5500+5400)/4, 4), "Average update.");
 
         // Fall back depth to 3
-        assert_ok!(AresOcw::pool_depth_propose(Origin::root(), 3));
+        assert_ok!(AresOcw::update_pool_depth_propose(Origin::root(), 3));
         AresOcw::add_price(Default::default(), 4440, price_key.clone(), 4, Default::default(), AresOcw::get_price_pool_depth());
         assert_eq!(3, AresOcw::get_price_pool_depth());
         assert_eq!(1 as usize, AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len());
@@ -2665,11 +2666,11 @@ fn test_jump_block_submit() {
 }
 
 #[test]
-fn test_allowable_offset_propose() {
+fn test_update_allowable_offset_propose() {
     let mut t = new_test_ext();
     t.execute_with(|| {
         assert_eq!(AresOcw::price_allowable_offset(), 10);
-        assert_ok!(AresOcw::allowable_offset_propose(Origin::root(), 20));
+        assert_ok!(AresOcw::update_allowable_offset_propose(Origin::root(), 20));
         assert_eq!(AresOcw::price_allowable_offset(), 20);
     });
 }
@@ -2764,7 +2765,7 @@ fn test_request_propose_submit_and_revoke_propose() {
 
     t.execute_with(|| {
         assert_eq!(AresOcw::prices_requests().len(), 4);
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 , 4, 1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 , 4, 1));
         assert_eq!(AresOcw::prices_requests().len(), 5);
 
         //TODO:: test not attach.
@@ -2773,7 +2774,7 @@ fn test_request_propose_submit_and_revoke_propose() {
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[4], (toVec("xxx_price"), toVec("http://xxx.com"), 2, 4, 1));
 
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("xxx_price"), toVec("http://aaa.com"), 3 , 3, 2));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("xxx_price"), toVec("http://aaa.com"), 3 , 3, 2));
         assert_eq!(AresOcw::prices_requests().len(), 5);
         let tmp_result = AresOcw::prices_requests();
         // price_key are same will be update .
@@ -2781,7 +2782,7 @@ fn test_request_propose_submit_and_revoke_propose() {
 
 
         // Test revoke.
-        assert_ok!(AresOcw::revoke_request_propose(Origin::root(), "xxx_price".as_bytes().to_vec()));
+        assert_ok!(AresOcw::revoke_update_request_propose(Origin::root(), "xxx_price".as_bytes().to_vec()));
         assert_eq!(AresOcw::prices_requests().len(), 4);
         let tmp_result = AresOcw::prices_requests();
         // price_key are same will be update .
@@ -2802,7 +2803,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 
         assert_eq!(AresOcw::prices_requests().len(), 4);
 
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 , 4, 1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 , 4, 1));
         assert_eq!(AresOcw::prices_requests().len(), 5);
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[4], (toVec("xxx_price"), toVec("http://xxx.com"), 2, 4, 1));
@@ -2819,7 +2820,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         ], btc_price_list);
 
         // if parse version change
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 8 , 4, 1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 8 , 4, 1));
         assert_eq!(AresOcw::prices_requests().len(), 5);
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[4], (toVec("xxx_price"), toVec("http://xxx.com"), 8, 4, 1));
@@ -2831,7 +2832,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         ], btc_price_list);
 
         // Other price request get in
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("zzz_price"), toVec("http://zzz.com"), 8 , 4, 1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("zzz_price"), toVec("http://zzz.com"), 8 , 4, 1));
         assert_eq!(AresOcw::prices_requests().len(), 6);
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[5], (toVec("zzz_price"), toVec("http://zzz.com"), 8, 4, 1));
@@ -2843,7 +2844,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         ], btc_price_list);
 
         // Other price request fraction number change.
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("zzz_price"), toVec("http://zzz.com"), 8 , 5, 1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("zzz_price"), toVec("http://zzz.com"), 8 , 5, 1));
         assert_eq!(AresOcw::prices_requests().len(), 6);
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[5], (toVec("zzz_price"), toVec("http://zzz.com"), 8, 5, 1));
@@ -2855,7 +2856,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
         ], btc_price_list);
 
         // Current price request fraction number change. (xxx_price)
-        assert_ok!(AresOcw::request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 ,5 ,1));
+        assert_ok!(AresOcw::update_request_propose(Origin::root(), toVec("xxx_price"), toVec("http://xxx.com"), 2 ,5 ,1));
         assert_eq!(AresOcw::prices_requests().len(), 6);
         let tmp_result = AresOcw::prices_requests();
         assert_eq!(tmp_result[5], (toVec("xxx_price"), toVec("http://xxx.com"), 2, 5, 1));
@@ -3009,7 +3010,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (toVec("eth_price"), toVec("eth"), 2u32, 4u32, 2u8),
             (toVec("dot_price"), toVec("dot"), 2u32, 4u32, 3u8),
             (toVec("xrp_price"), toVec("xrp"), 2u32, 4u32, 4u8),
-        ]
+        ],
+        // pre_check_session_multi: 2u32.into(),
+        // pre_check_token_list: vec![toVec("btc_price"), toVec("eth_price")],
+        // pre_check_allowable_offset: Percent::from_percent(10),
     }.assimilate_storage(&mut t).unwrap();
 
     t.into()
