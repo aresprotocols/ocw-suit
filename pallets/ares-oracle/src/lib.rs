@@ -373,7 +373,7 @@ pub mod pallet {
         pub fn submit_forced_clear_purchased_price_payload_signed (
             origin: OriginFor<T>,
             price_payload: PurchasedForceCleanPayload<T::Public, T::BlockNumber>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResultWithPostInfo  {
             ensure_none(origin)?;
 
@@ -420,7 +420,7 @@ pub mod pallet {
         pub fn submit_purchased_price_unsigned_with_signed_payload(
             origin: OriginFor<T>,
             price_payload: PurchasedPricePayload<T::Public, T::BlockNumber>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResultWithPostInfo  {
             ensure_none(origin)?;
 
@@ -472,7 +472,7 @@ pub mod pallet {
         pub fn submit_price_unsigned_with_signed_payload(
             origin: OriginFor<T>,
             price_payload: PricePayload<T::Public, T::BlockNumber>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResultWithPostInfo {
             ensure_none(origin)?;
 
@@ -541,7 +541,7 @@ pub mod pallet {
         pub fn submit_create_pre_check_task (
             origin: OriginFor<T>,
             precheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
             let result = Self::create_pre_check_task(precheck_payload.stash, precheck_payload.auth, precheck_payload.block_number);
@@ -555,7 +555,7 @@ pub mod pallet {
         pub fn submit_offchain_pre_check_result (
             origin: OriginFor<T>,
             preresult_payload: PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
 

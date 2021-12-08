@@ -7,7 +7,7 @@ use frame_support::sp_runtime::Percent;
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
 
-
+pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct OcwControlData
