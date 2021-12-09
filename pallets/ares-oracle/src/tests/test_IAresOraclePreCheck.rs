@@ -216,6 +216,11 @@ fn save_pre_check_result_for_success() {
             = AresOcw::get_pre_check_status(candidate_account);
         assert_eq!(get_status, Some((current_bn, PreCheckStatus::Pass)));
 
+        AresOcw::clean_pre_check_status(candidate_account);
+        let get_status: Option<(BlockNumber, PreCheckStatus)>
+            = AresOcw::get_pre_check_status(candidate_account);
+        assert_eq!(get_status, None);
+
     });
 }
 
