@@ -338,14 +338,14 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::B
 
 /// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PerCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
+pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
     pub stash: AccountId,
     pub auth: AuthorityId,
     pub block_number: BlockNumber,
     pub public: Public,
 }
 
-impl<T: SigningTypes + Config > SignedPayload<T> for PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
+impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
     where
         u64: From<<T as frame_system::Config>::BlockNumber>,
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>

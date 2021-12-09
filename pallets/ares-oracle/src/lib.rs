@@ -250,7 +250,7 @@ pub mod pallet {
                                         )
                                     }
                                     if !Self::has_pre_check_task(stash_id.clone()) && auth_id.is_some() {
-                                        // Use PerCheckPayload send transaction.
+                                        // Use PreCheckPayload send transaction.
                                         Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number);
                                     }
                                     false
@@ -518,7 +518,7 @@ pub mod pallet {
         #[pallet::weight(0)]
         pub fn submit_create_pre_check_task (
             origin: OriginFor<T>,
-            precheck_payload: PerCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
+            precheck_payload: PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>,
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
@@ -1746,7 +1746,7 @@ where
         let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
             .with_filter(sign_public_keys)
             .send_unsigned_transaction(
-                |account| PerCheckPayload {
+                |account| PreCheckPayload {
                     stash: stash_id.clone(),
                     auth: auth_id.clone(),
                     block_number,
