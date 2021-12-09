@@ -123,6 +123,9 @@ pub trait IAresOraclePreCheck <AccountId, AuthorityId, BlockNumber>
     fn get_pre_check_status(stash: AccountId) -> Option<(BlockNumber, PreCheckStatus)> ;
 
     //
+    fn clean_pre_check_status(stash: AccountId)  ;
+
+    //
     fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> bool;
 }
 
@@ -148,6 +151,8 @@ impl <AC,AU,B> IAresOraclePreCheck <AC,AU,B> for () {
     fn get_pre_check_status(stash: AC) -> Option<(B, PreCheckStatus)> {
         None
     }
+
+    fn clean_pre_check_status(stash: AC) {}
 
     fn create_pre_check_task(stash: AC, auth: AU, bn: B) -> bool {
        false

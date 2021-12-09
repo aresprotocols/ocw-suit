@@ -45,7 +45,7 @@ use sp_runtime::{
     AccountId32, FixedU128, Perbill, Permill, Rational128, RuntimeAppPublic, RuntimeDebug,
 };
 
-use ares_oracle::{traits::SymbolInfo, types::FractionLength};
+use ares_oracle::{traits::SymbolInfo, types::FractionLength, types::OffchainSignature};
 use sp_core::sp_std::convert::TryInto;
 
 type BalanceOf<T, I = ()> =
@@ -585,7 +585,7 @@ pub mod pallet {
         pub fn choose_winner_with_signed_payload(
             origin: OriginFor<T>,
             winner_payload: ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>,
-            _signature: T::Signature,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure!(Self::is_active(), Error::<T, I>::PalletInactive);
             ensure_none(origin)?;
