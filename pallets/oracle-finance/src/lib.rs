@@ -154,7 +154,7 @@ pub mod pallet {
 			let finance_account = <Pallet<T>>::account_id();
 			if T::Currency::total_balance(&finance_account).is_zero() {
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-				// Self::deposit_event(Event::<T>::OcwFinanceDepositCreating(T::Currency::minimum_balance()));
+				// Self::deposit_event(Event::<T>::OracleFinanceDepositCreating(T::Currency::minimum_balance()));
 			}
 		}
 	}
@@ -166,7 +166,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		PurchaseRewardTaken(T::AccountId, BalanceOf<T>),
-		// OcwFinanceDepositCreating(BalanceOf<T>),
+		// OracleFinanceDepositCreating(BalanceOf<T>),
 		PurchaseRewardSlashedAfterExpiration(BalanceOf<T>),
 	}
 
@@ -351,7 +351,7 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 		let ask_period = Self::make_period_num(paid_value.create_bn);
 		<AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), paid_value.amount);
 
-		// Self::deposit_event(Event::OcwFinanceDepositCreating());
+		// Self::deposit_event(Event::OracleFinanceDepositCreating());
 
 		Ok(())
 	}

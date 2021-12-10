@@ -2,6 +2,7 @@ use super::*;
 use sp_runtime::Percent;
 use ares_oracle_provider_support::*;
 use crate::crypto2::AuraAuthId;
+use frame_support::weights::Pays::No;
 
 #[test]
 fn test_create_pre_check_task() {
@@ -16,7 +17,7 @@ fn test_create_pre_check_task() {
         assert!(AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn));
         assert_eq!(<PreCheckTaskList<Test>>::get()[0], (stash_1.clone(), auth_1.clone(), current_bn));
         // println!("1111{:?}", <FinalPerCheckResult<Test>>::get(stash_1.clone()));
-        assert_eq!(<FinalPerCheckResult<Test>>::get(stash_1.clone()).unwrap(), Some((1, PreCheckStatus::Review)));
+        assert_eq!(<FinalPerCheckResult<Test>>::get(stash_1.clone()).unwrap(), Some((1, PreCheckStatus::Review, None)));
 
         assert_eq!(
 			AresOcw::create_pre_check_task(stash_1.clone(), auth_1.clone(), current_bn),
@@ -200,6 +201,7 @@ fn save_pre_check_result_for_success() {
         let take_price_list = AresOcw::take_price_for_per_check(check_config.clone());
 
         // Create avg price
+        // let btc_avg_price =
         <AresAvgPrice<Test>>::insert(toVec("btc_price"), (502613720 - Percent::from_percent(9) * 502613720, 4));
         <AresAvgPrice<Test>>::insert(toVec("eth_price"), (31077100 + Percent::from_percent(9) * 31077100, 4));
 
@@ -215,6 +217,9 @@ fn save_pre_check_result_for_success() {
         let get_status: Option<(BlockNumber, PreCheckStatus)>
             = AresOcw::get_pre_check_status(candidate_account);
         assert_eq!(get_status, Some((current_bn, PreCheckStatus::Pass)));
+
+        let final_check_result = <FinalPerCheckResult<Test>>::get(candidate_account);
+        println!("final_check_result = {:?}", final_check_result);
 
         AresOcw::clean_pre_check_status(candidate_account);
         let get_status: Option<(BlockNumber, PreCheckStatus)>

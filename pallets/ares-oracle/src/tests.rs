@@ -94,7 +94,7 @@ frame_support::construct_runtime!(
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		AresOcw: ares_ocw_worker::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OcwFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
+		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -291,7 +291,7 @@ impl Config for Test {
     type VMember = TestMember;
 
     type AuthorityCount = TestAuthorityCount;
-    type OcwFinanceHandler = OcwFinance;
+    type OracleFinanceHandler = OracleFinance;
 
     type AresIStakingNpos = ();
 }
@@ -551,7 +551,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
         Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
         assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
-        let result = OcwFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+        let result = OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
         println!("result = {:?}", result);
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
@@ -649,23 +649,23 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             assert!(purchased_key_option.is_none());
         }
 
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_1.into_account(),
             pub_purchase_id.clone(),
         ), None);
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_2.into_account(),
             pub_purchase_id.clone(),
         ), None);
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_3.into_account(),
             pub_purchase_id.clone(),
         ), None);
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_4.into_account(),
             pub_purchase_id.clone(),
         ), None);
@@ -716,23 +716,23 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             assert!(purchased_key_option.is_none());
         }
 
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_1.into_account(),
             pub_purchase_id.clone(),
         ), Some(1));
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_2.into_account(),
             pub_purchase_id.clone(),
         ), Some(1));
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_3.into_account(),
             pub_purchase_id.clone(),
         ), Some(1));
-        assert_eq!(OcwFinance::get_record_point(
-            OcwFinance::make_period_num(2),
+        assert_eq!(OracleFinance::get_record_point(
+            OracleFinance::make_period_num(2),
             public_key_4.into_account(),
             pub_purchase_id.clone(),
         ), Some(1));
@@ -822,7 +822,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 
         let current_bn: u64 = 1;
         System::set_block_number(current_bn);
-        <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+        <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
         // Add purchase price
         // Add purchased request.
@@ -835,7 +835,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
         // check finance pallet status.
         assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000);
         let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
-        OcwFinance::reserve_for_ask_quantity(request_acc.into_account(), purchase_id.clone(), request_keys.len() as u32);
+        OracleFinance::reserve_for_ask_quantity(request_acc.into_account(), purchase_id.clone(), request_keys.len() as u32);
         assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000 - DOLLARS * 1);
 
         assert_ok!(AresOcw::ask_price(
@@ -1030,7 +1030,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
         Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
         assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
         let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
-        let result = OcwFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+        let result = OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,

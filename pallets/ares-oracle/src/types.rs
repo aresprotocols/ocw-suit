@@ -195,6 +195,13 @@ pub struct AresPriceData<AccountId, BlockNumber>
     pub raw_number: JsonNumberValue,
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PreCheckCompareLog {
+    pub chain_avg_price_list: BTreeMap::<Vec<u8>, (u64, FractionLength)>,
+    pub validator_up_price_list: BTreeMap::<Vec<u8>, (u64, FractionLength)>,
+    pub raw_precheck_list: Vec<PreCheckStruct>,
+}
+
 
 // impl <T: Config > AresPriceData<T>
 //     where sp_runtime::AccountId32: From<T::AccountId>,

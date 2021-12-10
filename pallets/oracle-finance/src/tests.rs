@@ -8,7 +8,7 @@ use frame_support::traits::OnInitialize;
 fn test_it_works_for_default_value() {
 	new_test_ext().execute_with(|| {
 
-		let calculate_result = OcwFinance::calculate_fee_of_ask_quantity(3);
+		let calculate_result = OracleFinance::calculate_fee_of_ask_quantity(3);
 		assert_eq!(calculate_result, 3u64.saturating_mul(DOLLARS));
 	});
 }
@@ -19,14 +19,14 @@ fn test_reserve_for_ask_quantity() {
 
 		let current_bn: u64 = 1;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId: u64 = 3u64;
 		const price_count: u32 = 3;
 
-		let calculate_result = OcwFinance::calculate_fee_of_ask_quantity(price_count);
+		let calculate_result = OracleFinance::calculate_fee_of_ask_quantity(price_count);
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		let payment_result = OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
+		let payment_result = OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
 		assert_eq!(payment_result, OcwPaymentResult::Success(toVec("Purchased_ID"), calculate_result));
@@ -50,30 +50,30 @@ fn test_unreserve_ask() {
 
 		let current_bn: u64 = 1;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId: u64 = 3u64;
 		const price_count: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OcwFinance::unreserve_ask(toVec("Purchased_ID"));
+		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(toVec("Purchased_ID"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
+		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
 
 		// check period income.
 		assert_eq!(
-			OcwFinance::get_period_income(OcwFinance::make_period_num(current_bn)),
+			OracleFinance::get_period_income(OracleFinance::make_period_num(current_bn)),
 			0
 		);
 		assert_eq!(
-			OcwFinance::pot(),
-			(OcwFinance::account_id(), 0)
+			OracleFinance::pot(),
+			(OracleFinance::account_id(), 0)
 		);
 
 		// check storage status
@@ -88,7 +88,7 @@ fn test_unreserve_ask() {
 		assert_eq!(ask_payment, 0, "only reserve so payment still be 0.");
 
 		// get ask paid fee.
-		assert_ok!(OcwFinance::unreserve_ask(toVec("Purchased_ID")));
+		assert_ok!(OracleFinance::unreserve_ask(toVec("Purchased_ID")));
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
 
 		// check storage status
@@ -104,19 +104,19 @@ fn test_unreserve_ask() {
 
 		let current_bn: u64 = 10;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId: u64 = 3u64;
 		const price_count: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OcwFinance::unreserve_ask(toVec("Purchased_ID_2"));
+		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(toVec("Purchased_ID_2"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
+		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 
 	});
@@ -126,30 +126,30 @@ fn test_unreserve_ask() {
 		let previous_bn: u64 = 10;
 		let current_bn: u64 = 30;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId: u64 = 4u64;
 		const price_count: u32 = 4;
 
 		// paid
 		assert_eq!(Balances::free_balance(AccountId), 4000000000100);
-		OcwFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID_NEW"), price_count);
+		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID_NEW"), price_count);
 		assert_eq!(Balances::free_balance(AccountId), 100);
 
 		// check period income.
 		assert_eq!(
-			OcwFinance::get_period_income(OcwFinance::make_period_num(previous_bn)),
+			OracleFinance::get_period_income(OracleFinance::make_period_num(previous_bn)),
 			0
 		);
 
 		// check period income.
 		assert_eq!(
-			OcwFinance::get_period_income(OcwFinance::make_period_num(current_bn)),
+			OracleFinance::get_period_income(OracleFinance::make_period_num(current_bn)),
 			0
 		);
 		assert_eq!(
-			OcwFinance::pot(),
-			(OcwFinance::account_id(), 0) // because use reserve
+			OracleFinance::pot(),
+			(OracleFinance::account_id(), 0) // because use reserve
 		);
 
 	});
@@ -161,7 +161,7 @@ fn test_record_submit_point() {
 
 		// let current_bn: u64 = 1;
 		// System::set_block_number(current_bn);
-		// <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 		//
 		// const AccountId: u64 = 3u64;
 		// const price_count: u32 = 3;
@@ -174,12 +174,12 @@ fn test_record_submit_point() {
 		let purchase_id_1 = toVec("PurchaseId_1");
 		let purchase_id_2 = toVec("PurchaseId_2");
 
-		assert_eq!(OcwFinance::get_period_point(OcwFinance::make_period_num(3)), 0);
+		assert_eq!(OracleFinance::get_period_point(OracleFinance::make_period_num(3)), 0);
 		// who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: u64sum
-		assert_ok!(OcwFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9));
-		assert_eq!(OcwFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9), Err(Error::<Test>::PointRecordIsAlreadyExists) );
-		assert_ok!(OcwFinance::record_submit_point(AccountId_2, purchase_id_1.clone(), 3, 10));
-		assert_eq!(OcwFinance::get_period_point(OcwFinance::make_period_num(3)), 19, "Get all the record points in the first time zone");
+		assert_ok!(OracleFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9));
+		assert_eq!(OracleFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9), Err(Error::<Test>::PointRecordIsAlreadyExists) );
+		assert_ok!(OracleFinance::record_submit_point(AccountId_2, purchase_id_1.clone(), 3, 10));
+		assert_eq!(OracleFinance::get_period_point(OracleFinance::make_period_num(3)), 19, "Get all the record points in the first time zone");
 		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
 			(0, 9, purchase_id_1.clone())
 		]);
@@ -197,18 +197,18 @@ fn test_check_and_slash_expired_rewards() {
 		let purchased_submit_bn: u64 = 50;
 		let current_bn: u64 = 50;
 		System::set_block_number(current_bn);
-		// <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		const AccountId_2: u64 = 2;
 		const AccountId_3: u64 = 3;
 
-		OcwFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
-		assert_ok!(OcwFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OcwFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OcwFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
+		OracleFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		assert_ok!(OracleFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
 		// check pot
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
 		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
 			(5, 2, toVec("Purchased_ID_BN_55"))
@@ -218,16 +218,16 @@ fn test_check_and_slash_expired_rewards() {
 		]);
 
 		// check none
-		assert_eq!(OcwFinance::check_and_slash_expired_rewards(OcwFinance::make_period_num(current_bn)), None);
+		assert_eq!(OracleFinance::check_and_slash_expired_rewards(OracleFinance::make_period_num(current_bn)), None);
 
-		// let current_period_num = OcwFinance::make_period_num(current_bn);
+		// let current_period_num = OracleFinance::make_period_num(current_bn);
 		// check none
-		// assert_eq!(OcwFinance::check_and_slash_expired_rewards(
+		// assert_eq!(OracleFinance::check_and_slash_expired_rewards(
 		// 	current_period_num + RewardPeriodCycle::get() + RewardSlot::get() + 1
 		// ), Some(2000000000000));
 		//
 		// // check pot
-		// assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
+		// assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
 
 	});
 
@@ -236,7 +236,7 @@ fn test_check_and_slash_expired_rewards() {
 		let purchased_submit_bn: u64 = 50;
 		let current_bn: u64 = 90;
 		System::set_block_number(current_bn);
-		// <OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		const AccountId_2: u64 = 2;
@@ -244,7 +244,7 @@ fn test_check_and_slash_expired_rewards() {
 
 		//
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, AccountId_1),
 			Err(Error::<Test>::RewardPeriodHasExpired)
 		);
 
@@ -257,11 +257,11 @@ fn test_check_and_slash_expired_rewards() {
 		assert!(<AskPeriodPoint<Test>>::contains_key(5, (AccountId_1, toVec("Purchased_ID_BN_55"))));
 		assert!(<AskPeriodPoint<Test>>::contains_key(5, (AccountId_3, toVec("Purchased_ID_BN_55"))));
 
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
 		// if reward is expired
 		assert_eq!(
-			OcwFinance::check_and_slash_expired_rewards(OcwFinance::make_period_num(current_bn)),
+			OracleFinance::check_and_slash_expired_rewards(OracleFinance::make_period_num(current_bn)),
 			Some(2000000000000),
 		);
 
@@ -273,8 +273,8 @@ fn test_check_and_slash_expired_rewards() {
 		assert_eq!(false, <AskPeriodPoint<Test>>::contains_key(5, (AccountId_3, toVec("Purchased_ID_BN_55"))));
 
 
-		// assert_eq!(Balances::usable_balance(OcwFinance::account_id()),0);
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
+		// assert_eq!(Balances::usable_balance(OracleFinance::account_id()),0);
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
 
 		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![]);
 		assert_eq!(<RewardPeriod<Test>>::get(AccountId_3), vec![]);
@@ -291,35 +291,35 @@ fn test_take_reward() {
 
 		let current_bn: u64 = 50;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		const AccountId_2: u64 = 2;
 		const AccountId_3: u64 = 3;
 
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, AccountId_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 
 		assert_eq!(
-			OcwFinance::take_reward(1, AccountId_1),
+			OracleFinance::take_reward(1, AccountId_1),
 			Err(Error::<Test>::RewardPeriodHasExpired)
 		);
 
 
 		assert_eq!(
-			OcwFinance::take_reward(2, AccountId_1),
+			OracleFinance::take_reward(2, AccountId_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 
 		assert_eq!(
-			OcwFinance::take_reward(3, AccountId_1),
+			OracleFinance::take_reward(3, AccountId_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 
 		assert_eq!(
-			OcwFinance::take_reward(4, AccountId_1),
+			OracleFinance::take_reward(4, AccountId_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 	});
@@ -329,7 +329,7 @@ fn test_take_reward() {
 
 		let current_bn: u64 = 55;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		assert_eq!(Balances::free_balance(AccountId_1), 1000000000100);
@@ -341,15 +341,15 @@ fn test_take_reward() {
 		assert_eq!(Balances::free_balance(AccountId_3), 3000000000100);
 
 		// ask paid.
-		OcwFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
-		assert_ok!(OcwFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
+		OracleFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		assert_ok!(OracleFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
 
 		//
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, AccountId_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 	});
@@ -358,7 +358,7 @@ fn test_take_reward() {
 		let purchased_submit_bn: u64 = 55;
 		let current_bn: u64 = 57;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 		assert_eq!(Balances::free_balance(AccountId_1), 1000000000100);
@@ -369,12 +369,12 @@ fn test_take_reward() {
 		const AccountId_3: u64 = 3;
 		assert_eq!(Balances::free_balance(AccountId_3), 3000000000100);
 
-		assert_ok!(OcwFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OcwFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
 
 		//
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, AccountId_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 	});
@@ -384,18 +384,18 @@ fn test_take_reward() {
 		let purchased_submit_bn: u64 = 55;
 		let current_bn: u64 = 65;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_1: u64 = 1;
 
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 2000000000000));
-		assert_eq!(OcwFinance::take_reward(5, AccountId_1), Ok(2000000000000/2));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::take_reward(5, AccountId_1), Ok(2000000000000/2));
 		//
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, AccountId_1),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 1000000000000));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
 		assert_eq!(Balances::free_balance(AccountId_1), 2000000000100);
 	});
 
@@ -404,19 +404,19 @@ fn test_take_reward() {
 		let purchased_submit_bn: u64 = 55;
 		let current_bn: u64 = 75;
 		System::set_block_number(current_bn);
-		<OcwFinance as OnInitialize<u64>>::on_initialize(current_bn);
+		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		const AccountId_3: u64 = 3;
 
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 1000000000000));
-		assert_eq!(OcwFinance::take_reward(5, AccountId_3), Ok(1000000000000));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+		assert_eq!(OracleFinance::take_reward(5, AccountId_3), Ok(1000000000000));
 
 		//
 		assert_eq!(
-			OcwFinance::take_reward(5, AccountId_3),
+			OracleFinance::take_reward(5, AccountId_3),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
-		assert_eq!(OcwFinance::pot(),(OcwFinance::account_id(), 0));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
 		assert_eq!(Balances::free_balance(AccountId_3), 4000000000100);
 	});
 }
@@ -425,32 +425,32 @@ fn test_take_reward() {
 fn test_get_earliest_reward_period() {
 	new_test_ext().execute_with(|| {
 
-		assert_eq!(OcwFinance::get_earliest_reward_period(1), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(5), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(10), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(15), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(20), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(25), 0);
-		assert_eq!(OcwFinance::get_earliest_reward_period(30), 1 - 1, "Because of the `RewardSlot` so `-1` ");
-		assert_eq!(OcwFinance::get_earliest_reward_period(35), 1 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(40), 2 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(45), 2 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(50), 3 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(55), 3 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(60), 4 - 1);
-		assert_eq!(OcwFinance::get_earliest_reward_period(65), 4 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(1), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(5), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(10), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(15), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(20), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(25), 0);
+		assert_eq!(OracleFinance::get_earliest_reward_period(30), 1 - 1, "Because of the `RewardSlot` so `-1` ");
+		assert_eq!(OracleFinance::get_earliest_reward_period(35), 1 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(40), 2 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(45), 2 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(50), 3 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(55), 3 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(60), 4 - 1);
+		assert_eq!(OracleFinance::get_earliest_reward_period(65), 4 - 1);
 	});
 }
 
 #[test]
 fn test_make_period_num() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(OcwFinance::make_period_num(0), 0);
-		assert_eq!(OcwFinance::make_period_num(5), 0);
-		assert_eq!(OcwFinance::make_period_num(10), 1);
-		assert_eq!(OcwFinance::make_period_num(15), 1);
-		assert_eq!(OcwFinance::make_period_num(20), 2);
-		assert_eq!(OcwFinance::make_period_num(25), 2);
-		assert_eq!(OcwFinance::make_period_num(30), 3);
+		assert_eq!(OracleFinance::make_period_num(0), 0);
+		assert_eq!(OracleFinance::make_period_num(5), 0);
+		assert_eq!(OracleFinance::make_period_num(10), 1);
+		assert_eq!(OracleFinance::make_period_num(15), 1);
+		assert_eq!(OracleFinance::make_period_num(20), 2);
+		assert_eq!(OracleFinance::make_period_num(25), 2);
+		assert_eq!(OracleFinance::make_period_num(30), 3);
 	});
 }

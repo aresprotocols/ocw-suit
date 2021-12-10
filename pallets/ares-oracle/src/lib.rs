@@ -121,6 +121,8 @@ pub mod pallet {
         PerCheckTaskAlreadyExists,
         //
         PreCheckTokenListNotEmpty,
+        //
+
 
     }
 
@@ -172,7 +174,7 @@ pub mod pallet {
 
         type AuthorityCount: ValidatorCount;
 
-        type OcwFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
+        type OracleFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
 
         type AresIStakingNpos: IStakingNpos<Self::AuthorityAres, Self::BlockNumber, StashId = <Self as frame_system::Config>::AccountId> ;
     }
@@ -323,14 +325,14 @@ pub mod pallet {
             let submit_threshold =purchased_default.submit_threshold;
             let max_duration = purchased_default.max_duration;
             let request_keys = Self::extract_purchased_request(request_keys);
-            let offer = T::OcwFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
+            let offer = T::OracleFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
             if offer > max_fee {
                 return Err(Error::<T>::InsufficientMaxFee.into());
             }
 
             let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
 
-            let payment_result: OcwPaymentResult<T> = T::OcwFinanceHandler::reserve_for_ask_quantity(who.clone(), purchase_id.clone(), request_keys.len() as u32);
+            let payment_result: OcwPaymentResult<T> = T::OracleFinanceHandler::reserve_for_ask_quantity(who.clone(), purchase_id.clone(), request_keys.len() as u32);
             // let payment_result: OcwPaymentResult<T> = OcwPaymentResult::<T>::Success(purchase_id.clone(), 0u32.into());
             match payment_result {
                 OcwPaymentResult::InsufficientBalance(_, _balance) => {
@@ -371,7 +373,7 @@ pub mod pallet {
                 }else{
                     // println!("refund_ask_paid p_id = {:?}", x.to_vec());
                     // Get `ask owner`
-                    let refund_result = T::OcwFinanceHandler::unreserve_ask(x.to_vec());
+                    let refund_result = T::OracleFinanceHandler::unreserve_ask(x.to_vec());
                     // println!("refund_result = {:?}", &refund_result);
                     if refund_result.is_ok() {
                         // Remove chain storage.
@@ -383,7 +385,7 @@ pub mod pallet {
                     } else {
                         log::error!(
                             target: "pallet::ocw::submit_forced_clear_purchased_price_payload_signed",
-                            "⛔️ T::OcwFinanceHandler::unreserve_ask() had an error!"
+                            "⛔️ T::OracleFinanceHandler::unreserve_ask() had an error!"
                         );
                         Self::deposit_event(Event::ProblemWithRefund);
                     }
@@ -536,6 +538,7 @@ pub mod pallet {
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
+            ensure!(preresult_payload.per_check_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
             Self::save_pre_check_result(
                 preresult_payload.stash,
                 preresult_payload.block_number,
@@ -975,13 +978,18 @@ pub mod pallet {
                     .build()
             } else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
                 log::debug!(
-                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}",
+                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}, per_check_list: {:?}",
                     payload.block_number.clone(),
                     <system::Pallet<T>>::block_number(),
                     payload.stash.clone(),
                     payload.auth.clone(),
-                    payload.public.clone()
+                    payload.public.clone(),
+                    payload.per_check_list.clone(),
                 );
+
+                if payload.block_number.clone() - <system::Pallet<T>>::block_number() > 5u32.into() {
+                    return InvalidTransaction::BadProof.into();
+                }
 
                 // check stash status
                 let mut auth_list = Vec::new();
@@ -1207,7 +1215,7 @@ pub mod pallet {
     pub(super) type FinalPerCheckResult<T: Config> = StorageMap<_,
         Blake2_128Concat,
         T::AccountId,
-        Option<(T::BlockNumber, PreCheckStatus)>
+        Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>)>,
     >;
 
     // PreCheckTaskList
@@ -1297,7 +1305,7 @@ pub mod pallet {
     //         let finance_account = <Pallet<T>>::account_id();
     //         if T::Currency::total_balance(&finance_account).is_zero() {
     //             T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-    //             // Self::deposit_event(Event::<T>::OcwFinanceDepositCreating(T::Currency::minimum_balance()));
+    //             // Self::deposit_event(Event::<T>::OracleFinanceDepositCreating(T::Currency::minimum_balance()));
     //         }
     //     }
     // }
@@ -1352,7 +1360,7 @@ use crate::traits::*;
 use frame_support::weights::Weight;
 use frame_support::sp_runtime::{Percent, DigestItem};
 use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct, PreCheckStatus};
-
+use sp_std::{collections::btree_map::BTreeMap};
 
 
 impl<T: Config> Pallet<T>
@@ -2307,7 +2315,9 @@ where
     fn get_ares_authority_list() -> Vec<T::AuthorityAres> {
         let authority_list = T::AuthorityAres::all();
         if authority_list.len() > 1 {
-            log::warn!(target: "T::AuthorityAres", "❗ Multiple related `authority` are found, one binding related to the session should be kept, and the redundant ones should be deleted. ");
+            log::warn!(target: "T::AuthorityAres", "❗ Multiple related `authority` are found, current count is {:?} , one binding related to the session should be kept, and the redundant ones should be deleted. ",
+                       authority_list.len()
+            );
         }
         authority_list
     }
@@ -3003,7 +3013,7 @@ where
 
     fn update_reporter_point(purchase_id: Vec<u8>)->Result<(), Error<T>> {
         // transfer balance to pallet account.
-        if T::OcwFinanceHandler::pay_to_ask(purchase_id.clone()).is_err() {
+        if T::OracleFinanceHandler::pay_to_ask(purchase_id.clone()).is_err() {
             return Err(Error::<T>::PayToPurchaseFeeFailed)
         }
 
@@ -3011,7 +3021,7 @@ where
         // update report work point
         <PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone()).into_iter()
             .any(|(acc, _)| {
-                T::OcwFinanceHandler::record_submit_point(acc,
+                T::OracleFinanceHandler::record_submit_point(acc,
                                                           purchase_id.clone(),
                                                           request_mission.create_bn,
                                                           request_mission.request_keys.len() as u32);
@@ -3162,7 +3172,13 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
 
     // Record the per check results and add them to the storage structure.
     fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PreCheckStruct> ) {
+
+        assert!(per_check_list.len() > 0, "⛔️ Do not receive empty result check.");
+
         // get avg price.
+        let mut chain_avg_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
+        let mut validator_up_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
+        let raw_precheck_list = per_check_list.clone();
         let check_result = per_check_list.iter().all(|checked_struct| {
             // Check price key exists.
             if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
@@ -3170,6 +3186,9 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             }
             // Get avg price struct.
             let (avg_price_val, avg_fraction_len) = <AresAvgPrice<T>>::get(&checked_struct.price_key);
+
+            chain_avg_price_list.insert(checked_struct.price_key.clone(),(avg_price_val, avg_fraction_len));
+            validator_up_price_list.insert(checked_struct.price_key.clone(), (checked_struct.number_val.toPrice(avg_fraction_len),avg_fraction_len));
 
             let max_price = checked_struct.number_val.toPrice(avg_fraction_len).max(avg_price_val);
             let min_price = checked_struct.number_val.toPrice(avg_fraction_len).min(avg_price_val);
@@ -3184,18 +3203,34 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             per_checkstatus = PreCheckStatus::Pass;
         }
 
-        log::debug!(" ------ debug . on RUN A5");
-        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus)));
+
+        // make pre check log.
+        let pre_check_log = PreCheckCompareLog {
+            chain_avg_price_list,
+            validator_up_price_list,
+            raw_precheck_list,
+        };
+
+        log::debug!("LINDEBUG **** PreCheckCompareLog = {:?}", &pre_check_log);
+
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus, Some(pre_check_log) )));
         let mut task_list = <PreCheckTaskList<T>>::get();
         task_list.retain(|(old_acc, _, _)|{ &stash != old_acc }) ;
         <PreCheckTaskList<T>>::put(task_list);
 
-        log::debug!(" ------ debug . on RUN A6");
+        // log::debug!(" ------ debug . on RUN A6");
     }
 
     //
     fn get_pre_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PreCheckStatus)> {
-        <FinalPerCheckResult<T>>::get(stash).unwrap_or(None)
+        // let pre_check_result = <FinalPerCheckResult<T>>::get(stash).unwrap_or(None);
+        // // if pre_check_result.is_none() {
+        // //     return None;
+        // // }
+        if let Some((bn, check_status, _ )) = <FinalPerCheckResult<T>>::get(stash).unwrap_or(None) {
+            return Some((bn, check_status));
+        }
+        None
     }
 
     fn clean_pre_check_status(stash: T::AccountId) {
@@ -3211,7 +3246,7 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
         }
         task_list.push((stash.clone(), auth, bn));
         <PreCheckTaskList<T>>::put(task_list);
-        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, PreCheckStatus::Review)));
+        <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, PreCheckStatus::Review, Option::<PreCheckCompareLog>::None)));
         true
     }
 }
