@@ -1,6 +1,6 @@
 use super::*;
-use frame_support::weights::Weight;
-use frame_support::sp_runtime::Percent;
+// use frame_support::weights::Weight;
+// use frame_support::sp_runtime::Percent;
 
 pub trait SymbolInfo {
     fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()>;

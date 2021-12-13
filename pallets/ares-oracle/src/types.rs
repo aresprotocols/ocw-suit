@@ -1,8 +1,8 @@
 
 use super::*;
 use sp_core::hexdisplay::HexDisplay;
-use sp_runtime::traits::{Saturating, Zero};
-use frame_support::sp_runtime::Percent;
+// use sp_runtime::traits::{Saturating, Zero};
+// use frame_support::sp_runtime::Percent;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
@@ -193,6 +193,13 @@ pub struct AresPriceData<AccountId, BlockNumber>
     pub create_bn: BlockNumber,
     pub fraction_len: FractionLength,
     pub raw_number: JsonNumberValue,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PreCheckCompareLog {
+    pub chain_avg_price_list: BTreeMap::<Vec<u8>, (u64, FractionLength)>,
+    pub validator_up_price_list: BTreeMap::<Vec<u8>, (u64, FractionLength)>,
+    pub raw_precheck_list: Vec<PreCheckStruct>,
 }
 
 

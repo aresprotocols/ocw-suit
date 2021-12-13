@@ -33,7 +33,7 @@ impl JsonNumberValue {
         }
     }
 
-    pub fn toPrice(&self, fraction_number: FractionLength) -> u64 {
+    pub fn to_price(&self, fraction_number: FractionLength) -> u64 {
         let mut price_fraction = self.fraction;
         if price_fraction < 10u64.pow(fraction_number) {
             price_fraction *= 10u64.pow(
@@ -130,31 +130,31 @@ pub trait IAresOraclePreCheck <AccountId, AuthorityId, BlockNumber>
 }
 
 impl <AC,AU,B> IAresOraclePreCheck <AC,AU,B> for () {
-    fn has_pre_check_task(stash: AC) -> bool {
+    fn has_pre_check_task(_stash: AC) -> bool {
         false
     }
 
-    fn get_pre_task_by_authority_set(auth_list: Vec<AU>) -> Option<(AC, AU, B)> {
+    fn get_pre_task_by_authority_set(_auth_list: Vec<AU>) -> Option<(AC, AU, B)> {
         None
     }
 
-    fn check_and_clean_obsolete_task(maximum_due: B) -> u64 {
+    fn check_and_clean_obsolete_task(_maximum_due: B) -> u64 {
         0
     }
 
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
+    fn take_price_for_per_check(_check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
         Vec::new()
     }
 
-    fn save_pre_check_result(stash: AC, bn: B, per_check_list: Vec<PreCheckStruct>) {}
+    fn save_pre_check_result(_stash: AC, _bn: B, _per_check_list: Vec<PreCheckStruct>) {}
 
-    fn get_pre_check_status(stash: AC) -> Option<(B, PreCheckStatus)> {
+    fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
         None
     }
 
-    fn clean_pre_check_status(stash: AC) {}
+    fn clean_pre_check_status(_stash: AC) {}
 
-    fn create_pre_check_task(stash: AC, auth: AU, bn: B) -> bool {
+    fn create_pre_check_task(_stash: AC, _auth: AU, _bn: B) -> bool {
        false
     }
 }

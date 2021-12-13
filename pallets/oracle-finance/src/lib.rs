@@ -8,12 +8,12 @@ pub use pallet::*;
 use crate::traits::*;
 use crate::types::*;
 use sp_runtime::traits::{Saturating, Zero};
-use frame_support::sp_runtime::traits::{AccountIdConversion, Clear};
+use frame_support::sp_runtime::traits::{AccountIdConversion};
 use frame_support::sp_std::convert::TryInto;
 use sp_std::vec::Vec;
 
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
+// #[cfg(feature = "std")]
+// use frame_support::traits::GenesisBuild;
 
 #[cfg(test)]
 mod mock;
@@ -154,7 +154,7 @@ pub mod pallet {
 			let finance_account = <Pallet<T>>::account_id();
 			if T::Currency::total_balance(&finance_account).is_zero() {
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-				// Self::deposit_event(Event::<T>::OcwFinanceDepositCreating(T::Currency::minimum_balance()));
+				// Self::deposit_event(Event::<T>::OracleFinanceDepositCreating(T::Currency::minimum_balance()));
 			}
 		}
 	}
@@ -166,7 +166,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		PurchaseRewardTaken(T::AccountId, BalanceOf<T>),
-		// OcwFinanceDepositCreating(BalanceOf<T>),
+		// OracleFinanceDepositCreating(BalanceOf<T>),
 		PurchaseRewardSlashedAfterExpiration(BalanceOf<T>),
 	}
 
@@ -275,7 +275,7 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 				is_income: true,
 			},
 		);
-		let ask_period = Self::make_period_num(current_block_number);
+		// let ask_period = Self::make_period_num(current_block_number);
 		// <AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), reserve_balance);
 
 		OcwPaymentResult::Success(p_id, reserve_balance)
@@ -351,7 +351,7 @@ impl <T: Config> IForPrice<T> for Pallet<T> {
 		let ask_period = Self::make_period_num(paid_value.create_bn);
 		<AskPeriodPayment<T>>::insert(ask_period, (who.clone(), p_id.clone()), paid_value.amount);
 
-		// Self::deposit_event(Event::OcwFinanceDepositCreating());
+		// Self::deposit_event(Event::OracleFinanceDepositCreating());
 
 		Ok(())
 	}
@@ -447,7 +447,7 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 
 		// get his point.
 		let mut reward_point: AskPointNum = 0;
-		let reward_list: Vec<(T::AccountId, PurchaseId)> = <AskPeriodPoint<T>>::iter_prefix(ask_period).map(|((acc, p_id), point)| {
+		let _reward_list: Vec<(T::AccountId, PurchaseId)> = <AskPeriodPoint<T>>::iter_prefix(ask_period).map(|((acc, p_id), point)| {
 			if &acc == &who {
 				reward_point += point;
 			}
@@ -473,6 +473,9 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 			reward_balance,
 			ExistenceRequirement::KeepAlive,
 		);
+		if res.is_err() {
+			return Err(Error::<T>::TransferBalanceError);
+		}
 
 		<RewardTrace<T>>::insert(ask_period.clone(), who.clone(), (current_block_number, reward_balance));
 
@@ -520,7 +523,7 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 
 		// get sum of paid reward
 		let mut paid_reward = <BalanceOf<T>>::from(0u32);
-		<RewardTrace<T>>::iter_prefix_values(check_period).any(|(bn, amount)| {
+		<RewardTrace<T>>::iter_prefix_values(check_period).any(|(_bn, amount)| {
 			paid_reward += amount;
 			false
 		});

@@ -6,7 +6,7 @@
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use crate::pallet::*;
 use frame_support::pallet_prelude::PhantomData;
-use frame_support::traits::FindAuthor;
+// use frame_support::traits::FindAuthor;
 
 /// Config necessary for the historical module.
 pub trait Config: pallet_aura::Config { }
