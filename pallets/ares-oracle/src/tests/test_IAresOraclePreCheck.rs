@@ -1,8 +1,8 @@
 use super::*;
 use sp_runtime::Percent;
 use ares_oracle_provider_support::*;
-use crate::crypto2::AuraAuthId;
-use frame_support::weights::Pays::No;
+// use crate::crypto2::AuraAuthId;
+// use frame_support::weights::Pays::No;
 
 #[test]
 fn test_create_pre_check_task() {
@@ -118,7 +118,7 @@ fn test_take_price_for_per_check() {
 
         // create check config
         let check_config = PreCheckTaskConfig{
-            check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
+            check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };
 
@@ -128,7 +128,7 @@ fn test_take_price_for_per_check() {
         assert_eq!(take_price_list.len() , 2);
 
         assert_eq!(take_price_list[0], PreCheckStruct {
-            price_key: toVec("btc_price"),
+            price_key: to_test_vec("btc_price"),
             number_val: JsonNumberValue {
                 integer: 50261,
                 fraction: 372,
@@ -139,7 +139,7 @@ fn test_take_price_for_per_check() {
         });
 
         assert_eq!(take_price_list[1], PreCheckStruct {
-            price_key: toVec("eth_price"),
+            price_key: to_test_vec("eth_price"),
             number_val: JsonNumberValue {
                 integer: 3107,
                 fraction: 71,
@@ -193,7 +193,7 @@ fn save_pre_check_result_for_success() {
         // get check result
         // create check config
         let check_config = PreCheckTaskConfig{
-            check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
+            check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };
 
@@ -202,8 +202,8 @@ fn save_pre_check_result_for_success() {
 
         // Create avg price
         // let btc_avg_price =
-        <AresAvgPrice<Test>>::insert(toVec("btc_price"), (502613720 - Percent::from_percent(9) * 502613720, 4));
-        <AresAvgPrice<Test>>::insert(toVec("eth_price"), (31077100 + Percent::from_percent(9) * 31077100, 4));
+        <AresAvgPrice<Test>>::insert(to_test_vec("btc_price"), (502613720 - Percent::from_percent(9) * 502613720, 4));
+        <AresAvgPrice<Test>>::insert(to_test_vec("eth_price"), (31077100 + Percent::from_percent(9) * 31077100, 4));
 
         // check before status
         let get_status: Option<(BlockNumber, PreCheckStatus)>
@@ -272,7 +272,7 @@ fn save_pre_check_result_for_prohibit() {
         // get check result
         // create check config
         let check_config = PreCheckTaskConfig{
-            check_token_list: vec![toVec("eth_price"), toVec("btc_price")],
+            check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
             allowable_offset: Percent::from_percent(10)
         };
 
@@ -280,8 +280,8 @@ fn save_pre_check_result_for_prohibit() {
         let take_price_list = AresOcw::take_price_for_per_check(check_config.clone());
 
         // Create avg price
-        <AresAvgPrice<Test>>::insert(toVec("btc_price"), (502613720 - Percent::from_percent(11) * 502613720, 4));
-        <AresAvgPrice<Test>>::insert(toVec("eth_price"), (31077100 + Percent::from_percent(11) * 31077100, 4));
+        <AresAvgPrice<Test>>::insert(to_test_vec("btc_price"), (502613720 - Percent::from_percent(11) * 502613720, 4));
+        <AresAvgPrice<Test>>::insert(to_test_vec("eth_price"), (31077100 + Percent::from_percent(11) * 31077100, 4));
 
         // check before status
         let get_status: Option<(BlockNumber, PreCheckStatus)>

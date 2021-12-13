@@ -33,7 +33,7 @@ impl JsonNumberValue {
         }
     }
 
-    pub fn toPrice(&self, fraction_number: FractionLength) -> u64 {
+    pub fn to_price(&self, fraction_number: FractionLength) -> u64 {
         let mut price_fraction = self.fraction;
         if price_fraction < 10u64.pow(fraction_number) {
             price_fraction *= 10u64.pow(
@@ -146,7 +146,7 @@ impl <AC,AU,B> IAresOraclePreCheck <AC,AU,B> for () {
         Vec::new()
     }
 
-    fn save_pre_check_result(_stash: AC, bn: B, _per_check_list: Vec<PreCheckStruct>) {}
+    fn save_pre_check_result(_stash: AC, _bn: B, _per_check_list: Vec<PreCheckStruct>) {}
 
     fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
         None

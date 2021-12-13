@@ -5,11 +5,11 @@
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use pallet::*;
 use frame_election_provider_support::onchain;
-use frame_support::traits::{Get, EstimateNextSessionRotation, OneSessionHandler};
-use pallet_session::{ShouldEndSession, PeriodicSessions};
-use frame_support::sp_std::marker::PhantomData;
-use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero, OpaqueKeys, IdentifyAccount, Verify};
-use frame_support::sp_runtime::{RuntimeAppPublic, MultiSignature};
+use frame_support::traits::{Get, EstimateNextSessionRotation};
+// use pallet_session::{ShouldEndSession, PeriodicSessions};
+// use frame_support::sp_std::marker::PhantomData;
+use frame_support::sp_runtime::traits::{ Zero, OpaqueKeys, };
+use frame_support::sp_runtime::{RuntimeAppPublic};
 // use sp_consensus_aura::{AURA_ENGINE_ID, AuthorityIndex, ConsensusLog};
 // use sp_runtime::DigestItem;
 // use frame_support::pallet_prelude::Encode;
@@ -25,17 +25,17 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{dispatch::DispatchResult, pallet_prelude::*, ConsensusEngineId};
-	use frame_system::pallet_prelude::*;
+	use frame_support::{ pallet_prelude::* };
+	// use frame_system::pallet_prelude::*;
 	// use pallet_ocw::{ValidatorHandler};
 	use sp_std::vec::Vec;
-	use sp_std::boxed::Box;
-	use frame_support::sp_runtime::{RuntimeAppPublic, AccountId32};
-	use frame_support::sp_runtime::traits::{IsMember, AccountIdConversion, MaybeDisplay};
-	use frame_support::traits::{ValidatorSet, FindAuthor, OneSessionHandler};
+	// use sp_std::boxed::Box;
+	use frame_support::sp_runtime::{RuntimeAppPublic};
+	use frame_support::sp_runtime::traits::{IsMember};
+	use frame_support::traits::{ValidatorSet};
 	use frame_support::sp_std::fmt::Debug;
-	use frame_election_provider_support::{data_provider, VoteWeight, ElectionDataProvider, Supports, ElectionProvider, onchain, PerThing128};
-	use crate::IStakingNpos;
+	use frame_election_provider_support::{data_provider, VoteWeight, ElectionDataProvider, Supports, ElectionProvider, PerThing128};
+	// use crate::IStakingNpos;
 	use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 	// frame-election-provider-support
 
@@ -336,8 +336,8 @@ impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for T
 impl<A, B> IStakingNpos<A, B> for () {
 	type StashId = sp_application_crypto::sr25519::Public;
 	fn current_staking_era() -> u32 { 0 }
-	fn near_era_change(leading_period: B) -> bool { false }
-	fn calculate_near_era_change(period_multiple: B, current_bn: B, session_length: B, per_era: B) -> bool {
+	fn near_era_change(_leading_period: B) -> bool { false }
+	fn calculate_near_era_change(_period_multiple: B, _current_bn: B, _session_length: B, _per_era: B) -> bool {
 		false
 	}
 	fn old_npos() -> sp_core::sp_std::vec::Vec<Self::StashId> { Vec::new() }

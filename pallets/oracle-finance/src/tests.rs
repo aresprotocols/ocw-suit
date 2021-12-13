@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, PaymentTrace, AskPeriodPayment, RewardTrace, AskPeriodPoint, RewardPeriod};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_ok};
 use crate::traits::*;
 use crate::types::*;
 use frame_support::traits::OnInitialize;
@@ -21,24 +21,24 @@ fn test_reserve_for_ask_quantity() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId: u64 = 3u64;
-		const price_count: u32 = 3;
+		const ACCOUNT_ID: u64 = 3u64;
+		const PRICE_COUNT: u32 = 3;
 
-		let calculate_result = OracleFinance::calculate_fee_of_ask_quantity(price_count);
-		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		let payment_result = OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
-		assert_eq!(Balances::free_balance(AccountId), 100);
-		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
-		assert_eq!(payment_result, OcwPaymentResult::Success(toVec("Purchased_ID"), calculate_result));
+		let calculate_result = OracleFinance::calculate_fee_of_ask_quantity(PRICE_COUNT);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 3000000000100);
+		let payment_result = OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID, to_test_vec("Purchased_ID"), PRICE_COUNT);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 100);
+		assert_eq!(Balances::reserved_balance(ACCOUNT_ID), 3000000000000);
+		assert_eq!(payment_result, OcwPaymentResult::Success(to_test_vec("Purchased_ID"), calculate_result));
 
 		// check storage status
-		let payment_trace = <PaymentTrace<Test>>::get(toVec("Purchased_ID"), AccountId);
+		let payment_trace = <PaymentTrace<Test>>::get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
 		assert_eq!(payment_trace, PaidValue::<Test> {
 			amount: calculate_result,
 			create_bn: current_bn,
 			is_income: true,
 		});
-		// let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, toVec("Purchased_ID")));
+		// let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, to_test_vec("Purchased_ID")));
 		// assert_eq!(ask_payment, calculate_result);
 	});
 }
@@ -52,19 +52,19 @@ fn test_unreserve_ask() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId: u64 = 3u64;
-		const price_count: u32 = 3;
+		const ACCOUNT_ID: u64 = 3u64;
+		const PRICE_COUNT: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(toVec("Purchased_ID"));
+		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(to_test_vec("Purchased_ID"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
-		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
-		assert_eq!(Balances::free_balance(AccountId), 100);
-		assert_eq!(Balances::reserved_balance(AccountId), 3000000000000);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 3000000000100);
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID, to_test_vec("Purchased_ID"), PRICE_COUNT);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 100);
+		assert_eq!(Balances::reserved_balance(ACCOUNT_ID), 3000000000000);
 
 		// check period income.
 		assert_eq!(
@@ -77,24 +77,24 @@ fn test_unreserve_ask() {
 		);
 
 		// check storage status
-		let payment_trace = <PaymentTrace<Test>>::get(toVec("Purchased_ID"), AccountId);
+		let payment_trace = <PaymentTrace<Test>>::get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
 		assert_eq!(payment_trace, PaidValue::<Test> {
 			amount: 3000000000000,
 			create_bn: current_bn,
 			is_income: true,
 		});
 
-		let ask_payment = <AskPeriodPayment<Test>>::get(0, (AccountId, toVec("Purchased_ID")));
+		let ask_payment = <AskPeriodPayment<Test>>::get(0, (ACCOUNT_ID, to_test_vec("Purchased_ID")));
 		assert_eq!(ask_payment, 0, "only reserve so payment still be 0.");
 
 		// get ask paid fee.
-		assert_ok!(OracleFinance::unreserve_ask(toVec("Purchased_ID")));
-		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
+		assert_ok!(OracleFinance::unreserve_ask(to_test_vec("Purchased_ID")));
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 3000000000100);
 
 		// check storage status
-		let payment_trace = <PaymentTrace<Test>>::try_get(toVec("Purchased_ID"), AccountId);
+		let payment_trace = <PaymentTrace<Test>>::try_get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
 		assert!(payment_trace.is_err());
-		let ask_payment = <AskPeriodPayment<Test>>::try_get(0, (AccountId, toVec("Purchased_ID")));
+		let ask_payment = <AskPeriodPayment<Test>>::try_get(0, (ACCOUNT_ID, to_test_vec("Purchased_ID")));
 		assert!(ask_payment.is_err());
 
 	});
@@ -106,18 +106,18 @@ fn test_unreserve_ask() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId: u64 = 3u64;
-		const price_count: u32 = 3;
+		const ACCOUNT_ID: u64 = 3u64;
+		const PRICE_COUNT: u32 = 3;
 
 		// Direct refund when payment is not
-		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(toVec("Purchased_ID_2"));
+		let refund_result: Result<(), Error<Test>> = OracleFinance::unreserve_ask(to_test_vec("Purchased_ID_2"));
 		assert!(refund_result.is_err());
 		assert_eq!(refund_result.err().unwrap(), Error::<Test>::NotFoundPaymentRecord);
 
 		// paid
-		assert_eq!(Balances::free_balance(AccountId), 3000000000100);
-		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID"), price_count);
-		assert_eq!(Balances::free_balance(AccountId), 100);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 3000000000100);
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID, to_test_vec("Purchased_ID"), PRICE_COUNT);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 100);
 
 	});
 
@@ -128,13 +128,13 @@ fn test_unreserve_ask() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId: u64 = 4u64;
-		const price_count: u32 = 4;
+		const ACCOUNT_ID: u64 = 4u64;
+		const PRICE_COUNT: u32 = 4;
 
 		// paid
-		assert_eq!(Balances::free_balance(AccountId), 4000000000100);
-		OracleFinance::reserve_for_ask_quantity(AccountId, toVec("Purchased_ID_NEW"), price_count);
-		assert_eq!(Balances::free_balance(AccountId), 100);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 4000000000100);
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID, to_test_vec("Purchased_ID_NEW"), PRICE_COUNT);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID), 100);
 
 		// check period income.
 		assert_eq!(
@@ -166,24 +166,24 @@ fn test_record_submit_point() {
 		// const AccountId: u64 = 3u64;
 		// const price_count: u32 = 3;
 
-		const AccountId_1: u64 = 1;
-		const AccountId_2: u64 = 2;
-		const AccountId_3: u64 = 3;
-		const AccountId_4: u64 = 4;
+		const ACCOUNT_ID_1: u64 = 1;
+		const ACCOUNT_ID_2: u64 = 2;
+		// const AccountId_3: u64 = 3;
+		// const AccountId_4: u64 = 4;
 
-		let purchase_id_1 = toVec("PurchaseId_1");
-		let purchase_id_2 = toVec("PurchaseId_2");
+		let purchase_id_1 = to_test_vec("PurchaseId_1");
+		// let purchase_id_2 = to_test_vec("PurchaseId_2");
 
 		assert_eq!(OracleFinance::get_period_point(OracleFinance::make_period_num(3)), 0);
 		// who: T::AccountId, p_id: PurchaseId, bn: T::BlockNumber, ask_point: u64sum
-		assert_ok!(OracleFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9));
-		assert_eq!(OracleFinance::record_submit_point(AccountId_1, purchase_id_1.clone(), 1, 9), Err(Error::<Test>::PointRecordIsAlreadyExists) );
-		assert_ok!(OracleFinance::record_submit_point(AccountId_2, purchase_id_1.clone(), 3, 10));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, purchase_id_1.clone(), 1, 9));
+		assert_eq!(OracleFinance::record_submit_point(ACCOUNT_ID_1, purchase_id_1.clone(), 1, 9), Err(Error::<Test>::PointRecordIsAlreadyExists) );
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_2, purchase_id_1.clone(), 3, 10));
 		assert_eq!(OracleFinance::get_period_point(OracleFinance::make_period_num(3)), 19, "Get all the record points in the first time zone");
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_1), vec![
 			(0, 9, purchase_id_1.clone())
 		]);
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_2), vec![
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_2), vec![
 			(0, 10, purchase_id_1.clone())
 		]);
 
@@ -199,22 +199,22 @@ fn test_check_and_slash_expired_rewards() {
 		System::set_block_number(current_bn);
 		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
-		const AccountId_2: u64 = 2;
-		const AccountId_3: u64 = 3;
+		const ACCOUNT_ID_1: u64 = 1;
+		const ACCOUNT_ID_2: u64 = 2;
+		const ACCOUNT_ID_3: u64 = 3;
 
-		OracleFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
-		assert_ok!(OracleFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OracleFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OracleFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55")));
 		// check pot
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![
-			(5, 2, toVec("Purchased_ID_BN_55"))
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_1), vec![
+			(5, 2, to_test_vec("Purchased_ID_BN_55"))
 		]);
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_3), vec![
-			(5, 2, toVec("Purchased_ID_BN_55"))
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_3), vec![
+			(5, 2, to_test_vec("Purchased_ID_BN_55"))
 		]);
 
 		// check none
@@ -233,29 +233,29 @@ fn test_check_and_slash_expired_rewards() {
 
 
 	t.execute_with(|| {
-		let purchased_submit_bn: u64 = 50;
+		let _purchased_submit_bn: u64 = 50;
 		let current_bn: u64 = 90;
 		System::set_block_number(current_bn);
 		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
-		const AccountId_2: u64 = 2;
-		const AccountId_3: u64 = 3;
+		const ACCOUNT_ID_1: u64 = 1;
+		const ACCOUNT_ID_2: u64 = 2;
+		const ACCOUNT_ID_3: u64 = 3;
 
 		//
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardPeriodHasExpired)
 		);
 
 		// check storage struct.
-		assert!(<PaymentTrace<Test>>::contains_key(toVec("Purchased_ID_BN_55"), AccountId_2));
-		assert!(<AskPeriodPayment<Test>>::contains_key(5, (AccountId_2, toVec("Purchased_ID_BN_55"))));
+		assert!(<PaymentTrace<Test>>::contains_key(to_test_vec("Purchased_ID_BN_55"), ACCOUNT_ID_2));
+		assert!(<AskPeriodPayment<Test>>::contains_key(5, (ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"))));
 
-		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, AccountId_1));
-		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, AccountId_3));
-		assert!(<AskPeriodPoint<Test>>::contains_key(5, (AccountId_1, toVec("Purchased_ID_BN_55"))));
-		assert!(<AskPeriodPoint<Test>>::contains_key(5, (AccountId_3, toVec("Purchased_ID_BN_55"))));
+		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, ACCOUNT_ID_1));
+		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, ACCOUNT_ID_3));
+		assert!(<AskPeriodPoint<Test>>::contains_key(5, (ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"))));
+		assert!(<AskPeriodPoint<Test>>::contains_key(5, (ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"))));
 
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
@@ -266,18 +266,18 @@ fn test_check_and_slash_expired_rewards() {
 		);
 
 		// store clean
-		assert_eq!(false, <AskPeriodPayment<Test>>::contains_key(5, (AccountId_2, toVec("Purchased_ID_BN_55"))));
-		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, AccountId_1));
-		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, AccountId_3));
-		assert_eq!(false, <AskPeriodPoint<Test>>::contains_key(5, (AccountId_1, toVec("Purchased_ID_BN_55"))));
-		assert_eq!(false, <AskPeriodPoint<Test>>::contains_key(5, (AccountId_3, toVec("Purchased_ID_BN_55"))));
+		assert_eq!(false, <AskPeriodPayment<Test>>::contains_key(5, (ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"))));
+		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, ACCOUNT_ID_1));
+		assert_eq!(false, <RewardTrace<Test>>::contains_key(5, ACCOUNT_ID_3));
+		assert_eq!(false, <AskPeriodPoint<Test>>::contains_key(5, (ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"))));
+		assert_eq!(false, <AskPeriodPoint<Test>>::contains_key(5, (ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"))));
 
 
 		// assert_eq!(Balances::usable_balance(OracleFinance::account_id()),0);
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
 
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_1), vec![]);
-		assert_eq!(<RewardPeriod<Test>>::get(AccountId_3), vec![]);
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_1), vec![]);
+		assert_eq!(<RewardPeriod<Test>>::get(ACCOUNT_ID_3), vec![]);
 
 	});
 
@@ -293,33 +293,33 @@ fn test_take_reward() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
-		const AccountId_2: u64 = 2;
-		const AccountId_3: u64 = 3;
+		const ACCOUNT_ID_1: u64 = 1;
+		// const AccountId_2: u64 = 2;
+		// const ACCOUNT_ID_3: u64 = 3;
 
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 
 		assert_eq!(
-			OracleFinance::take_reward(1, AccountId_1),
+			OracleFinance::take_reward(1, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardPeriodHasExpired)
 		);
 
 
 		assert_eq!(
-			OracleFinance::take_reward(2, AccountId_1),
+			OracleFinance::take_reward(2, ACCOUNT_ID_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 
 		assert_eq!(
-			OracleFinance::take_reward(3, AccountId_1),
+			OracleFinance::take_reward(3, ACCOUNT_ID_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 
 		assert_eq!(
-			OracleFinance::take_reward(4, AccountId_1),
+			OracleFinance::take_reward(4, ACCOUNT_ID_1),
 			Err(Error::<Test>::NoRewardPoints)
 		);
 	});
@@ -331,25 +331,25 @@ fn test_take_reward() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
-		assert_eq!(Balances::free_balance(AccountId_1), 1000000000100);
+		const ACCOUNT_ID_1: u64 = 1;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 1000000000100);
 
-		const AccountId_2: u64 = 2;
-		assert_eq!(Balances::free_balance(AccountId_2), 2000000000100);
+		const ACCOUNT_ID_2: u64 = 2;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_2), 2000000000100);
 
-		const AccountId_3: u64 = 3;
-		assert_eq!(Balances::free_balance(AccountId_3), 3000000000100);
+		const ACCOUNT_ID_3: u64 = 3;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 3000000000100);
 
 		// ask paid.
-		OracleFinance::reserve_for_ask_quantity(AccountId_2, toVec("Purchased_ID_BN_55"), 2);
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
-		assert_ok!(OracleFinance::pay_to_ask(toVec("Purchased_ID_BN_55")));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55")));
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
 
 		//
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 	});
@@ -360,64 +360,64 @@ fn test_take_reward() {
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
-		assert_eq!(Balances::free_balance(AccountId_1), 1000000000100);
+		const ACCOUNT_ID_1: u64 = 1;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 1000000000100);
 
-		const AccountId_2: u64 = 2;
-		assert_eq!(Balances::free_balance(AccountId_2), 100);
+		const ACCOUNT_ID_2: u64 = 2;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_2), 100);
 
-		const AccountId_3: u64 = 3;
-		assert_eq!(Balances::free_balance(AccountId_3), 3000000000100);
+		const ACCOUNT_ID_3: u64 = 3;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 3000000000100);
 
-		assert_ok!(OracleFinance::record_submit_point(AccountId_1, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
-		assert_ok!(OracleFinance::record_submit_point(AccountId_3, toVec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"), purchased_submit_bn ,2 ));
 
 		//
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardSlotNotExpired)
 		);
 	});
 
 	//
 	t.execute_with(|| {
-		let purchased_submit_bn: u64 = 55;
+		let _purchased_submit_bn: u64 = 55;
 		let current_bn: u64 = 65;
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_1: u64 = 1;
+		const ACCOUNT_ID_1: u64 = 1;
 
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
-		assert_eq!(OracleFinance::take_reward(5, AccountId_1), Ok(2000000000000/2));
+		assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_1), Ok(2000000000000/2));
 		//
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_1),
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
-		assert_eq!(Balances::free_balance(AccountId_1), 2000000000100);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 2000000000100);
 	});
 
 	//
 	t.execute_with(|| {
-		let purchased_submit_bn: u64 = 55;
+		let _purchased_submit_bn: u64 = 55;
 		let current_bn: u64 = 75;
 		System::set_block_number(current_bn);
 		<OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
-		const AccountId_3: u64 = 3;
+		const ACCOUNT_ID_3: u64 = 3;
 
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
-		assert_eq!(OracleFinance::take_reward(5, AccountId_3), Ok(1000000000000));
+		assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_3), Ok(1000000000000));
 
 		//
 		assert_eq!(
-			OracleFinance::take_reward(5, AccountId_3),
+			OracleFinance::take_reward(5, ACCOUNT_ID_3),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
-		assert_eq!(Balances::free_balance(AccountId_3), 4000000000100);
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 4000000000100);
 	});
 }
 

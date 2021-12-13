@@ -461,7 +461,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn toVec(to_str: &str) -> Vec<u8> {
+pub fn to_test_vec(to_str: &str) -> Vec<u8> {
 	to_str.as_bytes().to_vec()
 }
 

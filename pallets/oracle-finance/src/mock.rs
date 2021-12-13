@@ -1,24 +1,23 @@
 use crate as oracle_finance;
-use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
-use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
+// use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
+// use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
 use frame_support::{
-	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
-	weights::Weight,
+	 parameter_types,
+	traits::{Contains, GenesisBuild},
 	PalletId,
 };
 
 
 use frame_system as system;
 use pallet_balances;
-use pallet_balances::{BalanceLock, Error as BalancesError};
+// use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-use frame_benchmarking::frame_support::pallet_prelude::Get;
+// use frame_benchmarking::frame_support::pallet_prelude::Get;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -133,6 +132,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn toVec(to_str: &str) -> Vec<u8> {
+pub fn to_test_vec(to_str: &str) -> Vec<u8> {
 	to_str.as_bytes().to_vec()
 }
