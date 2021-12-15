@@ -1,6 +1,6 @@
 [package]
 name = "ares-oracle"
-version = "3.3.5"
+version = "3.4.1"
 authors = ["Ares Technologies <linhai@cancanyou.com>"]
 edition = "2018"
 license = "Unlicense"
@@ -22,12 +22,15 @@ sp-keystore = { version = "0.10.0-dev", git = "https://github.com/paritytech/sub
 sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
 sp-application-crypto = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
 pallet-aura = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+pallet-babe = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, path = "../session" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
 pallet-balances = {  version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
@@ -35,9 +38,12 @@ oracle-finance = { version = "3.0.1", default-features = false, path= "../oracle
 staking-extend = { version = "3.0.4", default-features = false, path= "../staking-extend" }
 ares-oracle-provider-support = { version = "3.0.1", default-features = false, path= "../ares-oracle-provider-support" }
 
+
 [dev-dependencies]
 sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+
 
 [features]
 default = ["std"]
@@ -58,7 +64,9 @@ std = [
 	"hex/std",
 	"serde/std",
 	"serde_json/std",
+	"sp-consensus-babe/std",
 	"pallet-aura/std",
+	"pallet-babe/std",
 	"pallet-session/std",
 	"ares-oracle-provider-support/std",
 	"staking-extend/std", # Ares staking

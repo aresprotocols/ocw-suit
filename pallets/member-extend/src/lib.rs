@@ -22,16 +22,16 @@ pub mod pallet {
 	pub trait Config: frame_system::Config  {
 		type MemberAuthority: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize + UncheckedFrom<[u8; 32]>;
 		type Member: IsMember<Self::MemberAuthority>;
-		type ValidatorId: IsType<<Self as frame_system::Config>::AccountId>  + Encode + Debug + PartialEq;
+		// type ValidatorId: IsType<<Self as frame_system::Config>::AccountId>  + Encode + Debug + PartialEq;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	impl<T: Config> IsMember<T::ValidatorId> for Pallet<T>
+	impl<T: Config> IsMember<T::AccountId> for Pallet<T>
 	{
-		fn is_member(authority_id: &T::ValidatorId) -> bool {
+		fn is_member(authority_id: &T::AccountId) -> bool {
 			let encode_data: Vec<u8> = authority_id.encode();
 			assert!(32 == encode_data.len());
 			let raw: Result<[u8; 32], _> = encode_data.try_into();

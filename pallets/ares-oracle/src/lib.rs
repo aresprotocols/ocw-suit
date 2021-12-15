@@ -15,15 +15,24 @@ use sp_runtime::{
     AccountId32, RuntimeAppPublic, RuntimeDebug,
 };
 use sp_std::vec::Vec;
-
+use sp_core::sr25519::Signature as Sr25519Signature;
 use frame_support::traits::{FindAuthor, Get};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
+use frame_support::sp_runtime::sp_std::convert::TryInto;
+use frame_support::sp_runtime::traits::{IsMember, Verify};
+use frame_system::offchain::{SendUnsignedTransaction, Signer};
+use lite_json::NumberValue;
+pub use pallet::*;
+use sp_application_crypto::sp_core::crypto::UncheckedFrom;
+use sp_consensus_aura::{AURA_ENGINE_ID,};
+use sp_runtime::offchain::storage::StorageValueRef;
 
 #[cfg(test)]
 mod tests;
 
 pub mod aura_handler;
+pub mod babe_handler;
 
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
@@ -37,61 +46,84 @@ pub const PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN: u8 = 2;
 
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 // pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ares"); // sp_application_crypto::key_types::BABE ; //
-pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
-/// the types with this pallet-specific identifier.
-pub mod crypto {
-    use super::KEY_TYPE;
-    use crate::pallet;
-    use frame_support::pallet_prelude::PhantomData;
-    use sp_core::sr25519::Signature as Sr25519Signature;
-    use sp_runtime::{
-        app_crypto::{app_crypto, sr25519},
-        traits::Verify,
-        MultiSignature, MultiSigner,
-    };
+// pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::AURA;
+// pub const KEY_TYPE: KeyTypeId = sp_application_crypto::key_types::BABE;
+// /// the types with this pallet-specific identifier.
+// pub mod crypto {
+//     use super::KEY_TYPE;
+//     use crate::pallet;
+//     use crate::traits::ValidatorCount;
+//     use frame_support::pallet_prelude::PhantomData;
+//     use sp_core::sr25519::Signature as Sr25519Signature;
+//     use sp_runtime::{
+//         app_crypto::{app_crypto, sr25519},
+//         traits::Verify,
+//         MultiSignature, MultiSigner,
+//     };
+//
+//     app_crypto!(sr25519, KEY_TYPE);
+//
+//     // struct fro production
+//     pub struct OcwAuthId<T>(PhantomData<T>);
+//
+//     impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
+//     for OcwAuthId<T>
+//         where
+//             sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+//             u64: From<<T as frame_system::Config>::BlockNumber>,
+//     {
+//         type RuntimeAppPublic = Public;
+//         type GenericSignature = sp_core::sr25519::Signature;
+//         type GenericPublic = sp_core::sr25519::Public;
+//     }
+//
+//     impl<T: pallet::Config>
+//     frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+//     for OcwAuthId<T>
+//         where
+//             sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+//             u64: From<<T as frame_system::Config>::BlockNumber>,
+//     {
+//         type RuntimeAppPublic = Public;
+//         type GenericSignature = sp_core::sr25519::Signature;
+//         type GenericPublic = sp_core::sr25519::Public;
+//     }
+//
+//     /// An i'm online identifier using sr25519 as its crypto.
+//     pub type AuthorityId = self::Public;
+// }
 
-    app_crypto!(sr25519, KEY_TYPE);
+pub struct AresCrypto<AresPublic>(PhantomData<AresPublic>) ;
 
-    // struct fro production
-    pub struct OcwAuthId<T>(PhantomData<T>);
-
-    impl<T: pallet::Config> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-    for OcwAuthId<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-
-    impl<T: pallet::Config>
-    frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-    for OcwAuthId<T>
-        where
-            sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-            u64: From<<T as frame_system::Config>::BlockNumber>,
-    {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-
-    /// An i'm online identifier using sr25519 as its crypto.
-    pub type AuthorityId = self::Public;
+impl <AresPublic: RuntimeAppPublic> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
+for AresCrypto<AresPublic>
+    where sp_application_crypto::sr25519::Signature: From<<AresPublic as sp_runtime::RuntimeAppPublic>::Signature>,
+          <AresPublic as sp_runtime::RuntimeAppPublic>::Signature: From<sp_application_crypto::sr25519::Signature>,
+          sp_application_crypto::sr25519::Public: From<AresPublic>,
+          AresPublic: From<sp_application_crypto::sr25519::Public>,
+    // where
+    //     sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    //     u64: From<<T as frame_system::Config>::BlockNumber>,
+{
+    type RuntimeAppPublic = AresPublic;
+    type GenericSignature = Sr25519Signature;
+    type GenericPublic = sp_core::sr25519::Public;
 }
 
-// use crate::crypto::OcwAuthId;
-// use frame_support::sp_runtime::app_crypto::{Public};
-use frame_support::sp_runtime::sp_std::convert::TryInto;
-use frame_support::sp_runtime::traits::{IsMember};
-use frame_system::offchain::{SendUnsignedTransaction, Signer};
-use lite_json::NumberValue;
-pub use pallet::*;
-use sp_application_crypto::sp_core::crypto::UncheckedFrom;
-use sp_consensus_aura::{AURA_ENGINE_ID,};
-use sp_runtime::offchain::storage::StorageValueRef;
+impl <AresPublic: RuntimeAppPublic> frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+for AresCrypto<AresPublic>
+    where sp_application_crypto::sr25519::Signature: From<<AresPublic as sp_runtime::RuntimeAppPublic>::Signature>,
+          <AresPublic as sp_runtime::RuntimeAppPublic>::Signature: From<sp_application_crypto::sr25519::Signature>,
+          sp_application_crypto::sr25519::Public: From<AresPublic>,
+          AresPublic: From<sp_application_crypto::sr25519::Public>,
+    // where
+    //     sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    //     u64: From<<T as frame_system::Config>::BlockNumber>,
+{
+    type RuntimeAppPublic = AresPublic;
+    type GenericSignature = Sr25519Signature;
+    type GenericPublic = sp_core::sr25519::Public;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -105,7 +137,6 @@ pub mod pallet {
     use frame_system::{ensure_signed, ensure_none};
     use staking_extend::IStakingNpos;
     use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckTaskConfig};
-
 
     #[pallet::error]
     #[derive(PartialEq, Eq)]
@@ -122,8 +153,6 @@ pub mod pallet {
         //
         PreCheckTokenListNotEmpty,
         //
-
-
     }
 
     /// This pallet's configuration trait
@@ -153,18 +182,12 @@ pub mod pallet {
 
         type FindAuthor: FindAuthor<Self::AccountId>;
 
-        type ValidatorAuthority: IsType<<Self as frame_system::Config>::AccountId> + Member;
+        // type ValidatorAuthority: IsType<<Self as frame_system::Config>::AccountId> + Member;
 
-        type VMember: IsMember<Self::ValidatorAuthority>;
+        type VMember: IsMember<Self::AccountId>;
 
         #[pallet::constant]
         type UnsignedPriority: Get<TransactionPriority>;
-
-        // #[pallet::constant]
-        // type NeedVerifierCheck: Get<bool>;
-
-        // Used to confirm RequestPropose.
-        type RequestOrigin: EnsureOrigin<Self::Origin>;
 
         #[pallet::constant]
         type FractionLengthNum: Get<u32>;
@@ -172,15 +195,17 @@ pub mod pallet {
         #[pallet::constant]
         type CalculationKind: Get<u8>;
 
+        // #[pallet::constant]
+        // type NeedVerifierCheck: Get<bool>;
+
+        // Used to confirm RequestPropose.
+        type RequestOrigin: EnsureOrigin<Self::Origin>;
+
         type AuthorityCount: ValidatorCount;
 
         type OracleFinanceHandler: IForPrice<Self> + IForReporter<Self> + IForReward<Self>;
 
         type AresIStakingNpos: IStakingNpos<Self::AuthorityAres, Self::BlockNumber, StashId = <Self as frame_system::Config>::AccountId> ;
-    }
-
-    pub trait ValidatorCount {
-        fn get_validators_count() -> u64;
     }
 
     #[pallet::pallet]
@@ -1005,7 +1030,7 @@ pub mod pallet {
                     payload.per_check_list.clone(),
                 );
 
-                if payload.block_number.clone() - <system::Pallet<T>>::block_number() > 5u32.into() {
+                if <system::Pallet<T>>::block_number() - payload.block_number.clone() > 5u32.into() {
                     return InvalidTransaction::BadProof.into();
                 }
 
@@ -1371,14 +1396,15 @@ pub mod crypto2;
 use types::*;
 use hex;
 use sp_runtime::traits::{UniqueSaturatedInto, Saturating};
-use frame_support::pallet_prelude::StorageMap;
+use frame_support::pallet_prelude::{StorageMap, PhantomData};
 use oracle_finance::types::BalanceOf;
 use oracle_finance::traits::{IForReporter, IForPrice};
 use crate::traits::*;
 use frame_support::weights::Weight;
-use frame_support::sp_runtime::{Percent};
+use frame_support::sp_runtime::{Percent, MultiSigner, MultiSignature};
 use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckTaskConfig, PreCheckStruct, PreCheckStatus};
 use sp_std::{collections::btree_map::BTreeMap};
+use frame_support::ConsensusEngineId;
 
 
 impl<T: Config> Pallet<T>
@@ -1397,11 +1423,15 @@ where
             );
         }
         let worker_ownerid_list = Self::get_ares_authority_list() ;
+        // log::debug!("****A0 worker_ownerid_list count ::{:?} ", worker_ownerid_list.len());
+        // log::info!("****A0 worker_ownerid_list count ::{:?} ", worker_ownerid_list.len());
         for ownerid in worker_ownerid_list.iter() {
             let mut a = [0u8; 32];
             a[..].copy_from_slice(&ownerid.to_raw_vec());
             // extract AccountId32 from store keys
             let owner_account_id32 = AccountId32::new(a);
+            // log::debug!("****A1 authority::{:?} =? block_author::{:?}", &owner_account_id32, &block_author);
+            // log::info!("****A2 authority::{:?} =? block_author::{:?}", &owner_account_id32, &block_author);
             // debug end.
             if owner_account_id32 == block_author.clone().into() {
                 log::info!("🚅 found mathing block author {:?}", &block_author);
@@ -1961,14 +1991,10 @@ where
         None
     }
 
-    fn is_validator_member(validator: T::ValidatorAuthority) -> bool {
+    fn is_validator_member(validator: T::AccountId) -> bool {
         // let mut find_validator = !T::NeedVerifierCheck::get();
         let mut find_validator = !<OcwControlSetting<T>>::get().need_verifier_check;
         if false == find_validator {
-            // check exists
-            // let encode_data: Vec<u8> = payload.public.encode();
-            // let validator_authority: T::ValidatorAuthority =
-            //     <T as SigningTypes>::Public::into_account(payload.public.clone()).into();
             find_validator = T::VMember::is_member(&validator);
         }
         find_validator
@@ -3045,6 +3071,11 @@ where
             });
         Ok(())
     }
+
+    // AresCrypto
+    // fn get_ares_crypto() -> dyn AppCrypto {
+    //     todo!()
+    // }
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -3079,6 +3110,29 @@ impl fmt::Debug for LocalPriceRequestStorage {
     }
 }
 
+pub struct FindAresAccountFromAuthority<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+
+impl<T: Config, Inner: FindAuthor<T::AuthorityAres>> FindAuthor<T::AccountId>
+for FindAresAccountFromAuthority<T, Inner>
+    where
+        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+        u64: From<<T as frame_system::Config>::BlockNumber>,
+        <T as frame_system::Config>::AccountId: From<sp_runtime::AccountId32>,
+{
+    fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
+        where
+            I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
+    {
+        let find_auraid = Inner::find_author(digests)?;
+
+        let mut a = [0u8; 32];
+        a[..].copy_from_slice(&find_auraid.to_raw_vec());
+        // extract AccountId32 from store keys
+        let owner_account_id32 = sp_runtime::AccountId32::new(a);
+        let authro_account_id = owner_account_id32.clone().into();
+        Some(authro_account_id)
+    }
+}
 
 impl<T: Config> SymbolInfo for Pallet<T>
     where
