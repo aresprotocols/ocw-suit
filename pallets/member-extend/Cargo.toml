@@ -7,7 +7,7 @@ name = 'member-extend'
 publish = false
 homepage = "https://github.com/aresprotocols"
 repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.0.3'
+version = '3.1.0'
 readme = 'README.md'
 
 [package.metadata.docs.rs]

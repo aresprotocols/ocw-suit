@@ -80,6 +80,9 @@ pub const DOLLARS: u64 = 1_000_000_000_000;
 // use oracle_finance::types::*;
 use oracle_finance::traits::*;
 
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+
+
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -272,8 +275,8 @@ ord_parameter_types! {
 
 impl Config for Test {
     type Event = Event;
-    type OffchainAppCrypto = crypto::OcwAuthId<Self>;
-    type AuthorityAres = crypto::AuthorityId;
+    type OffchainAppCrypto = crate::AresCrypto<AuraId>;
+    type AuthorityAres = AuraId;
     type Call = Call;
     // type ValidatorSet = Historical;
     type RequestOrigin = frame_system::EnsureRoot<AccountId>;
@@ -287,7 +290,7 @@ impl Config for Test {
     type FractionLengthNum = FractionLengthNum;
     type CalculationKind = CalculationKind;
 
-    type ValidatorAuthority= AccountId;
+    // type ValidatorAuthority= AccountId;
     type VMember = TestMember;
 
     type AuthorityCount = TestAuthorityCount;
@@ -453,55 +456,55 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter3", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter4", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter5", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(1)
         .unwrap()
         .clone();
 
-    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(2)
         .unwrap()
         .clone();
 
-    let public_key_4 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_4 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(3)
         .unwrap()
         .clone();
 
-    let public_key_5 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_5 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(4)
         .unwrap()
         .clone();
@@ -577,7 +580,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             let signature_valid = <PurchasedPricePayload<
                 <Test as SigningTypes>::Public,
                 <Test as frame_system::Config>::BlockNumber
-            > as SignedPayload<Test>>::verify::<crypto::OcwAuthId<Test>>(&price_payload_b1, signature.clone());
+            > as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
             assert!(signature_valid);
 
             // Test purchased submit call
@@ -781,23 +784,23 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let _public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let _public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(1)
         .unwrap()
         .clone();
@@ -970,33 +973,33 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter3", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(1)
         .unwrap()
         .clone();
 
-    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(2)
         .unwrap()
         .clone();
@@ -2360,11 +2363,11 @@ fn save_fetch_ares_price_and_send_payload_signed() {
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
-    let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(0)
         .unwrap()
         .clone();
@@ -2414,7 +2417,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
             let signature_valid = <PricePayload<
                 <Test as SigningTypes>::Public,
                 <Test as frame_system::Config>::BlockNumber
-            > as SignedPayload<Test>>::verify::<crypto::OcwAuthId<Test>>(&price_payload_b1, signature.clone());
+            > as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
             assert!(signature_valid);
         }
     });
@@ -2551,22 +2554,22 @@ fn test_jump_block_submit() {
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        crate::crypto::Public::ID,
+        sp_consensus_aura::sr25519::AuthorityId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
         .get(1)
         .unwrap()
         .clone();

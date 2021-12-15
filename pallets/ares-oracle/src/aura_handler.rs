@@ -4,7 +4,8 @@
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
-pub use crate::pallet::*;
+use crate::pallet::*;
+use crate::ValidatorCount;
 use frame_support::pallet_prelude::PhantomData;
 // use frame_support::traits::FindAuthor;
 
