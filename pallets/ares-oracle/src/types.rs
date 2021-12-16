@@ -111,7 +111,7 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 #[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          u64: From<<T as frame_system::Config>::BlockNumber>,
+          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     pub account_id: T::AccountId,
     pub offer: BalanceOf<T>,
@@ -123,7 +123,7 @@ pub struct PurchasedRequestData<T: Config>
 
 impl <T: Config> Default for PurchasedRequestData<T>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          u64: From<<T as frame_system::Config>::BlockNumber>,
+          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     fn default() -> Self {
         Self {
@@ -140,7 +140,7 @@ impl <T: Config> Default for PurchasedRequestData<T>
 // Impl debug.
 impl <T: Config> fmt::Debug for PurchasedRequestData<T>
     where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          u64: From<<T as frame_system::Config>::BlockNumber>,
+          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     // `fmt` converts the vector of bytes inside the struct back to string for
     //  more friendly display.
@@ -354,7 +354,7 @@ pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
 
 impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
     where
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
     fn public(&self) -> T::Public {
@@ -374,7 +374,7 @@ pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
 
 impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
     where
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
     fn public(&self) -> T::Public {

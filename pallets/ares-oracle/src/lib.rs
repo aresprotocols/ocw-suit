@@ -160,7 +160,7 @@ pub mod pallet {
     pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config + oracle_finance::Config
     where
         sp_runtime::AccountId32: From<<Self as frame_system::Config>::AccountId>,
-        u64: From<<Self as frame_system::Config>::BlockNumber>,
+        // u64: From<<Self as frame_system::Config>::BlockNumber>,
     {
         /// The identifier type for an offchain worker.
         type OffchainAppCrypto: AppCrypto<Self::Public, Self::Signature>;
@@ -216,7 +216,7 @@ pub mod pallet {
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
         <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
     {
@@ -354,7 +354,7 @@ pub mod pallet {
     impl<T: Config> Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         #[pallet::weight(1000)]
@@ -827,7 +827,7 @@ pub mod pallet {
     pub enum Event<T: Config>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, Vec<PricePayloadSubJumpBlock>, T::AccountId),
@@ -859,7 +859,7 @@ pub mod pallet {
     impl<T: Config> ValidateUnsigned for Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
     {
         type Call = Call<T>;
 
@@ -1306,7 +1306,7 @@ pub mod pallet {
     pub struct GenesisConfig<T: Config>
     where
         AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         pub _phantom: sp_std::marker::PhantomData<T>,
@@ -1325,7 +1325,7 @@ pub mod pallet {
     impl<T: Config> Default for GenesisConfig<T>
     where
         AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn default() -> Self {
@@ -1357,7 +1357,7 @@ pub mod pallet {
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
     where
         AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         // <T as frame_system::offchain::SigningTypes>::Public: From<<T as pallet::Config>::AuthorityAres>,
     {
         fn build(&self) {
@@ -1410,8 +1410,9 @@ use frame_support::ConsensusEngineId;
 impl<T: Config> Pallet<T>
 where
     sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-    u64: From<<T as frame_system::Config>::BlockNumber>,
+    // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
+
     fn are_block_author_and_sotre_key_the_same(block_author: T::AccountId) -> bool {
         // let mut is_same = !T::NeedVerifierCheck::get(); // Self::get_default_author_save_bool();
 
@@ -2050,7 +2051,7 @@ where
             source_list
         {
             if 2 == parse_version {
-                let mut round_number: u64 = block_number.into();
+                let mut round_number: u64 = block_number.unique_saturated_into();
                 round_number += Self::get_jump_block_number(price_key.clone());
                 let remainder: u64 = (round_number % request_interval as u64).into();
                 if 0 == remainder {
@@ -3116,7 +3117,7 @@ impl<T: Config, Inner: FindAuthor<T::AuthorityAres>> FindAuthor<T::AccountId>
 for FindAresAccountFromAuthority<T, Inner>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
         <T as frame_system::Config>::AccountId: From<sp_runtime::AccountId32>,
 {
     fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
@@ -3137,7 +3138,7 @@ for FindAresAccountFromAuthority<T, Inner>
 impl<T: Config> SymbolInfo for Pallet<T>
     where
         sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-        u64: From<<T as frame_system::Config>::BlockNumber>,
+        // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
         AresAvgPrice::<T>::try_get(symbol)
@@ -3150,7 +3151,7 @@ impl<T: Config> SymbolInfo for Pallet<T>
 
 impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumber> for Pallet<T>
     where sp_runtime::AccountId32: From<T::AccountId>,
-      u64: From<T::BlockNumber>,
+      // u64: From<T::BlockNumber>,
 {
     //
     fn has_pre_check_task(stash: T::AccountId) -> bool {
