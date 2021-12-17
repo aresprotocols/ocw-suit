@@ -1,5 +1,6 @@
 
 use super::*;
+
 use sp_core::hexdisplay::HexDisplay;
 // use sp_runtime::traits::{Saturating, Zero};
 // use frame_support::sp_runtime::Percent;
@@ -110,7 +111,7 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
-    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     pub account_id: T::AccountId,
@@ -122,7 +123,7 @@ pub struct PurchasedRequestData<T: Config>
 }
 
 impl <T: Config> Default for PurchasedRequestData<T>
-    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     fn default() -> Self {
@@ -139,7 +140,7 @@ impl <T: Config> Default for PurchasedRequestData<T>
 
 // Impl debug.
 impl <T: Config> fmt::Debug for PurchasedRequestData<T>
-    where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
+    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
           // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     // `fmt` converts the vector of bytes inside the struct back to string for
@@ -301,28 +302,30 @@ pub struct PreCheckCompareLog {
 
 /// data required to submit a transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayload<Public, BlockNumber> {
+pub struct PricePayload<Public, BlockNumber, AuthorityId> {
     pub block_number: BlockNumber,
     // price_key,price_val, fraction len
     pub price: Vec<PricePayloadSubPrice>,
     pub jump_block: Vec<PricePayloadSubJumpBlock>,
+    pub auth: AuthorityId,
     pub public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes + Config > SignedPayload<T> for PricePayload<T::Public, T::BlockNumber, T::AuthorityAres> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PurchasedForceCleanPayload<Public, BlockNumber> {
+pub struct PurchasedForceCleanPayload<Public, BlockNumber, AuthorityId> {
     pub block_number: BlockNumber,
     pub purchase_id_list: Vec<Vec<u8>>,
+    pub auth: AuthorityId,
     pub public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PurchasedForceCleanPayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes + Config > SignedPayload<T> for PurchasedForceCleanPayload<T::Public, T::BlockNumber, T::AuthorityAres> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
@@ -330,14 +333,15 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedForceCleanPayload<T::Public,
 
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PurchasedPricePayload<Public, BlockNumber> {
+pub struct PurchasedPricePayload<Public, BlockNumber, AuthorityId> {
     pub block_number: BlockNumber,
     pub purchase_id: Vec<u8>,
     pub price: Vec<PricePayloadSubPrice>,
+    pub auth: AuthorityId,
     pub public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes + Config > SignedPayload<T> for PurchasedPricePayload<T::Public, T::BlockNumber, T::AuthorityAres> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
@@ -346,16 +350,16 @@ impl<T: SigningTypes> SignedPayload<T> for PurchasedPricePayload<T::Public, T::B
 /// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
+    pub block_number: BlockNumber,
     pub stash: AccountId,
     pub auth: AuthorityId,
-    pub block_number: BlockNumber,
     pub public: Public,
 }
 
 impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
-    where
+    // where
         // u64: From<<T as frame_system::Config>::BlockNumber>,
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+        // sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
     fn public(&self) -> T::Public {
         self.public.clone()
@@ -365,17 +369,17 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, 
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
-    pub stash: AccountId,
-    pub auth: AuthorityId,
     pub block_number: BlockNumber,
     pub per_check_list: Vec<PreCheckStruct>,
+    pub stash: AccountId,
+    pub auth: AuthorityId,
     pub public: Public,
 }
 
 impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
-    where
+    // where
         // u64: From<<T as frame_system::Config>::BlockNumber>,
-        sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
+        // sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
     fn public(&self) -> T::Public {
         self.public.clone()

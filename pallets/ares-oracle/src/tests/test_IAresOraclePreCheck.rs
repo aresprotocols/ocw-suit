@@ -77,6 +77,7 @@ fn test_get_pre_task_by_authority_set() {
     });
 }
 
+//noinspection RsDetachedFile
 #[test]
 fn test_take_price_for_per_check() {
     let mut t = new_test_ext();
@@ -88,11 +89,11 @@ fn test_take_price_for_per_check() {
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
@@ -162,11 +163,11 @@ fn save_pre_check_result_for_success() {
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
@@ -241,11 +242,11 @@ fn save_pre_check_result_for_prohibit() {
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();

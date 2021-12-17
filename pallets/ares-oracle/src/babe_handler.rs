@@ -14,7 +14,7 @@ use sp_runtime::traits::MaybeSerializeDeserialize;
 
 /// Config necessary for the historical module.
 pub trait Config: pallet_babe::Config
-    // where Self::AuthorityId: From<pallet_babe::AuthorityId>
+    // where Self::T::AuthorityAres: From<pallet_babe::AuthorityId>
 {
     type AuthorityId: Member
     + Parameter

@@ -7,6 +7,7 @@ use frame_support::sp_runtime::Percent;
 use lite_json::NumberValue;
 use sp_std::vec::Vec;
 
+pub mod crypto;
 
 pub type FractionLength = u32;
 

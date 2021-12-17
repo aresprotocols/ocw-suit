@@ -71,10 +71,6 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	pub type Something<T> = StorageValue<_, u32>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn payment_trace)]
 	pub type PaymentTrace<T> = StorageDoubleMap<
 		_,

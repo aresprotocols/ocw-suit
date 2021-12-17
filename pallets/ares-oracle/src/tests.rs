@@ -80,8 +80,9 @@ pub const DOLLARS: u64 = 1_000_000_000_000;
 // use oracle_finance::types::*;
 use oracle_finance::traits::*;
 
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-
+// use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use crate::AuthorityId as AuraId;
+// use crate::AuthorityId::ID as ;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
@@ -158,23 +159,23 @@ impl crate::historical::Config for Test {
 // }
 
 // const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
+// pub struct TestFindAuthor;
+// impl FindAuthor<AccountId> for TestFindAuthor {
+//     fn find_author<'a, I>(digests: I) -> Option<AccountId> where
+//         I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+//     {
+//         Some(Default::default())
+//     }
+// }
+
 pub struct TestFindAuthor;
-impl FindAuthor<AccountId> for TestFindAuthor {
-    fn find_author<'a, I>(digests: I) -> Option<AccountId> where
+impl FindAuthor<u32> for TestFindAuthor {
+    fn find_author<'a, I>(digests: I) -> Option<u32> where
         I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
     {
-        Some(Default::default())
-        // println!("----->> ");
-        // for (id, data) in digests {
-        //     println!("digests = id = {:?}, data = {:?}", &id, &data);
-        //     if id == TEST_ID {
-        //         Public::decode(&mut &data[..]).ok();
-        //     }
-        // }
-        // None
+        Some(1)
     }
 }
-
 
 parameter_types! {
 	pub const UncleGenerations: u32 = 5;
@@ -272,30 +273,17 @@ ord_parameter_types! {
 	pub const Six: u64 = 6;
 }
 
-
 impl Config for Test {
     type Event = Event;
     type OffchainAppCrypto = crate::AresCrypto<AuraId>;
     type AuthorityAres = AuraId;
     type Call = Call;
-    // type ValidatorSet = Historical;
     type RequestOrigin = frame_system::EnsureRoot<AccountId>;
-    // type UnsignedInterval = UnsignedInterval;
     type UnsignedPriority = UnsignedPriority;
     type FindAuthor = TestFindAuthor;
-    // type PriceVecMaxSize = PriceVecMaxSize;
-    // type MaxCountOfPerRequest = MaxCountOfPerRequest;
-    // type NeedVerifierCheck = NeedVerifierCheck;
-    // type UseOnChainPriceRequest = UseOnChainPriceRequest;
-    type FractionLengthNum = FractionLengthNum;
     type CalculationKind = CalculationKind;
-
-    // type ValidatorAuthority= AccountId;
-    type VMember = TestMember;
-
     type AuthorityCount = TestAuthorityCount;
     type OracleFinanceHandler = OracleFinance;
-
     type AresIStakingNpos = ();
 }
 
@@ -456,58 +444,44 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter3", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter4", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter5", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
-        .get(0)
-        .unwrap()
-        .clone();
+    let public_key_1: AuraId = get_account_id_from_seed::<AuraId>("hunter1").into();
+    let public_key_2: AuraId = get_account_id_from_seed::<AuraId>("hunter2").into();
+    let public_key_3: AuraId = get_account_id_from_seed::<AuraId>("hunter3").into();
+    let public_key_4: AuraId = get_account_id_from_seed::<AuraId>("hunter4").into();
+    let public_key_5: AuraId = get_account_id_from_seed::<AuraId>("hunter5").into();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
-        .get(1)
-        .unwrap()
-        .clone();
-
-    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
-        .get(2)
-        .unwrap()
-        .clone();
-
-    let public_key_4 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
-        .get(3)
-        .unwrap()
-        .clone();
-
-    let public_key_5 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
-        .get(4)
-        .unwrap()
-        .clone();
+    println!("**** public_key_1 = {:?}", public_key_1);
+    println!("**** public_key_2 = {:?}", public_key_2);
+    println!("**** public_key_3 = {:?}", public_key_3);
+    println!("**** public_key_4 = {:?}", public_key_4);
 
     t.register_extension(OffchainWorkerExt::new(offchain));
     t.register_extension(TransactionPoolExt::new(pool));
@@ -528,10 +502,15 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
     let mut pub_purchase_id = Vec::new();
     t.execute_with(|| {
         System::set_block_number(1);
-        let purchase_id = AresOcw::make_purchase_price_id(<Test as SigningTypes>::Public::from(public_key_1), 0);
+
+        let authroities =  <Authorities<Test>>::get();
+        println!("authroities = {:?}", authroities);
+
+        let purchase_id = AresOcw::make_purchase_price_id(<Test as SigningTypes>::Public::from(public_key_1.clone()), 0);
         pub_purchase_id = purchase_id.clone();
         let price_payload_b1 = PurchasedPricePayload {
             block_number: 1, // type is BlockNumber
+            auth: public_key_1.clone(),
             purchase_id: purchase_id.clone(),
             price: vec![
                 PricePayloadSubPrice("btc_price".as_bytes().to_vec(), 502613720u64, 4, JsonNumberValue{
@@ -541,12 +520,12 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
                     exponent: 0
                 }),
             ],
-            public: <Test as SigningTypes>::Public::from(public_key_1),
+            public: <Test as SigningTypes>::Public::from(public_key_1.clone()),
         };
 
         // Add purchase price
         // Add purchased request.
-        let request_acc = <Test as SigningTypes>::Public::from(public_key_1);
+        let request_acc = <Test as SigningTypes>::Public::from(public_key_1.clone());
         let offer = 10u64;
         let submit_threshold = 100u8;
         let max_duration = 3u64;
@@ -555,7 +534,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
         Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
         assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
         let result = OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
-        println!("result = {:?}", result);
+
         assert_ok!(AresOcw::ask_price(
             request_acc.clone(),
             offer,
@@ -564,12 +543,12 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             purchase_id.clone(),
             request_keys.clone() ));
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(request_acc.clone());
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
 
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(1, public_key_1.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(1, public_key_1.clone()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -579,15 +558,16 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
             assert_eq!(body.clone(), price_payload_b1);
             let signature_valid = <PurchasedPricePayload<
                 <Test as SigningTypes>::Public,
-                <Test as frame_system::Config>::BlockNumber
+                <Test as frame_system::Config>::BlockNumber,
+                AuraId,
             > as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
             assert!(signature_valid);
 
             // Test purchased submit call
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(request_acc.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
             assert!(purchased_key_option.is_some());
             AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(request_acc.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
             assert!(purchased_key_option.is_none());
             assert_eq!(TestAuthorityCount::get_validators_count(), 4);
         }
@@ -607,7 +587,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
     t.execute_with(|| {
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_2.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_2.clone()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -638,7 +618,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
     t.execute_with(|| {
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_3.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_3.clone()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -654,22 +634,25 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_1.into_account(),
+            AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
             pub_purchase_id.clone(),
         ), None);
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_2.into_account(),
+            AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
             pub_purchase_id.clone(),
         ), None);
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_3.into_account(),
+            AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
             pub_purchase_id.clone(),
         ), None);
+
+        println!("public_key_3 = {:?} ", public_key_3);
+        println!("public_key_4 = {:?}", public_key_4);
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_4.into_account(),
+            AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
             pub_purchase_id.clone(),
         ), None);
 
@@ -705,7 +688,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
         let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(order_pool.len(), 3);
 
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_4.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_4.clone()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -721,22 +704,22 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_1.into_account(),
+            AresOcw::get_stash_id(&public_key_1).unwrap(),
             pub_purchase_id.clone(),
         ), Some(1));
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_2.into_account(),
+            AresOcw::get_stash_id(&public_key_2).unwrap(),
             pub_purchase_id.clone(),
         ), Some(1));
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_3.into_account(),
+            AresOcw::get_stash_id(&public_key_3).unwrap(),
             pub_purchase_id.clone(),
         ), Some(1));
         assert_eq!(OracleFinance::get_record_point(
             OracleFinance::make_period_num(2),
-            public_key_4.into_account(),
+            AresOcw::get_stash_id(&public_key_4).unwrap(),
             pub_purchase_id.clone(),
         ), Some(1));
 
@@ -784,23 +767,23 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let _public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let _public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(1)
         .unwrap()
         .clone();
@@ -849,22 +832,22 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
             purchase_id.clone(),
             request_keys.clone() ));
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         assert_eq!(tx.signature, None);
         if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) = tx.call {
             // Test purchased submit call
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone().into());
             assert!(purchased_key_option.is_some());
             AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone().into());
             assert!(purchased_key_option.is_none());
             assert_eq!(TestAuthorityCount::get_validators_count(), 4);
         }
@@ -927,7 +910,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
         assert_eq!(avg_trace.len(), 0);
 
         // Forced to settle
-        AresOcw::save_forced_clear_purchased_price_payload_signed(3, public_key_1.into_account()).unwrap();
+        AresOcw::save_forced_clear_purchased_price_payload_signed(3, public_key_1.into()).unwrap();
 
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
@@ -973,33 +956,33 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     let keystore = KeyStore::new();
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter3", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(1)
         .unwrap()
         .clone();
 
-    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_3 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(2)
         .unwrap()
         .clone();
@@ -1042,22 +1025,22 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
             purchase_id,
             request_keys.clone() ));
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into_account());
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_1.into()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         assert_eq!(tx.signature, None);
         if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) = tx.call {
             // Test purchased submit call
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into());
             assert!(purchased_key_option.is_some());
             AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_1.into());
             assert!(purchased_key_option.is_none());
             assert_eq!(TestAuthorityCount::get_validators_count(), 4);
         }
@@ -1094,22 +1077,22 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     t.execute_with(|| {
         System::set_block_number(2);
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.into_account());
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.into());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_2.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_2.into()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         assert_eq!(tx.signature, None);
         if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) = tx.call {
             // Test purchased submit call
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.clone().into());
             assert!(purchased_key_option.is_some());
             AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_2.clone().into());
             assert!(purchased_key_option.is_none());
             assert_eq!(TestAuthorityCount::get_validators_count(), 4);
         }
@@ -1146,22 +1129,22 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
     t.execute_with(|| {
         System::set_block_number(2);
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.into_account());
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.into());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, vec![("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4)]);
 
         System::set_block_number(2);
-        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_3.into_account()).unwrap();
+        AresOcw::save_fetch_purchased_price_and_send_payload_signed(2, public_key_3.into()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         assert_eq!(tx.signature, None);
         if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) = tx.call {
             // Test purchased submit call
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.clone().into());
             assert!(purchased_key_option.is_some());
             AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.clone());
+            let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(public_key_3.clone().into());
             assert!(purchased_key_option.is_none());
             assert_eq!(TestAuthorityCount::get_validators_count(), 4);
         }
@@ -1228,7 +1211,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
         assert_eq!(avg_trace.len(), 0);
 
         // Forced to settle
-        AresOcw::save_forced_clear_purchased_price_payload_signed(4, public_key_1.into_account()).unwrap();
+        AresOcw::save_forced_clear_purchased_price_payload_signed(4, public_key_1.into()).unwrap();
 
         println!(" --------- clean down.");
         // then
@@ -1267,7 +1250,12 @@ fn test_submit_ask_price() {
 
         AresOcw::submit_ask_price(Origin::signed(AccountId::from_raw([1;32])), 20_00000000000000, to_test_vec("btc_price,eth_price"));
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([2;32]));
+        // Get an authority id
+        // let authority_list = <Authorities<Test>>::get();
+        // let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(authority_1.clone());
 
         let purchased_key = purchased_key_option.unwrap();
         // println!("purchased_key.raw_source_keys = {:?}", &purchased_key);
@@ -1311,6 +1299,11 @@ fn update_purchase_avg_price_storage() {
     t.execute_with(|| {
         System::set_block_number(2);
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+        let (_, authority_3) = <Authorities<Test>>::get()[2].clone();
+        let (_, authority_4) = <Authorities<Test>>::get()[3].clone();
+
         // add ask
         PurchasedRequestPool::<Test>::insert(
             "abc".encode(),
@@ -1343,21 +1336,21 @@ fn update_purchase_avg_price_storage() {
             vec![
                     AresPriceData{
                             price: 100,
-                            account_id: Default::default(),
+                            account_id: authority_1.clone(),
                             create_bn: 1,
                             fraction_len: 2,
                             raw_number: Default::default()
                     },
                     AresPriceData{
                         price: 101,
-                        account_id: Default::default(),
+                        account_id: authority_2.clone(),
                         create_bn: 1,
                         fraction_len: 2,
                         raw_number: Default::default()
                     },
                     AresPriceData{
                         price: 103,
-                        account_id: Default::default(),
+                        account_id: authority_3.clone(),
                         create_bn: 1,
                         fraction_len: 2,
                         raw_number: Default::default()
@@ -1372,28 +1365,27 @@ fn update_purchase_avg_price_storage() {
             vec![
                 AresPriceData{
                     price: 200,
-                    account_id: Default::default(),
+                    account_id: authority_1.clone(),
                     create_bn: 1,
                     fraction_len: 2,
                     raw_number: Default::default()
                 },
                 AresPriceData{
                     price: 201,
-                    account_id: Default::default(),
+                    account_id: authority_2.clone(),
                     create_bn: 1,
                     fraction_len: 2,
                     raw_number: Default::default()
                 },
                 AresPriceData{
                     price: 203,
-                    account_id: Default::default(),
+                    account_id: authority_3.clone(),
                     create_bn: 1,
                     fraction_len: 2,
                     raw_number: Default::default()
                 },
             ],
         );
-
 
         // check store status
         let price_pool = <PurchasedPricePool<Test>>::get("abc".encode(),"btc_price".encode() );
@@ -1455,9 +1447,16 @@ fn test_is_validator_purchased_threshold_up_on() {
         // check
         assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
 
+        // Get authority ids.
+
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+        let (_, authority_3) = <Authorities<Test>>::get()[2].clone();
+        let (_, authority_4) = <Authorities<Test>>::get()[3].clone();
+
         AresOcw::add_purchased_price(
             "abc".encode(),
-            AccountId::from_raw([1;32]),
+            authority_1.clone(),
             1,
             vec![
                 PricePayloadSubPrice(
@@ -1473,7 +1472,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 
         AresOcw::add_purchased_price(
             "abc".encode(),
-            AccountId::from_raw([2;32]),
+            authority_2.clone(),
             1,
             vec![
                 PricePayloadSubPrice(
@@ -1489,7 +1488,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 
         AresOcw::add_purchased_price(
             "abc".encode(),
-            AccountId::from_raw([3;32]),
+            authority_3.clone(),
             1,
             vec![
                 PricePayloadSubPrice(
@@ -1568,8 +1567,10 @@ fn test_fetch_purchased_request_keys() {
     t.execute_with(|| {
         System::set_block_number(1);
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+
         // Initial status request_keys is empty.
-        let request_keys = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([1;32]));
+        let request_keys = AresOcw::fetch_purchased_request_keys(authority_1.clone());
         assert_eq!(request_keys, None);
 
         // Add purchased request.
@@ -1593,7 +1594,7 @@ fn test_fetch_purchased_request_keys() {
         expect_format.push(("btc_price".as_bytes().to_vec(), "btc".as_bytes().to_vec(), 4));
         expect_format.push(("eth_price".as_bytes().to_vec(), "eth".as_bytes().to_vec(), 4));
 
-        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(AccountId::from_raw([1;32]));
+        let purchased_key_option: Option<PurchasedSourceRawKeys>  = AresOcw::fetch_purchased_request_keys(authority_1.clone());
         let purchased_key = purchased_key_option.unwrap();
         assert_eq!(purchased_key.raw_source_keys, expect_format);
         let purchased_id = purchased_key.purchase_id;
@@ -2363,11 +2364,11 @@ fn save_fetch_ares_price_and_send_payload_signed() {
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
-    let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
@@ -2391,6 +2392,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
     let price_payload_b1 = PricePayload {
         block_number: 1, // type is BlockNumber
         jump_block: Vec::new(),
+        auth: public_key.clone().into(),
         price: vec![
             PricePayloadSubPrice("btc_price".as_bytes().to_vec(), 502613720u64, 4, JsonNumberValue{
                 integer: 50261,
@@ -2406,7 +2408,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
     };
 
     t.execute_with(|| {
-        AresOcw::save_fetch_ares_price_and_send_payload_signed(1, public_key.into_account()).unwrap();
+        AresOcw::save_fetch_ares_price_and_send_payload_signed(1, public_key.into()).unwrap();
         // then
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -2416,7 +2418,8 @@ fn save_fetch_ares_price_and_send_payload_signed() {
             assert_eq!(body.clone(), price_payload_b1);
             let signature_valid = <PricePayload<
                 <Test as SigningTypes>::Public,
-                <Test as frame_system::Config>::BlockNumber
+                <Test as frame_system::Config>::BlockNumber,
+                AuraId,
             > as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
             assert!(signature_valid);
         }
@@ -2504,43 +2507,46 @@ fn test_update_last_price_list_for_author() {
     t.execute_with(|| {
         init_aura_enging_digest();
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+
         assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("btc_price")));
         assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("eth_price")));
         assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("dot_price")));
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), AccountId::from_raw([1u8;32])), false);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), AccountId::from_raw([1u8;32])), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_1.clone()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_1.clone()), false);
 
         AresOcw::update_last_price_list_for_author(vec![
             to_test_vec("btc_price"),
             to_test_vec("eth_price"),
-        ], AccountId::from_raw([1u8;32]) );
+        ], authority_1.clone() );
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), AccountId::from_raw([1u8;32])), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), AccountId::from_raw([1u8;32])), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_1.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_1.clone()), true);
 
-        assert_eq!(Some(AccountId::from_raw([1u8;32])), AresOcw::get_last_price_author(to_test_vec("btc_price")));
-        assert_eq!(Some(AccountId::from_raw([1u8;32])), AresOcw::get_last_price_author(to_test_vec("eth_price")));
+        assert_eq!(Some(authority_1.clone()), AresOcw::get_last_price_author(to_test_vec("btc_price")));
+        assert_eq!(Some(authority_1.clone()), AresOcw::get_last_price_author(to_test_vec("eth_price")));
 
         assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("dot_price")));
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), AccountId::from_raw([1u8;32])), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), authority_1.clone()), false);
 
         AresOcw::update_last_price_list_for_author(vec![
             to_test_vec("dot_price"),
             to_test_vec("eth_price"),
-        ], AccountId::from_raw([2u8;32]));
+        ], authority_2.clone());
 
-        assert_eq!(Some(AccountId::from_raw([1u8;32])), AresOcw::get_last_price_author(to_test_vec("btc_price")));
-        assert_eq!(Some(AccountId::from_raw([2u8;32])), AresOcw::get_last_price_author(to_test_vec("eth_price")));
-        assert_eq!(Some(AccountId::from_raw([2u8;32])), AresOcw::get_last_price_author(to_test_vec("dot_price")));
+        assert_eq!(Some(authority_1.clone()), AresOcw::get_last_price_author(to_test_vec("btc_price")));
+        assert_eq!(Some(authority_2.clone()), AresOcw::get_last_price_author(to_test_vec("eth_price")));
+        assert_eq!(Some(authority_2.clone()), AresOcw::get_last_price_author(to_test_vec("dot_price")));
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), AccountId::from_raw([1u8;32])), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), AccountId::from_raw([1u8;32])), false);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), AccountId::from_raw([1u8;32])), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_1.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_1.clone()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), authority_1.clone()), false);
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), AccountId::from_raw([2u8;32])), false);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), AccountId::from_raw([2u8;32])), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), AccountId::from_raw([2u8;32])), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_2.clone()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_2.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), authority_2.clone()), true);
     });
 }
 
@@ -2554,26 +2560,25 @@ fn test_jump_block_submit() {
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter1", PHRASE))
     ).unwrap();
 
     SyncCryptoStore::sr25519_generate_new(
         &keystore,
-        sp_consensus_aura::sr25519::AuthorityId::ID ,
+        AuraId::ID ,
         Some(&format!("{}/hunter2", PHRASE))
     ).unwrap();
 
-    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(0)
         .unwrap()
         .clone();
 
-    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, sp_consensus_aura::sr25519::AuthorityId::ID )
+    let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID )
         .get(1)
         .unwrap()
         .clone();
-
 
     t.register_extension(OffchainWorkerExt::new(offchain));
     t.register_extension(TransactionPoolExt::new(pool));
@@ -2594,20 +2599,27 @@ fn test_jump_block_submit() {
     t.execute_with(|| {
         init_aura_enging_digest();
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+
+        // assert_eq!(&authority_1.clone().encode(), &public_key_1.into_account().encode());
+        // assert_eq!(&authority_2.clone().encode(), &public_key_2.into_account().encode());
+
+
         assert_eq!(AresOcw::get_last_price_author(to_test_vec("btc_price")), None);
         assert_eq!(AresOcw::get_last_price_author(to_test_vec("eth_price")), None);
 
-        AresOcw::save_fetch_ares_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
+        AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
             AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
         }
 
-        assert_eq!(AresOcw::get_last_price_author(to_test_vec("btc_price")), Some(public_key_1.into_account()));
-        assert_eq!(AresOcw::get_last_price_author(to_test_vec("eth_price")), Some(public_key_1.into_account()));
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), public_key_1.into_account()), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), public_key_1.into_account()), true);
+        assert_eq!(AresOcw::get_last_price_author(to_test_vec("btc_price")), Some(authority_1.clone()));
+        assert_eq!(AresOcw::get_last_price_author(to_test_vec("eth_price")), Some(authority_1.clone()));
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_1.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_1.clone()), true);
 
     });
 
@@ -2615,9 +2627,11 @@ fn test_jump_block_submit() {
     t.execute_with(|| {
         init_aura_enging_digest();
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("eth_price")), 0);
-        AresOcw::save_fetch_ares_price_and_send_payload_signed(2, public_key_1.into_account()).unwrap();
+        AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
@@ -2640,10 +2654,13 @@ fn test_jump_block_submit() {
     t.execute_with(|| {
         init_aura_enging_digest();
 
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("eth_price")), 1);
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("dot_price")), 0);
-        AresOcw::save_fetch_ares_price_and_send_payload_signed(3, public_key_2.into_account()).unwrap();
+        AresOcw::save_fetch_ares_price_and_send_payload_signed(3, authority_2.clone()).unwrap();
         let tx = pool_state.write().transactions.pop().unwrap();
         let tx = Extrinsic::decode(&mut &*tx).unwrap();
         if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
@@ -2653,17 +2670,17 @@ fn test_jump_block_submit() {
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("eth_price")), 1);
         assert_eq!(AresOcw::get_jump_block_number(to_test_vec("dot_price")), 0);
 
-        assert_eq!(AresOcw::get_last_price_author(to_test_vec("btc_price")), Some(public_key_2.into_account()));
-        assert_eq!(AresOcw::get_last_price_author(to_test_vec("eth_price")), Some(public_key_2.into_account()));
-        assert_eq!(AresOcw::get_last_price_author(to_test_vec("dot_price")), Some(public_key_2.into_account()));
+        assert_eq!(AresOcw::get_last_price_author(to_test_vec("btc_price")), Some(authority_2.clone()));
+        assert_eq!(AresOcw::get_last_price_author(to_test_vec("eth_price")), Some(authority_2.clone()));
+        assert_eq!(AresOcw::get_last_price_author(to_test_vec("dot_price")), Some(authority_2.clone()));
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), public_key_1.into_account()), false);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), public_key_1.into_account()), false);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), public_key_1.into_account()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_1.clone()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_1.clone()), false);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), authority_1.clone()), false);
 
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), public_key_2.into_account()), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), public_key_2.into_account()), true);
-        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), public_key_2.into_account()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("btc_price"), authority_2.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("eth_price"), authority_2.clone()), true);
+        assert_eq!(AresOcw::is_need_update_jump_block(to_test_vec("dot_price"), authority_2.clone()), true);
 
     });
 }
@@ -2874,7 +2891,6 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 #[test]
 fn test_rpc_request () {
 
-
     // "{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"offchain_localStorageSet\", \"params\":[\"PERSISTENT\", \
     // "0x746172652d6f63773a3a70726963655f726571756573745f646f6d61696e\", \"0x68687474703a2f2f3134312e3136342e35382e3234313a35353636\"]}"
 
@@ -2974,24 +2990,8 @@ fn test_is_aura () {
 //     });
 // }
 
-// // Old will be discarded.
-// pub fn new_test_ext() -> sp_io::TestExternalities {
-//     let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-//     crate::GenesisConfig::<Test>{
-//         _phantom: Default::default(),
-//         price_requests: vec![
-//             (to_test_vec("btc_price"), to_test_vec("/api/getPartyPrice/btcusdt"), 1u32, 4u32),
-//             (to_test_vec("eth_price"), to_test_vec("/api/getPartyPrice/ethusdt"), 1u32, 4u32),
-//             (to_test_vec("dot_price"), to_test_vec("/api/getPartyPrice/dotusdt"), 1u32, 4u32),
-//             (to_test_vec("xrp_price"), to_test_vec("/api/getPartyPrice/xrpusdt"), 1u32, 4u32),
-//         ]
-//     }.assimilate_storage(&mut t).unwrap();
-//     t.into()
-// }
-
-
-
 pub fn new_test_ext() -> sp_io::TestExternalities {
+
     // let mut t = sp_io::TestExternalities::default();
     let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
     pallet_balances::GenesisConfig::<Test> {
@@ -3014,6 +3014,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (to_test_vec("dot_price"), to_test_vec("dot"), 2u32, 4u32, 3u8),
             (to_test_vec("xrp_price"), to_test_vec("xrp"), 2u32, 4u32, 4u8),
         ],
+        authorities: vec![
+            (AccountId::from_raw([1;32]), get_account_id_from_seed::<AuraId>("hunter1").into()),
+            (AccountId::from_raw([2;32]), get_account_id_from_seed::<AuraId>("hunter2").into()),
+            (AccountId::from_raw([3;32]), get_account_id_from_seed::<AuraId>("hunter3").into()),
+            (AccountId::from_raw([4;32]), get_account_id_from_seed::<AuraId>("hunter4").into()),
+        ]
         // pre_check_session_multi: 2u32.into(),
         // pre_check_token_list: vec![to_test_vec("btc_price"), to_test_vec("eth_price")],
         // pre_check_allowable_offset: Percent::from_percent(10),
@@ -3022,7 +3028,26 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     t.into()
 }
 
-fn ares_price_data_from_tuple (param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> AresPriceData<AccountId, BlockNumber> {
+
+/// Generate an account ID from seed.
+pub fn get_account_id_from_seed<TPublic: sp_core::Public>(seed: &str) -> AccountId
+    where
+        <Signature as Verify>::Signer: From<<TPublic::Pair as Pair>::Public>,
+{
+    <Signature as Verify>::Signer::from(get_from_seed::<TPublic>(seed)).into_account()
+}
+
+const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+
+/// Generate a crypto pair from seed.
+pub fn get_from_seed<TPublic: sp_core::Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+    TPublic::Pair::from_string(&format!("{}/{}",PHRASE, seed), None)
+        .expect("static values are valid; qed")
+        .public()
+}
+
+
+fn ares_price_data_from_tuple (param: (u64, AuraId, BlockNumber, FractionLength, JsonNumberValue)) -> AresPriceData<AuraId, BlockNumber> {
     AresPriceData {
         price: param.0,
         account_id: param.1,
