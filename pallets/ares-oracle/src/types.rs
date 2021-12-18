@@ -351,7 +351,8 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PurchasedPricePayload<T::Pu
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
     pub block_number: BlockNumber,
-    pub stash: AccountId,
+    pub pre_check_stash: AccountId,
+    pub pre_check_auth: AuthorityId,
     pub auth: AuthorityId,
     pub public: Public,
 }
@@ -370,9 +371,9 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
     pub block_number: BlockNumber,
-    pub per_check_list: Vec<PreCheckStruct>,
-    pub stash: AccountId,
-    pub auth: AuthorityId,
+    pub pre_check_list: Vec<PreCheckStruct>,
+    pub pre_check_stash: AccountId,
+    pub pre_check_auth: AuthorityId,
     pub public: Public,
 }
 

@@ -217,9 +217,12 @@ pub mod pallet {
                                             "❗ Staking authority is not set, you can use RPC author_insertKey fill that.",
                                         )
                                     }
+                                    // let ares_auth_id = Self::get_auth_id(&stash_id);
+                                    log::debug!(" ** Get ares_auth_id = {:?}", &auth_id);
                                     if !Self::has_pre_check_task(stash_id.clone()) && auth_id.is_some() {
+                                        log::debug!(" ** has_pre_check_task = author = {:?}", &author);
                                         // Use PreCheckPayload send transaction.
-                                        match Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap(), block_number) {
+                                        match Self::save_create_pre_check_task(author.clone(), stash_id, auth_id.unwrap() , block_number) {
                                             Ok(_) => {}
                                             Err(e) => {
                                                 log::warn!(
@@ -481,7 +484,7 @@ pub mod pallet {
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
-            let result = Self::create_pre_check_task(precheck_payload.stash, precheck_payload.auth, precheck_payload.block_number);
+            let result = Self::create_pre_check_task(precheck_payload.pre_check_stash, precheck_payload.pre_check_auth, precheck_payload.block_number);
             ensure!(result, Error::<T>::PerCheckTaskAlreadyExists );
             Ok(().into())
         }
@@ -493,11 +496,11 @@ pub mod pallet {
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
-            ensure!(preresult_payload.per_check_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
+            ensure!(preresult_payload.pre_check_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
             Self::save_pre_check_result(
-                preresult_payload.stash,
+                preresult_payload.pre_check_stash,
                 preresult_payload.block_number,
-                preresult_payload.per_check_list
+                preresult_payload.pre_check_list
             );
             Ok(().into())
         }
@@ -857,22 +860,22 @@ pub mod pallet {
                     .build()
             } else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
                 log::debug!(
-                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}, per_check_list: {:?}",
+                    "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}, pre_check_list: {:?}",
                     payload.block_number.clone(),
                     <system::Pallet<T>>::block_number(),
-                    payload.stash.clone(),
-                    payload.auth.clone(),
+                    payload.pre_check_stash.clone(),
+                    payload.pre_check_auth.clone(),
                     payload.public.clone(),
-                    payload.per_check_list.clone(),
+                    payload.pre_check_list.clone(),
                 );
                 if <system::Pallet<T>>::block_number() - payload.block_number.clone() > 5u32.into() {
                     return InvalidTransaction::BadProof.into();
                 }
                 // check stash status
                 let mut auth_list = Vec::new();
-                auth_list.push(payload.auth.clone());
+                auth_list.push(payload.pre_check_auth.clone());
                 if let Some((s_stash, _, _)) = Self::get_pre_task_by_authority_set(auth_list) {
-                    if &s_stash != &payload.stash {
+                    if &s_stash != &payload.pre_check_stash {
                         log::error!(
                             target: "pallet::ocw::validate_unsigned - submit_offchain_pre_check_result",
                             "⛔️ Stash account is inconsistent!"
@@ -1173,6 +1176,15 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    fn get_auth_id(stash: &T::AccountId) -> Option<T::AuthorityAres> {
+        for (storage_stash, auth) in <Authorities<T>>::get().into_iter() {
+            if stash == &storage_stash {
+                return Some(auth);
+            }
+        }
+        None
+    }
+
     fn get_stash_id(auth: &T::AuthorityAres) -> Option<T::AccountId> {
         for (stash, storage_auth) in <Authorities<T>>::get().into_iter() {
             if auth == &storage_auth {
@@ -1454,7 +1466,7 @@ impl<T: Config> Pallet<T> {
         stash_id: T::AccountId,
         auth_id: T::AuthorityAres,
         block_number: T::BlockNumber,
-        per_check_list: Vec<PreCheckStruct>) -> Result<(), &'static str>  where
+        pre_check_list: Vec<PreCheckStruct>) -> Result<(), &'static str>  where
             <T as frame_system::offchain::SigningTypes>::Public:
             From<sp_application_crypto::sr25519::Public>,
     {
@@ -1464,11 +1476,12 @@ impl<T: Config> Pallet<T> {
             .with_filter(sign_public_keys)
             .send_unsigned_transaction(
                 |account| PreCheckResultPayload {
-                    stash: stash_id.clone(),
-                    auth: auth_id.clone(),
+                    pre_check_stash: stash_id.clone(),
+                    pre_check_auth: auth_id.clone(),
                     block_number,
-                    per_check_list: per_check_list.clone(),
+                    pre_check_list: pre_check_list.clone(),
                     public: account.public.clone(),
+
                 },
                 |payload, signature| {
                     Call::submit_offchain_pre_check_result(
@@ -1500,8 +1513,9 @@ impl<T: Config> Pallet<T> {
             .send_unsigned_transaction(
                 |account| PreCheckPayload {
                     block_number,
-                    stash: stash_id.clone(),
-                    auth: auth_id.clone(),
+                    pre_check_stash: stash_id.clone(),
+                    pre_check_auth: auth_id.clone(),
+                    auth: account_id.clone(),
                     public: account.public.clone(),
                 },
                 |payload, signature| {
@@ -2722,13 +2736,13 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     // Record the per check results and add them to the storage structure.
-    fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, per_check_list: Vec<PreCheckStruct> ) {
-        assert!(per_check_list.len() > 0, "⛔️ Do not receive empty result check.");
+    fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: Vec<PreCheckStruct> ) {
+        assert!(pre_check_list.len() > 0, "⛔️ Do not receive empty result check.");
         // get avg price.
         let mut chain_avg_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
         let mut validator_up_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
-        let raw_precheck_list = per_check_list.clone();
-        let check_result = per_check_list.iter().all(|checked_struct| {
+        let raw_precheck_list = pre_check_list.clone();
+        let check_result = pre_check_list.iter().all(|checked_struct| {
             // Check price key exists.
             if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
                 return false;

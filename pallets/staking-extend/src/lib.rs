@@ -307,7 +307,6 @@ impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for T
 	}
 
 	fn pending_npos()
-		// -> Vec<(<T as frame_system::Config>::AccountId, Option<T::AuthorityId>)>
 		-> Vec<(Self::StashId, Option<T::AuthorityId>)>
 	{
 		let current_npos_list = Self::old_npos();

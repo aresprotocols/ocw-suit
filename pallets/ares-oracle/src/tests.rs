@@ -1241,6 +1241,16 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 }
 
 #[test]
+fn test_get_auth_id_from_stash_id() {
+    let mut t = new_test_ext();
+    let (offchain, _state) = testing::TestOffchainExt::new();
+    t.register_extension(OffchainWorkerExt::new(offchain));
+    t.execute_with(|| {
+        System::set_block_number(2);
+
+    });
+}
+#[test]
 fn test_submit_ask_price() {
     let mut t = new_test_ext();
     let (offchain, _state) = testing::TestOffchainExt::new();
