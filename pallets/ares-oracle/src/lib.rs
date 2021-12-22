@@ -145,6 +145,9 @@ pub mod pallet {
         #[pallet::constant]
         type CalculationKind: Get<u8>;
 
+        #[pallet::constant]
+        type ErrLogPoolDepth: Get<u32>;
+
         type RequestOrigin: EnsureOrigin<Self::Origin>;
 
         type AuthorityCount: ValidatorCount;
@@ -428,7 +431,7 @@ pub mod pallet {
             let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
             let mut event_result: Vec<(Vec<u8>, u64, FractionLength)> = Vec::new();
             let mut price_key_list = Vec::new();
-            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value) in
+            for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value, timestamp) in
                 price_list.clone()
             {
                 // Add the price to the on-chain list, but mark it as coming from an empty address.
@@ -439,6 +442,7 @@ pub mod pallet {
                     fraction_length,
                     json_number_value,
                     Self::get_price_pool_depth(),
+                    timestamp,
                 );
                 price_key_list.push(price_key.clone());
                 event_result.push((price_key, price, fraction_length));
@@ -506,13 +510,31 @@ pub mod pallet {
         }
 
         #[pallet::weight(0)]
-        pub fn to_clean_pre_check_status (
+        pub fn submit_offchain_http_err_trace_result (
             origin: OriginFor<T>,
+            err_payload: HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres>,
+            _signature: OffchainSignature<T>,
         ) -> DispatchResult {
-            let stash = ensure_signed(origin)?;
-            Self::clean_pre_check_status(stash);
+            ensure_none(origin)?;
+            let mut http_err = <HttpErrTraceLog<T>>::get();
+            if http_err.len() as u32 > T::ErrLogPoolDepth::get() {
+                http_err.remove(0usize);
+            }
+            http_err.push(err_payload.trace_data);
+            <HttpErrTraceLog<T>>::put(http_err);
             Ok(().into())
         }
+
+
+
+        // #[pallet::weight(0)]
+        // pub fn to_clean_pre_check_status (
+        //     origin: OriginFor<T>,
+        // ) -> DispatchResult {
+        //     let stash = ensure_signed(origin)?;
+        //     Self::clean_pre_check_status(stash);
+        //     Ok(().into())
+        // }
 
         #[pallet::weight(0)]
         pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> DispatchResult {
@@ -858,6 +880,41 @@ pub mod pallet {
                     .longevity(5)
                     .propagate(true)
                     .build()
+            } else if let Call::submit_offchain_http_err_trace_result(ref payload, ref signature) = call  {
+                // submit_offchain_http_err_trace_result
+                log::debug!(
+                    "🚅 Validate purchased price payload data, on block: {:?} ",
+                    <system::Pallet<T>>::block_number()
+                );
+
+                if ! Self::is_validator_member(&payload.auth) {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Payload public id is no longer in the members. `InvalidTransaction` on purchased price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let signature_valid =
+                    SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
+
+                if !signature_valid {
+                    log::error!(
+                        target: "pallet::ocw::validate_unsigned",
+                        "⛔️ Signature invalid. `InvalidTransaction` on purchased price"
+                    );
+                    return InvalidTransaction::BadProof.into();
+                }
+
+                let priority_num: u64 = T::UnsignedPriority::get();
+
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_offchain_http_err_trace_result")
+                    .priority(priority_num.saturating_add(1))
+                    .and_provides(payload.public.clone())
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
+
             } else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
                 log::debug!(
                     "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}, pre_check_list: {:?}",
@@ -926,6 +983,15 @@ pub mod pallet {
         OcwControlData,
         ValueQuery,
     >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn http_err_trace_log)]
+    pub(super) type HttpErrTraceLog<T: Config> = StorageValue<
+        _,
+        Vec<HttpErrTraceData<T::BlockNumber, T::AuthorityAres>>,
+        ValueQuery,
+    >;
+
 
     #[pallet::storage]
     #[pallet::getter(fn purchased_request_pool)]
@@ -1413,19 +1479,21 @@ impl<T: Config> Pallet<T> {
             return Ok(());
         }
 
-        let fetch_http_reesult =
+        let fetch_http_result =
             Self::fetch_bulk_price_with_http(purchased_key.clone().raw_source_keys).ok();
 
-        let price_result = fetch_http_reesult;
+        let price_result = fetch_http_result;
         if price_result.is_none() {
             log::error!(
                 target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
                 "⛔ Ocw network error."
             );
+            // Record http error.
+            Self::trace_network_error(account_id, purchased_key.clone().raw_source_keys);
             return Ok(());
         }
 
-        for (price_key, price_option, fraction_length, json_number_value) in price_result.unwrap() {
+        for (price_key, price_option, fraction_length, json_number_value, timestamp,) in price_result.unwrap() {
             if price_option.is_some() {
                 // record price to vec!
                 price_list.push(PricePayloadSubPrice(
@@ -1433,6 +1501,7 @@ impl<T: Config> Pallet<T> {
                     price_option.unwrap(),
                     fraction_length,
                     JsonNumberValue::new(json_number_value),
+                    timestamp,
                 ));
             }
         }
@@ -1497,6 +1566,38 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    fn trace_network_error(account_id: T::AuthorityAres, format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>) -> Result<(), &'static str>
+        where <T as frame_system::offchain::SigningTypes>::Public:
+                From<sp_application_crypto::sr25519::Public>,
+    {
+        let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+        // Singer
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| HttpErrTracePayload {
+                    trace_data: HttpErrTraceData {
+                        block_number: <system::Pallet<T>>::block_number() ,
+                        // request_list: format_arr.clone(),
+                        err_auth: account_id.clone(),
+                    },
+                    auth: account_id.clone(),
+                    public: account.public.clone(),
+                },
+                |payload, signature| {
+                    Call::submit_offchain_http_err_trace_result(
+                        payload,
+                        signature
+                    )
+                },
+            )
+            .ok_or(
+                "❗ No local accounts accounts available, `ares` StoreKey needs to be set.",
+            )?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
+        Ok(())
+    }
+
     fn save_create_pre_check_task(
         account_id: T::AuthorityAres,
         stash_id: T::AccountId,
@@ -1544,17 +1645,18 @@ impl<T: Config> Pallet<T> {
         let (format_arr, jump_block) =
             Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
         let price_result =
-            Self::fetch_bulk_price_with_http(format_arr)
+            Self::fetch_bulk_price_with_http(format_arr.clone())
                 .ok();
         if price_result.is_none() {
             log::error!(
                 target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
                 "⛔ Ocw network error."
             );
+            Self::trace_network_error(account_id, format_arr.clone());
             return Ok(());
         }
         let price_result = price_result.unwrap();
-        for (price_key, price_option, fraction_length, json_number_value) in price_result {
+        for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result {
             if price_option.is_some() {
                 // record price to vec!
                 price_list.push(PricePayloadSubPrice(
@@ -1562,6 +1664,7 @@ impl<T: Config> Pallet<T> {
                     price_option.unwrap(),
                     fraction_length,
                     JsonNumberValue::new(json_number_value),
+                    timestamp,
                 ));
             }
         }
@@ -1744,7 +1847,7 @@ impl<T: Config> Pallet<T> {
     fn fetch_bulk_price_with_http(
         format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
     ) -> Result<
-        Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)>,
+        Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue, u64)>,
         http::Error,
     > {
         // make request url
@@ -1799,7 +1902,7 @@ impl<T: Config> Pallet<T> {
         json_val: JsonValue,
         find_key: &str,
         param_length: FractionLength,
-    ) -> Option<(u64, NumberValue)> {
+    ) -> Option<(u64, NumberValue, u64)> {
         assert!(
             param_length <= 6,
             "Fraction length must be less than or equal to 6"
@@ -1819,15 +1922,29 @@ impl<T: Config> Pallet<T> {
                     Some((_, sub_val)) => {
                         match sub_val {
                             JsonValue::Object(price_obj) => {
-                                let (_, price) = price_obj
+                                let (_, price) = price_obj.clone()
                                     .into_iter()
                                     .find(|(k, _)| {
                                         k.iter().copied().eq("price".chars())
                                     }).unwrap();
-                                match price {
-                                    JsonValue::Number(number) => number,
+                                let match_number = match price {
+                                    JsonValue::Number(number) => {
+                                        number
+                                    },
                                     _ => return None,
-                                }
+                                };
+                                let (_, timestamp) = price_obj
+                                    .into_iter()
+                                    .find(|(k, _)| {
+                                        k.iter().copied().eq("timestamp".chars())
+                                    }).unwrap();
+                                let match_timestamp = match timestamp {
+                                    JsonValue::Number(timestamp) => {
+                                        timestamp.integer as u64
+                                    },
+                                    _ => return None,
+                                };
+                                Some((match_number, match_timestamp))
                             }
                             _ => {
                                 return None;
@@ -1841,21 +1958,26 @@ impl<T: Config> Pallet<T> {
             }
         };
 
+        if price_value.is_none() {
+            return None;
+        }
+        let price_value = price_value.unwrap();
+
         // Make u64 with fraction length
-        let result_price = JsonNumberValue::new(price_value.clone()).to_price(param_length);
+        let result_price = JsonNumberValue::new(price_value.0.clone()).to_price(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.
         if result_price == 0 {
             return None;
         }
-        Some((result_price, price_value))
+        Some((result_price, price_value.0, price_value.1))
     }
 
     fn bulk_parse_price_of_ares(
         price_str: &str,
         base_coin: Vec<u8>,
         format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
-    ) -> Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue)> {
+    ) -> Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue, u64)> {
         let val = lite_json::parse_json(price_str);
 
         let mut result_vec = Vec::new();
@@ -1884,13 +2006,14 @@ impl<T: Config> Pallet<T> {
                             );
 
                             if extract_price_grp.is_some() {
-                                let (extract_price, json_number_value) = extract_price_grp.unwrap();
+                                let (extract_price, json_number_value, timestamp) = extract_price_grp.unwrap();
                                 // TODO::need recheck why use Some(extract_price)
                                 result_vec.push((
                                     price_key,
                                     Some(extract_price),
                                     fraction_length,
                                     json_number_value,
+                                    timestamp,
                                 ));
                             }
                         }
@@ -2058,6 +2181,7 @@ impl<T: Config> Pallet<T> {
         fraction_length: FractionLength,
         json_number_value: JsonNumberValue,
         max_len: u32,
+        timestamp: u64,
     ) {
         // println!("add_price == {:?}", price);
         let key_str = price_key;
@@ -2104,6 +2228,7 @@ impl<T: Config> Pallet<T> {
                 create_bn: current_block,
                 fraction_len: fraction_length,
                 raw_number: json_number_value,
+                timestamp,
             });
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         } else {
@@ -2115,6 +2240,7 @@ impl<T: Config> Pallet<T> {
                 create_bn: current_block,
                 fraction_len: fraction_length,
                 raw_number: json_number_value,
+                timestamp,
             });
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         }
@@ -2366,7 +2492,7 @@ impl<T: Config> Pallet<T> {
             return ();
         }
         let current_block = <system::Pallet<T>>::block_number();
-        price_list.iter().any(|PricePayloadSubPrice(a,b,c,d)|{
+        price_list.iter().any(|PricePayloadSubPrice(a,b,c,d,timestamp)|{
             let mut price_data_vec = <PurchasedPricePool<T>>::get(
                 purchase_id.clone(),
                 a.to_vec(),
@@ -2378,6 +2504,7 @@ impl<T: Config> Pallet<T> {
                     create_bn: current_block,
                     fraction_len: *c,
                     raw_number: d.clone(),
+                    timestamp: timestamp.clone(),
                 }
             );
             //
@@ -2653,7 +2780,7 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
             match check_status {
                 PreCheckStatus::Review => { return true ;}
                 PreCheckStatus::Pass => { return true; }
-                PreCheckStatus::Prohibit => { return true; }
+                PreCheckStatus::Prohibit => { return false; }
             }
         }
         if <PreCheckTaskList<T>>::get().len() == 0 { return false; }
@@ -2725,12 +2852,13 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
         let reponse_result= Self::fetch_bulk_price_with_http(format_data);
         let reponse_result = reponse_result.unwrap_or(Vec::new());
 
-        reponse_result.into_iter().map(|(price_key,_parse_key, _fraction_len, number_val )|{
+        reponse_result.into_iter().map(|(price_key,_parse_key, _fraction_len, number_val, timestamp )|{
             let number_val = JsonNumberValue::new(number_val);
             PreCheckStruct {
                 price_key,
                 number_val,
-                max_offset: check_config.allowable_offset.clone()
+                max_offset: check_config.allowable_offset.clone(),
+                timestamp,
             }
         }).collect()
     }

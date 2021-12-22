@@ -134,9 +134,10 @@ fn test_take_price_for_per_check() {
                 integer: 50261,
                 fraction: 372,
                 fraction_length: 3,
-                exponent: 0
+                exponent: 0,
             },
             max_offset: check_config.allowable_offset.clone(),
+            timestamp: 1629699168,
         });
 
         assert_eq!(take_price_list[1], PreCheckStruct {
@@ -148,6 +149,7 @@ fn test_take_price_for_per_check() {
                 exponent: 0
             },
             max_offset: check_config.allowable_offset.clone(),
+            timestamp: 1630055777,
         });
     });
 }
