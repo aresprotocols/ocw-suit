@@ -153,18 +153,11 @@ pub mod pallet {
 
 					if is_new_target {
 						// check pre-price has success.
-						log::debug!(target: "staking_extend", "New target check RUN 0  ");
 						if let Some((_, new_target_status)) = T::AresOraclePreCheck::get_pre_check_status(target_acc.clone()) {
-							log::debug!(target: "staking_extend", "New target check RUN 1  ");
 							match new_target_status {
-								PreCheckStatus::Review => {
-									log::debug!(target: "staking_extend", "New target check RUN 1.1-Review  ");
-								}
-								PreCheckStatus::Prohibit => {
-									log::debug!(target: "staking_extend", "New target check RUN 1.2-Prohibit  ");
-								}
+								PreCheckStatus::Review => { }
+								PreCheckStatus::Prohibit => { }
 								PreCheckStatus::Pass => {
-									log::debug!(target: "staking_extend", "New target check RUN 1.3-Pass  ");
 									old_target_list.push(target_acc.clone());
 								}
 							}

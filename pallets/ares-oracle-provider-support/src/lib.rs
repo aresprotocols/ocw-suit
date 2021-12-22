@@ -68,6 +68,7 @@ pub struct PreCheckStruct {
     pub price_key: Vec<u8>,
     pub number_val: JsonNumberValue,
     pub max_offset: Percent,
+    pub timestamp: u64,
 }
 
 // The following code for `per check` functionable

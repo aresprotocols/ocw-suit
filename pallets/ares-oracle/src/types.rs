@@ -35,6 +35,7 @@ pub struct PurchasedDefaultData
     pub submit_threshold: u8,
     pub max_duration: u64,
     pub avg_keep_duration: u64,
+    // TODO:: Will be delete.
     pub unit_price: u64,
 }
 
@@ -194,6 +195,7 @@ pub struct AresPriceData<AccountId, BlockNumber>
     pub create_bn: BlockNumber,
     pub fraction_len: FractionLength,
     pub raw_number: JsonNumberValue,
+    pub timestamp: u64,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -202,6 +204,14 @@ pub struct PreCheckCompareLog {
     pub validator_up_price_list: BTreeMap::<Vec<u8>, (u64, FractionLength)>,
     pub raw_precheck_list: Vec<PreCheckStruct>,
 }
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
+    pub block_number: BlockNumber,
+    // pub request_list: Vec<(Vec<u8>, Vec<u8>, u32)>,
+    pub err_auth: AuthorityId,
+}
+
 
 
 // impl <T: Config > AresPriceData<T>
@@ -331,7 +341,6 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PurchasedForceCleanPayload<
     }
 }
 
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PurchasedPricePayload<Public, BlockNumber, AuthorityId> {
     pub block_number: BlockNumber,
@@ -357,16 +366,11 @@ pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
     pub public: Public,
 }
 
-impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
-    // where
-        // u64: From<<T as frame_system::Config>::BlockNumber>,
-        // sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
-{
+impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>  {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
 }
-
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
@@ -377,20 +381,27 @@ pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
     pub public: Public,
 }
 
-impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres>
-    // where
-        // u64: From<<T as frame_system::Config>::BlockNumber>,
-        // sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
-{
+impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Public, T::BlockNumber, T::AccountId, T::AuthorityAres> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct HttpErrTracePayload<Public, BlockNumber, AuthorityId> {
+    pub trace_data: HttpErrTraceData<BlockNumber, AuthorityId>,
+    pub auth: AuthorityId,
+    pub public: Public,
+}
 
+impl<T: SigningTypes + Config > SignedPayload<T> for HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue);
+pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue, pub u64,);
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PricePayloadSubJumpBlock(pub Vec<u8>, pub RequestInterval); // price_key ,request_interval
