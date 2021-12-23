@@ -289,7 +289,7 @@ pub mod pallet {
                     allowable_offset: allowable_offset,
                 };
                 // get check result
-                let take_price_list = Self::take_price_for_per_check(check_config);
+                let take_price_list = Self::take_price_for_pre_check(check_config);
                 // Sending transaction to chain. Use PreCheckResultPayload
                 match Self::save_offchain_pre_check_result(stash, auth, block_number, take_price_list) {
                     Ok(_) => {}
@@ -1480,16 +1480,16 @@ impl<T: Config> Pallet<T> {
         }
 
         let fetch_http_result =
-            Self::fetch_bulk_price_with_http(purchased_key.clone().raw_source_keys).ok();
+            Self::fetch_bulk_price_with_http(purchased_key.clone().raw_source_keys);
 
         let price_result = fetch_http_result;
-        if price_result.is_none() {
+        if price_result.is_err() {
             log::error!(
                 target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
                 "⛔ Ocw network error."
             );
             // Record http error.
-            Self::trace_network_error(account_id, purchased_key.clone().raw_source_keys);
+            Self::trace_network_error(account_id, purchased_key.clone().raw_source_keys, price_result.err().unwrap(), "purchased_worker".as_bytes().to_vec());
             return Ok(());
         }
 
@@ -1566,7 +1566,11 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
-    fn trace_network_error(account_id: T::AuthorityAres, format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>) -> Result<(), &'static str>
+    fn trace_network_error(account_id: T::AuthorityAres, 
+                           _format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
+                           http_err: HttpError,
+                           tip: Vec<u8>
+    ) -> Result<(), &'static str>
         where <T as frame_system::offchain::SigningTypes>::Public:
                 From<sp_application_crypto::sr25519::Public>,
     {
@@ -1580,6 +1584,8 @@ impl<T: Config> Pallet<T> {
                         block_number: <system::Pallet<T>>::block_number() ,
                         // request_list: format_arr.clone(),
                         err_auth: account_id.clone(),
+                        err_status: http_err.clone(),
+                        tip: tip.clone(),
                     },
                     auth: account_id.clone(),
                     public: account.public.clone(),
@@ -1645,14 +1651,13 @@ impl<T: Config> Pallet<T> {
         let (format_arr, jump_block) =
             Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
         let price_result =
-            Self::fetch_bulk_price_with_http(format_arr.clone())
-                .ok();
-        if price_result.is_none() {
+            Self::fetch_bulk_price_with_http(format_arr.clone());
+        if price_result.is_err() {
             log::error!(
                 target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
                 "⛔ Ocw network error."
             );
-            Self::trace_network_error(account_id, format_arr.clone());
+            Self::trace_network_error(account_id, format_arr.clone(), price_result.err().unwrap(), "ares_price_worker".as_bytes().to_vec());
             return Ok(());
         }
         let price_result = price_result.unwrap();
@@ -1848,7 +1853,7 @@ impl<T: Config> Pallet<T> {
         format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
     ) -> Result<
         Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue, u64)>,
-        http::Error,
+        HttpError,
     > {
         // make request url
         let (request_url, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
@@ -1868,22 +1873,29 @@ impl<T: Config> Pallet<T> {
         let pending = request
             .deadline(deadline)
             .send()
-            .map_err(|_| http::Error::IoError)?;
+            .map_err(|_| HttpError::IoErr )?;
         let response = pending.try_wait(deadline).map_err(|e| {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
                 "❗ The network cannot connect. http::Error::DeadlineReached error = {:?}",
                 e
             );
-            http::Error::DeadlineReached
-        })??;
+            // http::Error::DeadlineReached
+            // HttpError::TimeOut
+        });
+
+        if response.is_err() {
+            return Err(HttpError::TimeOut)
+        }
+        let response = response.unwrap().unwrap();
         if response.code != 200 {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
                 "❗ Unexpected http status code: {}",
                 response.code
             );
-            return Err(http::Error::Unknown);
+            // return Err(http::Error::Unknown);
+            return Err(HttpError::StatusErr(response.code));
         }
         let body = response.body().collect::<Vec<u8>>();
         // Create a str slice from the body.
@@ -1892,7 +1904,8 @@ impl<T: Config> Pallet<T> {
                 target: "pallet::ocw::fetch_bulk_price_with_http",
                 "❗ Extracting body error, No UTF8 body!"
             );
-            http::Error::Unknown
+            // http::Error::IoError
+            HttpError::ParseErr
         })?;
         Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
     }
@@ -2832,7 +2845,7 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     }
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
+    fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
 
         let mut raw_price_source_list = Self::get_raw_price_source_list();
         raw_price_source_list.retain(|x| {

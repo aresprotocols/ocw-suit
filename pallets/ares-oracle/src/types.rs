@@ -210,6 +210,8 @@ pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
     pub block_number: BlockNumber,
     // pub request_list: Vec<(Vec<u8>, Vec<u8>, u32)>,
     pub err_auth: AuthorityId,
+    pub err_status: HttpError,
+    pub tip: Vec<u8>,
 }
 
 
@@ -418,4 +420,12 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
             &self.1,
         )
     }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum HttpError {
+    IoErr,
+    TimeOut,
+    StatusErr(u16),
+    ParseErr,
 }
