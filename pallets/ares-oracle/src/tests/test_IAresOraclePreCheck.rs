@@ -79,7 +79,7 @@ fn test_get_pre_task_by_authority_set() {
 
 //noinspection RsDetachedFile
 #[test]
-fn test_take_price_for_per_check() {
+fn test_take_price_for_pre_check() {
     let mut t = new_test_ext();
 
     const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
@@ -124,7 +124,7 @@ fn test_take_price_for_per_check() {
         };
 
         // get check result
-        let take_price_list = AresOcw::take_price_for_per_check(check_config.clone());
+        let take_price_list = AresOcw::take_price_for_pre_check(check_config.clone());
 
         assert_eq!(take_price_list.len() , 2);
 
@@ -201,7 +201,7 @@ fn save_pre_check_result_for_success() {
         };
 
         // get check result
-        let take_price_list = AresOcw::take_price_for_per_check(check_config.clone());
+        let take_price_list = AresOcw::take_price_for_pre_check(check_config.clone());
 
         // Create avg price
         // let btc_avg_price =
@@ -280,7 +280,7 @@ fn save_pre_check_result_for_prohibit() {
         };
 
         // get check result
-        let take_price_list = AresOcw::take_price_for_per_check(check_config.clone());
+        let take_price_list = AresOcw::take_price_for_pre_check(check_config.clone());
 
         // Create avg price
         <AresAvgPrice<Test>>::insert(to_test_vec("btc_price"), (502613720 - Percent::from_percent(11) * 502613720, 4));

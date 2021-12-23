@@ -116,7 +116,7 @@ pub trait IAresOraclePreCheck <AccountId, AuthorityId, BlockNumber>
     fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
 
     // Obtain a set of price data according to the task configuration structure.
-    fn take_price_for_per_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct>;
+    fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct>;
 
     // Record the per check results and add them to the storage structure.
     fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: Vec<PreCheckStruct>);
@@ -144,7 +144,7 @@ impl <AC,AU,B> IAresOraclePreCheck <AC,AU,B> for () {
         0
     }
 
-    fn take_price_for_per_check(_check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
+    fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
         Vec::new()
     }
 
