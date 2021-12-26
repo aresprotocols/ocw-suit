@@ -49,6 +49,7 @@ pub mod crypto2;
 
 pub mod aura_handler;
 pub mod babe_handler;
+pub mod migrations;
 
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
@@ -169,19 +170,10 @@ pub mod pallet {
     {
 
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
-            if ConfPreCheckTokenList::<T>::get().len() == 0 {
-                log::debug!("Ares-Oracle:storage upgrade");
-                ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
-                let session_multi: T::BlockNumber= 2u32.into();
-                ConfPreCheckSessionMulti::<T>::put(session_multi);
-                let mut token_list = Vec::new();
-                token_list.push("btc-usdt".as_bytes().to_vec());
-                token_list.push("eth-usdt".as_bytes().to_vec());
-                token_list.push("dot-usdt".as_bytes().to_vec());
-                ConfPreCheckTokenList::<T>::put(token_list);
-                return T::DbWeight::get().reads_writes(1,5);
+            if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral {
+                return migrations::v1::migrate::<T>();
             }
-            0
+            T::DbWeight::get().reads(1)
         }
 
         fn offchain_worker(block_number: T::BlockNumber) {
@@ -516,12 +508,12 @@ pub mod pallet {
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
-            let mut http_err = <HttpErrTraceLog<T>>::get();
+            let mut http_err = <HttpErrTraceLogV1<T>>::get();
             if http_err.len() as u32 > T::ErrLogPoolDepth::get() {
                 http_err.remove(0usize);
             }
             http_err.push(err_payload.trace_data);
-            <HttpErrTraceLog<T>>::put(http_err);
+            <HttpErrTraceLogV1<T>>::put(http_err);
             Ok(().into())
         }
 
@@ -985,15 +977,6 @@ pub mod pallet {
     >;
 
     #[pallet::storage]
-    #[pallet::getter(fn http_err_trace_log)]
-    pub(super) type HttpErrTraceLog<T: Config> = StorageValue<
-        _,
-        Vec<HttpErrTraceData<T::BlockNumber, T::AuthorityAres>>,
-        ValueQuery,
-    >;
-
-
-    #[pallet::storage]
     #[pallet::getter(fn purchased_request_pool)]
     pub(super) type PurchasedRequestPool<T: Config> = StorageMap<
         _,
@@ -1167,6 +1150,17 @@ pub mod pallet {
         Percent, //
         ValueQuery
     >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn http_err_trace_log)]
+    pub(super) type HttpErrTraceLogV1<T: Config> = StorageValue<
+        _,
+        Vec<HttpErrTraceData<T::BlockNumber, T::AuthorityAres>>,
+        ValueQuery,
+    >;
+
+    #[pallet::storage]
+    pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
     /// The current authority set.
     #[pallet::storage]
