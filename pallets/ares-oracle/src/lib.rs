@@ -173,6 +173,10 @@ pub mod pallet {
             if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral {
                 return migrations::v1::migrate::<T>();
             }
+            // To runtime v104
+            if StorageVersion::<T>::get() == Releases::V1_0_1_HttpErrUpgrade {
+                return migrations::v2::migrate::<T>();
+            }
             T::DbWeight::get().reads(1)
         }
 
@@ -1850,8 +1854,8 @@ impl<T: Config> Pallet<T> {
         HttpError,
     > {
         // make request url
-        let (request_url, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
-        let request_url = sp_std::str::from_utf8(&request_url).unwrap();
+        let (request_url_vu8, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
+        let request_url = sp_std::str::from_utf8(&request_url_vu8).unwrap();
 
         // request and return http body.
         if "" == request_url {
@@ -1867,7 +1871,7 @@ impl<T: Config> Pallet<T> {
         let pending = request
             .deadline(deadline)
             .send()
-            .map_err(|_| HttpError::IoErr )?;
+            .map_err(|_| HttpError::IoErr(request_url_vu8.clone()) )?;
         let response = pending.try_wait(deadline).map_err(|e| {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",
@@ -1879,7 +1883,7 @@ impl<T: Config> Pallet<T> {
         });
 
         if response.is_err() {
-            return Err(HttpError::TimeOut)
+            return Err(HttpError::TimeOut(request_url_vu8.clone()));
         }
         let response = response.unwrap().unwrap();
         if response.code != 200 {
@@ -1889,7 +1893,7 @@ impl<T: Config> Pallet<T> {
                 response.code
             );
             // return Err(http::Error::Unknown);
-            return Err(HttpError::StatusErr(response.code));
+            return Err(HttpError::StatusErr(request_url_vu8.clone(), response.code));
         }
         let body = response.body().collect::<Vec<u8>>();
         // Create a str slice from the body.
@@ -1899,7 +1903,7 @@ impl<T: Config> Pallet<T> {
                 "❗ Extracting body error, No UTF8 body!"
             );
             // http::Error::IoError
-            HttpError::ParseErr
+            HttpError::ParseErr(request_url_vu8.clone())
         })?;
         Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
     }

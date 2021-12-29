@@ -327,16 +327,17 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum HttpError {
-    IoErr,
-    TimeOut,
-    StatusErr(u16),
-    ParseErr,
+    IoErr(Vec<u8>),
+    TimeOut(Vec<u8>),
+    StatusErr(Vec<u8>, u16),
+    ParseErr(Vec<u8>),
 }
 
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub(crate) enum Releases {
     V1_0_0_Ancestral,
     V1_0_1_HttpErrUpgrade,
+    V1_1_0_HttpErrUpgrade,
 }
 
 impl Default for Releases {
