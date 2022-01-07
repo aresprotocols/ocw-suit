@@ -7,8 +7,11 @@ use sp_core::hexdisplay::HexDisplay;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
-
 pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
+
+pub type PurchasedId = Vec<u8>;
+pub type PriceKey = Vec<u8>;
+pub type PriceToken = Vec<u8>;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct OcwControlData
@@ -187,8 +190,6 @@ impl Default for PurchasedAvgPriceData
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AresPriceData<AccountId, BlockNumber>
-    // where sp_runtime::AccountId32: From<AccountId>,
-    //       u64: From<BlockNumber>,
 {
     pub price: u64,
     pub account_id: AccountId,
@@ -213,103 +214,6 @@ pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
     pub err_status: HttpError,
     pub tip: Vec<u8>,
 }
-
-
-
-// impl <T: Config > AresPriceData<T>
-//     where sp_runtime::AccountId32: From<T::AccountId>,
-//           u64: From<T::BlockNumber>,
-// {
-//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-//         Self {
-//             price: param.0,
-//             account_id: param.1,
-//             create_bn: param.2,
-//             fraction_len: param.3,
-//             raw_number: param.4,
-//         }
-//     }
-// }
-
-// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-// pub struct AresPriceData2<AccountId, BlockNumber>
-//     where sp_runtime::AccountId32: From<AccountId>,
-//           u64: From<BlockNumber>,
-// {
-//     pub price: u64,
-//     pub account_id: AccountId,
-//     pub create_bn: BlockNumber,
-//     pub fraction_len: FractionLength,
-//     pub raw_number: JsonNumberValue,
-// }
-//
-// impl <T: Config > AresPriceData2<T::AccountId, T::BlockNumber>
-// {
-//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-//         Self {
-//             price: param.0,
-//             account_id: param.1,
-//             create_bn: param.2,
-//             fraction_len: param.3,
-//             raw_number: param.4,
-//         }
-//     }
-// }
-
-// pub struct AresPriceData3<T: Config>
-// {
-// }
-// impl <T: Config > AresPriceData3<T>
-// {
-//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-//     }
-// }
-
-
-// trait IFromPriceData <AccountId,BlockNumber>  {
-//     fn from_tuple(param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> Self;
-// }
-
-// impl <T: Config> IFromPriceData<T::AccountId, T::BlockNumber> for AresPriceData2<T::AccountId, T::BlockNumber> {
-//     fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, u32, JsonNumberValue)) -> Self {
-//         todo!()
-//     }
-// }
-
-
-
-// impl <T: Config, AccountId, BlockNumber> AresPriceData<AccountId, BlockNumber, T>
-//     where sp_runtime::AccountId32: From<AccountId>,
-//           u64: From<BlockNumber>,
-//            AccountId: From<<T as frame_system::Config>::AccountId>,
-//            BlockNumber: From<<T as frame_system::Config>::BlockNumber>,
-// {
-//     pub fn from_tuple(param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-//         Self {
-//             price: param.0,
-//             account_id: param.1,
-//             create_bn: param.2,
-//             fraction_len: param.3,
-//             raw_number: param.4,
-//         }
-//     }
-// }
-
-// impl <T: Config> AresPriceData<T::AccountId, T::BlockNumber>
-//     where sp_runtime::AccountId32: From<T::AccountId>,
-//           u64: From<T::BlockNumber>,
-// {
-//     pub fn from_tuple(param: (u64, T::AccountId, T::BlockNumber, FractionLength, JsonNumberValue)) -> Self {
-//         Self {
-//             price: param.0,
-//             account_id: param.1,
-//             create_bn: param.2,
-//             fraction_len: param.3,
-//             raw_number: param.4,
-//         }
-//     }
-// }
-
 
 
 /// data required to submit a transaction.
@@ -403,10 +307,10 @@ impl<T: SigningTypes + Config > SignedPayload<T> for HttpErrTracePayload<T::Publ
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue, pub u64,);
+pub struct PricePayloadSubPrice(pub PriceKey, pub u64, pub FractionLength, pub JsonNumberValue, pub u64,);
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PricePayloadSubJumpBlock(pub Vec<u8>, pub RequestInterval); // price_key ,request_interval
+pub struct PricePayloadSubJumpBlock(pub PriceKey, pub RequestInterval); // price_key ,request_interval
 
 // Impl debug.
 impl fmt::Debug for PricePayloadSubJumpBlock {
@@ -424,8 +328,21 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum HttpError {
-    IoErr,
-    TimeOut,
-    StatusErr(u16),
-    ParseErr,
+    IoErr(Vec<u8>),
+    TimeOut(Vec<u8>),
+    StatusErr(Vec<u8>, u16),
+    ParseErr(Vec<u8>),
+}
+
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+pub(crate) enum Releases {
+    V1_0_0_Ancestral,
+    V1_0_1_HttpErrUpgrade,
+    V1_1_0_HttpErrUpgrade,
+}
+
+impl Default for Releases {
+    fn default() -> Self {
+        Releases::V1_0_0_Ancestral
+    }
 }
