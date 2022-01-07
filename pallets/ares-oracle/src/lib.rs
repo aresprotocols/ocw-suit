@@ -1035,7 +1035,7 @@ pub mod pallet {
         Blake2_128Concat,
         PurchasedId, // purchased_id,
         Blake2_128Concat,
-        /// TODO:: Feature at 105, AuthorityAres convert to StashId
+        // TODO:: Feature at 105, AuthorityAres convert to StashId
         T::AuthorityAres,
         T::BlockNumber,
         ValueQuery,
@@ -1048,7 +1048,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         PriceKey, // price_key
-        /// TODO:: Feature at 105, AuthorityAres convert to StashId
+        // TODO:: Feature at 105, AuthorityAres convert to StashId
         T::AuthorityAres,
         ValueQuery,
     >;
@@ -1060,7 +1060,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         PriceKey,
-        /// TODO:: Feature at 105, AuthorityAres convert to StashId
+        // TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
@@ -1072,7 +1072,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         PriceKey,
-        /// TODO:: Feature at 105, AuthorityAres convert to StashId
+        // TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
