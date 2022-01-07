@@ -1001,7 +1001,7 @@ pub mod pallet {
         PurchasedId, // purchased_id,
         Blake2_128Concat,
         PriceKey, // price_key,,
-        /// TODO:: Feature at 105, AuthorityAres convert to StashId
+        // TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
