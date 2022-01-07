@@ -308,7 +308,7 @@ pub mod pallet {
         #[pallet::weight(1000)]
         pub fn submit_ask_price (
             origin: OriginFor<T>,
-            max_fee: BalanceOf<T>,
+            #[pallet::compact] max_fee: BalanceOf<T>,
             request_keys: Vec<u8>,
         ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
@@ -454,6 +454,7 @@ pub mod pallet {
                 price_key_list,
                 // price_payload.public.clone().into_account(),
                 price_payload.auth.clone(),
+                // price_payload.block_number,
             );
 
             // Set jump block
@@ -734,11 +735,13 @@ pub mod pallet {
     pub enum Event<T: Config> {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, Vec<PricePayloadSubJumpBlock>, T::AccountId),
+        // TODO:: Feature at 105.
+        AbnormalPrice(PriceKey, AresPriceData<T::AuthorityAres, T::BlockNumber>),
         // The report request was closed when the price was submitted
         PurchasedRequestWorkHasEnded(Vec<u8>, T::AccountId),
         NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
-        NewPurchasedRequest(Vec<u8>, PurchasedRequestData<T>, BalanceOf<T>),
-        PurchasedAvgPrice(Vec<u8>, Vec<Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)>>),
+        NewPurchasedRequest(PurchasedId, PurchasedRequestData<T>, BalanceOf<T>),
+        PurchasedAvgPrice(PurchasedId, Vec<Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)>>),
         UpdatePurchasedDefaultSetting(PurchasedDefaultData),
         UpdateOcwControlSetting(OcwControlData),
         RevokePriceRequest(Vec<u8>),
@@ -985,7 +988,7 @@ pub mod pallet {
     pub(super) type PurchasedRequestPool<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // purchased_id
+        PurchasedId, // purchased_id
         PurchasedRequestData<T>,
         ValueQuery,
     >;
@@ -995,9 +998,10 @@ pub mod pallet {
     pub(super) type PurchasedPricePool<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // purchased_id,
+        PurchasedId, // purchased_id,
         Blake2_128Concat,
-        Vec<u8>, // price_key,,
+        PriceKey, // price_key,,
+        /// TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
@@ -1007,9 +1011,9 @@ pub mod pallet {
     pub(super) type PurchasedAvgPrice<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // purchased_id,
+        PurchasedId, // purchased_id,
         Blake2_128Concat,
-        Vec<u8>, // price_key,,
+        PriceKey, // price_key,,
         PurchasedAvgPriceData,
         ValueQuery,
     >;
@@ -1019,7 +1023,7 @@ pub mod pallet {
     pub(super) type PurchasedAvgTrace<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // pricpurchased_ide_key
+        PurchasedId, // pricpurchased_ide_key
         T::BlockNumber,
         ValueQuery,
     >;
@@ -1029,8 +1033,9 @@ pub mod pallet {
     pub(super) type PurchasedOrderPool<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // purchased_id,
+        PurchasedId, // purchased_id,
         Blake2_128Concat,
+        /// TODO:: Feature at 105, AuthorityAres convert to StashId
         T::AuthorityAres,
         T::BlockNumber,
         ValueQuery,
@@ -1042,7 +1047,8 @@ pub mod pallet {
     pub(super) type LastPriceAuthor<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>, // price_key
+        PriceKey, // price_key
+        /// TODO:: Feature at 105, AuthorityAres convert to StashId
         T::AuthorityAres,
         ValueQuery,
     >;
@@ -1053,7 +1059,8 @@ pub mod pallet {
     pub(super) type AresPrice<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>,
+        PriceKey,
+        /// TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
@@ -1064,7 +1071,8 @@ pub mod pallet {
     pub(super) type AresAbnormalPrice<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>,
+        PriceKey,
+        /// TODO:: Feature at 105, AuthorityAres convert to StashId
         Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
         ValueQuery,
     >;
@@ -1074,7 +1082,7 @@ pub mod pallet {
     pub(super) type AresAvgPrice<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
-        Vec<u8>,
+        PriceKey,
         (u64, FractionLength),
         ValueQuery,
     >;
@@ -1092,8 +1100,8 @@ pub mod pallet {
     pub(super) type PricesRequests<T: Config> = StorageValue<
         _,
         Vec<(
-            Vec<u8>, // price key
-            Vec<u8>, // price token
+            PriceKey, // price key
+            PriceToken, // price token
             u32,     // parse version number.
             FractionLength,
             RequestInterval,
@@ -1107,7 +1115,7 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn jump_block_number)]
-    pub(super) type JumpBlockNumber<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, u64>;
+    pub(super) type JumpBlockNumber<T: Config> = StorageMap<_, Blake2_128Concat, PriceKey, u64>;
 
     // FinalPerCheckResult
     #[pallet::storage]
@@ -1794,7 +1802,8 @@ impl<T: Config> Pallet<T> {
     // Store the list of authors in the price list.
     fn update_last_price_list_for_author(price_list: Vec<Vec<u8>>, author: T::AuthorityAres) {
         price_list.iter().any(|price_key| {
-            <LastPriceAuthor<T>>::insert(price_key.to_vec(), author.clone());
+            // find_author() // session_id =
+            <LastPriceAuthor<T>>::insert(price_key.to_vec(), to_stash(author.clone()) );
             false
         });
     }
@@ -1885,7 +1894,19 @@ impl<T: Config> Pallet<T> {
         if response.is_err() {
             return Err(HttpError::TimeOut(request_url_vu8.clone()));
         }
-        let response = response.unwrap().unwrap();
+
+        let response = response.unwrap();
+
+        if response.is_err() {
+            log::warn!(
+                target: "pallet::ocw::fetch_bulk_price_with_http",
+                "❗ Https is not currently supported.",
+            );
+            return Err(HttpError::IoErr(request_url_vu8.clone()));
+        }
+
+        let response = response.unwrap();
+
         if response.code != 200 {
             log::warn!(
                 target: "pallet::ocw::fetch_bulk_price_with_http",

@@ -7,8 +7,11 @@ use sp_core::hexdisplay::HexDisplay;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
-
 pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
+
+pub type PurchasedId = Vec<u8>;
+pub type PriceKey = Vec<u8>;
+pub type PriceToken = Vec<u8>;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct OcwControlData
@@ -187,8 +190,6 @@ impl Default for PurchasedAvgPriceData
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AresPriceData<AccountId, BlockNumber>
-    // where sp_runtime::AccountId32: From<AccountId>,
-    //       u64: From<BlockNumber>,
 {
     pub price: u64,
     pub account_id: AccountId,
@@ -306,10 +307,10 @@ impl<T: SigningTypes + Config > SignedPayload<T> for HttpErrTracePayload<T::Publ
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PricePayloadSubPrice(pub Vec<u8>, pub u64, pub FractionLength, pub JsonNumberValue, pub u64,);
+pub struct PricePayloadSubPrice(pub PriceKey, pub u64, pub FractionLength, pub JsonNumberValue, pub u64,);
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PricePayloadSubJumpBlock(pub Vec<u8>, pub RequestInterval); // price_key ,request_interval
+pub struct PricePayloadSubJumpBlock(pub PriceKey, pub RequestInterval); // price_key ,request_interval
 
 // Impl debug.
 impl fmt::Debug for PricePayloadSubJumpBlock {
