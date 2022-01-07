@@ -1803,7 +1803,7 @@ impl<T: Config> Pallet<T> {
     fn update_last_price_list_for_author(price_list: Vec<Vec<u8>>, author: T::AuthorityAres) {
         price_list.iter().any(|price_key| {
             // find_author() // session_id =
-            <LastPriceAuthor<T>>::insert(price_key.to_vec(), to_stash(author.clone()) );
+            <LastPriceAuthor<T>>::insert(price_key.to_vec(), author.clone() );
             false
         });
     }
