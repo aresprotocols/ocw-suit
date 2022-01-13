@@ -125,21 +125,19 @@ pub mod pallet {
 		// }
 
 		// TODO:: kami:: develop for new feature, don't remove blew.
-		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
+		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)>
 		{
 			//
 			let result = T::DataProvider::targets(maybe_max_len);
 			// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
 
-			// check current validator
-			let current_validators = T::ValidatorSet::validators();
-			// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
-
-			//
-			let mut old_target_list = Vec::new();
-
 			if result.is_ok() {
-				let mut new_target = result.clone().unwrap();
+				// check current validator
+				let current_validators = T::ValidatorSet::validators();
+				// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}", &current_validators);
+				let mut old_target_list = Vec::new();
+				let (new_target,weight) = result.unwrap();
+				let mut new_target = new_target.clone();
 				new_target.retain(|target_acc|{
 					let is_new_target = !current_validators.iter().any(|current_acc|{
 						let is_exists = &current_acc == &target_acc;
@@ -167,26 +165,28 @@ pub mod pallet {
 					is_new_target
 				});
 				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
+				return Ok((old_target_list, weight))
 			}
-
-			Ok(old_target_list)
+			return result
 			// result
 		}
 
-		fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+		fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
 			T::DataProvider::voters(maybe_max_len)
 		}
 
-		fn desired_targets() -> data_provider::Result<u32> {
-			let result = T::DataProvider::desired_targets();
+		fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+			T::DataProvider::desired_targets()
+			// let result = T::DataProvider::desired_targets();
 			// log::debug!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}", result);
-			result
+			// result
 		}
 
 		fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-			let result = T::DataProvider::next_election_prediction(now);
+			// let result = T::DataProvider::next_election_prediction(now);
 			// log::debug!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}", result);
-			result
+			// result
+			T::DataProvider::next_election_prediction(now)
 		}
 	}
 
@@ -195,7 +195,7 @@ pub mod pallet {
 		type Error = <T::ElectionProvider as ElectionProvider<<T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>>::Error;
 		type DataProvider = T::DataProvider ;
 
-		fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
 			T::ElectionProvider::elect()
 		}
 	}
@@ -205,6 +205,7 @@ pub mod pallet {
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
 impl<T: Config> onchain::Config for OnChainConfig<T> {
+	type BlockWeights = T::BlockWeights;
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Accuracy = T::OnChainAccuracy;
