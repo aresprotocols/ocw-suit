@@ -18,20 +18,20 @@ serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 
 
 [dependencies]
-# -- snip --
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-core = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "monthly-2021-09+1" }
-sp-io = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "monthly-2021-09+1" }
-#sp-arithmetic = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
 log = { version = "0.4.14", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', optional = true , tag = "monthly-2021-09+1" }
-frame-system = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "monthly-2021-09+1" }
-frame-support = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "monthly-2021-09+1" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "monthly-2021-09+1" }
-ares-oracle =  {default-features = false, path = '../ares-oracle' }
 hex = { version = "0.4", default-features = false }
-# -- snip --
+
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+#sp-arithmetic = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.10" }
+frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+
+ares-oracle = { default-features = false, path = '../ares-oracle' }
 
 [features]
 default = ['std']
