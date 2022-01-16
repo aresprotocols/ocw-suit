@@ -2,8 +2,6 @@
 use super::*;
 
 use sp_core::hexdisplay::HexDisplay;
-// use sp_runtime::traits::{Saturating, Zero};
-// use frame_support::sp_runtime::Percent;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
@@ -32,6 +30,7 @@ impl Default for OcwControlData
     }
 }
 
+// Migration
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PurchasedDefaultData
 {
@@ -39,12 +38,12 @@ pub struct PurchasedDefaultData
     pub max_duration: u64,
     pub avg_keep_duration: u64,
     // TODO:: Will be delete.
-    pub unit_price: u64,
+    // pub unit_price: u64,
 }
 
 
 impl PurchasedDefaultData {
-    pub fn new(submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> Self {
+    pub fn new(submit_threshold: u8, max_duration: u64, avg_keep_duration: u64) -> Self {
         if submit_threshold == 0 || submit_threshold > 100 {
             panic!("Submit Threshold range is (0 - 100] ");
         }
@@ -55,7 +54,7 @@ impl PurchasedDefaultData {
             submit_threshold,
             max_duration,
             avg_keep_duration,
-            unit_price,
+            // unit_price,
         }
     }
 }
@@ -67,7 +66,7 @@ impl Default for PurchasedDefaultData
             submit_threshold: 60,
             max_duration: 20,
             avg_keep_duration: 14400,
-            unit_price: 100_000_000_000_000,
+            // unit_price: 100_000_000_000_000,
         }
     }
 }
@@ -91,8 +90,6 @@ impl Default for PurchasedSourceRawKeys
 
 // Impl debug.
 impl fmt::Debug for PurchasedSourceRawKeys {
-    // `fmt` converts the vector of bytes inside the struct back to string for
-    //  more friendly display.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let raw_keys: Vec<_> = self.raw_source_keys.iter().map(
             |(price_key,parse_key,fraction_len)| {
@@ -115,8 +112,6 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq,)]
 pub struct PurchasedRequestData<T: Config>
-    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     pub account_id: T::AccountId,
     pub offer: BalanceOf<T>,
@@ -127,8 +122,6 @@ pub struct PurchasedRequestData<T: Config>
 }
 
 impl <T: Config> Default for PurchasedRequestData<T>
-    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
     fn default() -> Self {
         Self {
@@ -144,11 +137,7 @@ impl <T: Config> Default for PurchasedRequestData<T>
 
 // Impl debug.
 impl <T: Config> fmt::Debug for PurchasedRequestData<T>
-    // where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>,
-          // u64: From<<T as frame_system::Config>::BlockNumber>,
 {
-    // `fmt` converts the vector of bytes inside the struct back to string for
-    //  more friendly display.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let request_keys: Vec<_> = self.request_keys.iter().map(
             |x| {
@@ -186,8 +175,6 @@ impl Default for PurchasedAvgPriceData
     }
 }
 
-
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AresPriceData<AccountId, BlockNumber>
 {
@@ -197,6 +184,13 @@ pub struct AresPriceData<AccountId, BlockNumber>
     pub fraction_len: FractionLength,
     pub raw_number: JsonNumberValue,
     pub timestamp: u64,
+}
+
+// migrated
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct AvgPriceData {
+    pub integer: u64,
+    pub fraction_len: FractionLength,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -294,13 +288,13 @@ impl<T: SigningTypes + Config > SignedPayload<T> for PreCheckResultPayload<T::Pu
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct HttpErrTracePayload<Public, BlockNumber, AuthorityId> {
-    pub trace_data: HttpErrTraceData<BlockNumber, AuthorityId>,
+pub struct HttpErrTracePayload<Public, BlockNumber, AuthorityId, AccountId> {
+    pub trace_data: HttpErrTraceData<BlockNumber, AccountId>,
     pub auth: AuthorityId,
     pub public: Public,
 }
 
-impl<T: SigningTypes + Config > SignedPayload<T> for HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres> {
+impl<T: SigningTypes + Config > SignedPayload<T> for HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres, T::AccountId> {
     fn public(&self) -> T::Public {
         self.public.clone()
     }
@@ -339,6 +333,7 @@ pub(crate) enum Releases {
     V1_0_0_Ancestral,
     V1_0_1_HttpErrUpgrade,
     V1_1_0_HttpErrUpgrade,
+    V1_2_0,
 }
 
 impl Default for Releases {

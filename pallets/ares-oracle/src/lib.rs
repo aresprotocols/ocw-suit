@@ -170,12 +170,11 @@ pub mod pallet {
     {
 
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
-            if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral {
-                return migrations::v1::migrate::<T>();
-            }
-            // To runtime v104
-            if StorageVersion::<T>::get() == Releases::V1_0_1_HttpErrUpgrade {
-                return migrations::v2::migrate::<T>();
+            // To runtime v106
+            if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral ||
+                StorageVersion::<T>::get() == Releases::V1_1_0_HttpErrUpgrade
+                {
+                return migrations::v1_2_0::migrate::<T>();
             }
             T::DbWeight::get().reads(1)
         }
@@ -390,13 +389,13 @@ pub mod pallet {
             if false == <PurchasedRequestPool<T>>::contains_key(price_payload.purchase_id.clone()) {
                 Self::deposit_event(Event::PurchasedRequestWorkHasEnded(
                     price_payload.purchase_id.clone(),
-                    price_payload.public.clone().into_account(),
+                    Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
                 ));
                 return Ok(().into());
             }
 
             Self::add_purchased_price(price_payload.purchase_id.clone(),
-                                      price_payload.auth.clone(),
+                                      Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
                                       price_payload.block_number.clone(),
                                       price_payload.price.clone());
             // check
@@ -432,7 +431,7 @@ pub mod pallet {
             {
                 // Add the price to the on-chain list, but mark it as coming from an empty address.
                 Self::add_price(
-                    price_payload.auth.clone(),
+                    Self::get_stash_id(&price_payload.auth).unwrap(),
                     price.clone(),
                     price_key.clone(),
                     fraction_length,
@@ -453,7 +452,7 @@ pub mod pallet {
             Self::update_last_price_list_for_author(
                 price_key_list,
                 // price_payload.public.clone().into_account(),
-                price_payload.auth.clone(),
+                Self::get_stash_id(&price_payload.auth).unwrap(),
                 // price_payload.block_number,
             );
 
@@ -485,8 +484,17 @@ pub mod pallet {
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
-            let result = Self::create_pre_check_task(precheck_payload.pre_check_stash, precheck_payload.pre_check_auth, precheck_payload.block_number);
+            let result = Self::create_pre_check_task(
+                precheck_payload.pre_check_stash.clone(),
+                precheck_payload.pre_check_auth.clone(),
+                precheck_payload.block_number
+            );
             ensure!(result, Error::<T>::PerCheckTaskAlreadyExists );
+            Self::deposit_event(Event::NewPreCheckTask(
+                precheck_payload.pre_check_stash,
+                precheck_payload.pre_check_auth,
+                precheck_payload.block_number
+            ));
             Ok(().into())
         }
 
@@ -499,17 +507,22 @@ pub mod pallet {
             ensure_none(origin)?;
             ensure!(preresult_payload.pre_check_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
             Self::save_pre_check_result(
+                preresult_payload.pre_check_stash.clone(),
+                preresult_payload.block_number,
+                preresult_payload.pre_check_list.clone()
+            );
+            Self::deposit_event(Event::NewPreCheckResult(
                 preresult_payload.pre_check_stash,
                 preresult_payload.block_number,
-                preresult_payload.pre_check_list
-            );
+                preresult_payload.pre_check_list,
+            ));
             Ok(().into())
         }
 
         #[pallet::weight(0)]
         pub fn submit_offchain_http_err_trace_result (
             origin: OriginFor<T>,
-            err_payload: HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres>,
+            err_payload: HttpErrTracePayload<T::Public, T::BlockNumber, T::AuthorityAres, T::AccountId>,
             _signature: OffchainSignature<T>,
         ) -> DispatchResult {
             ensure_none(origin)?;
@@ -522,23 +535,12 @@ pub mod pallet {
             Ok(().into())
         }
 
-
-
-        // #[pallet::weight(0)]
-        // pub fn to_clean_pre_check_status (
-        //     origin: OriginFor<T>,
-        // ) -> DispatchResult {
-        //     let stash = ensure_signed(origin)?;
-        //     Self::clean_pre_check_status(stash);
-        //     Ok(().into())
-        // }
-
         #[pallet::weight(0)]
-        pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, avg_keep_duration: u64, unit_price: u64) -> DispatchResult {
+        pub fn update_purchased_param(origin: OriginFor<T>, submit_threshold: u8, max_duration: u64, avg_keep_duration: u64) -> DispatchResult {
             T::RequestOrigin::ensure_origin(origin)?;
             ensure!(submit_threshold>0 && submit_threshold <= 100 , Error::<T>::SubmitThresholdRangeError);
             ensure!(max_duration > 0 , Error::<T>::DruationNumberNotBeZero);
-            let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, avg_keep_duration, unit_price);
+            let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, avg_keep_duration);
             <PurchasedDefaultSetting<T>>::put(setting_data.clone());
             Self::deposit_event(Event::UpdatePurchasedDefaultSetting(setting_data));
             Ok(().into())
@@ -736,7 +738,7 @@ pub mod pallet {
         // (price_key, price_val, fraction len)
         NewPrice(Vec<(Vec<u8>, u64, FractionLength)>, Vec<PricePayloadSubJumpBlock>, T::AccountId),
         // TODO:: Feature at 105.
-        AbnormalPrice(PriceKey, AresPriceData<T::AuthorityAres, T::BlockNumber>),
+        AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
         // The report request was closed when the price was submitted
         PurchasedRequestWorkHasEnded(Vec<u8>, T::AccountId),
         NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
@@ -751,6 +753,9 @@ pub mod pallet {
         PriceAllowableOffsetUpdate(u8),
         InsufficientCountOfValidators,
         ProblemWithRefund,
+        // -- TODO add New events to UML
+        NewPreCheckTask(T::AccountId, T::AuthorityAres, T::BlockNumber),
+        NewPreCheckResult(T::AccountId, T::BlockNumber, Vec<PreCheckStruct>),
     }
 
     #[pallet::validate_unsigned]
@@ -993,6 +998,7 @@ pub mod pallet {
         ValueQuery,
     >;
 
+    // migrated
     #[pallet::storage]
     #[pallet::getter(fn purchased_price_pool)]
     pub(super) type PurchasedPricePool<T: Config> = StorageDoubleMap<
@@ -1001,8 +1007,7 @@ pub mod pallet {
         PurchasedId, // purchased_id,
         Blake2_128Concat,
         PriceKey, // price_key,,
-        // TODO:: Feature at 105, AuthorityAres convert to StashId
-        Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
+        Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
         ValueQuery,
     >;
 
@@ -1035,24 +1040,23 @@ pub mod pallet {
         Blake2_128Concat,
         PurchasedId, // purchased_id,
         Blake2_128Concat,
-        // TODO:: Feature at 105, AuthorityAres convert to StashId
-        T::AuthorityAres,
+        T::AccountId,
         T::BlockNumber,
         ValueQuery,
     >;
 
-
+    // migrated
     #[pallet::storage]
     #[pallet::getter(fn last_price_author)]
     pub(super) type LastPriceAuthor<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         PriceKey, // price_key
-        // TODO:: Feature at 105, AuthorityAres convert to StashId
-        T::AuthorityAres,
+        T::AccountId,
         ValueQuery,
     >;
 
+    // migrated
     /// The lookup table for names.
     #[pallet::storage]
     #[pallet::getter(fn ares_prices)]
@@ -1060,11 +1064,11 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         PriceKey,
-        // TODO:: Feature at 105, AuthorityAres convert to StashId
-        Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
+        Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
         ValueQuery,
     >;
 
+    // migrated
     /// The lookup table for names.
     #[pallet::storage]
     #[pallet::getter(fn ares_abnormal_prices)]
@@ -1072,8 +1076,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         PriceKey,
-        // TODO:: Feature at 105, AuthorityAres convert to StashId
-        Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>,
+        Vec<(AresPriceData<T::AccountId, T::BlockNumber>, AvgPriceData)>,
         ValueQuery,
     >;
 
@@ -1167,7 +1170,7 @@ pub mod pallet {
     #[pallet::getter(fn http_err_trace_log)]
     pub(super) type HttpErrTraceLogV1<T: Config> = StorageValue<
         _,
-        Vec<HttpErrTraceData<T::BlockNumber, T::AuthorityAres>>,
+        Vec<HttpErrTraceData<T::BlockNumber, T::AccountId>>,
         ValueQuery,
     >;
 
@@ -1231,6 +1234,8 @@ pub mod pallet {
             token_list.push("eth-usdt".as_bytes().to_vec());
             token_list.push("dot-usdt".as_bytes().to_vec());
             ConfPreCheckTokenList::<T>::put(token_list);
+            // V1_2_0
+            StorageVersion::<T>::put(Releases::V1_2_0);
         }
     }
 }
@@ -1264,6 +1269,13 @@ impl<T: Config> Pallet<T> {
             }
         }
         None
+    }
+
+    fn get_stash_id_or_default(auth: &T::AuthorityAres) -> T::AccountId {
+        if let Some(stash_id) = Self::get_stash_id(auth) {
+            return stash_id;
+        }
+        Default::default()
     }
 
     fn are_block_author_and_sotre_key_the_same(block_author: &T::AuthorityAres) -> bool {
@@ -1589,7 +1601,7 @@ impl<T: Config> Pallet<T> {
                     trace_data: HttpErrTraceData {
                         block_number: <system::Pallet<T>>::block_number() ,
                         // request_list: format_arr.clone(),
-                        err_auth: account_id.clone(),
+                        err_auth: Self::get_stash_id(&account_id.clone()).unwrap() ,
                         err_status: http_err.clone(),
                         tip: tip.clone(),
                     },
@@ -1655,7 +1667,7 @@ impl<T: Config> Pallet<T> {
         let format_arr = Self::make_bulk_price_format_data(block_number);
         // Filter jump block info
         let (format_arr, jump_block) =
-            Self::filter_jump_block_data(format_arr.clone(), account_id.clone(), block_number);
+            Self::filter_jump_block_data(format_arr.clone(),  Self::get_stash_id(&account_id).unwrap() , block_number);
         let price_result =
             Self::fetch_bulk_price_with_http(format_arr.clone());
         if price_result.is_err() {
@@ -1730,7 +1742,7 @@ impl<T: Config> Pallet<T> {
     // Use to filter out those format_data of price that need to jump block.
     fn filter_jump_block_data(
         fomat_data: Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>,
-        account: T::AuthorityAres,
+        account: T::AccountId,
         _block_number: T::BlockNumber,
     ) -> (
         Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
@@ -1762,13 +1774,13 @@ impl<T: Config> Pallet<T> {
     }
 
     // Judge the author who submitted the price last time, and return true if it is consistent with this time.
-    fn is_need_update_jump_block(price_key: Vec<u8>, account: T::AuthorityAres) -> bool {
+    fn is_need_update_jump_block(price_key: Vec<u8>, account: T::AccountId) -> bool {
         if !Self::is_aura() || 1 == T::AuthorityCount::get_validators_count(){
             return false;
         }
         match Self::get_last_price_author(price_key) {
             None => false,
-            Some(x) => x == account,
+            Some(x) => x == account ,
         }
     }
 
@@ -1800,16 +1812,16 @@ impl<T: Config> Pallet<T> {
     }
 
     // Store the list of authors in the price list.
-    fn update_last_price_list_for_author(price_list: Vec<Vec<u8>>, author: T::AuthorityAres) {
+    fn update_last_price_list_for_author(price_list: Vec<Vec<u8>>, author: T::AccountId) {
         price_list.iter().any(|price_key| {
-            // find_author() // session_id =
-            <LastPriceAuthor<T>>::insert(price_key.to_vec(), author.clone() );
+            // find_author()
+            <LastPriceAuthor<T>>::insert(price_key.to_vec(), author.clone());
             false
         });
     }
 
     // Get
-    fn get_last_price_author(price_key: Vec<u8>) -> Option<T::AuthorityAres> {
+    fn get_last_price_author(price_key: Vec<u8>) -> Option<T::AccountId> {
         if <LastPriceAuthor<T>>::contains_key(&price_key) {
             return Some(<LastPriceAuthor<T>>::get(price_key).into());
         }
@@ -2134,9 +2146,11 @@ impl<T: Config> Pallet<T> {
     {
         let mut raw_source_keys = Vec::new();
         let mut raw_purchase_id: Vec<u8>= Vec::new();
+
+        let stash_id = Self::get_stash_id(&who).unwrap();
         // Iter
         <PurchasedRequestPool<T>>::iter().any(|(purchase_id, request_data)| {
-            if false == <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), who.clone()) {
+            if false == <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), stash_id.clone()) {
                 raw_purchase_id = purchase_id.clone();
                 raw_source_keys = Self::filter_raw_price_source_list(request_data.request_keys)
                     .iter().map(|(price_key,parse_key,fraction_len,_)| {
@@ -2207,7 +2221,7 @@ impl<T: Config> Pallet<T> {
 
     // add price on chain
     fn add_price(
-        who: T::AuthorityAres,
+        who: T::AccountId,
         price: u64,
         price_key: Vec<u8>,
         fraction_length: FractionLength,
@@ -2265,7 +2279,7 @@ impl<T: Config> Pallet<T> {
             <AresPrice<T>>::insert(key_str.clone(), new_price);
         } else {
             // push a new value.
-            let mut new_price: Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>> = Vec::new();
+            let mut new_price: Vec<AresPriceData<T::AccountId, T::BlockNumber>> = Vec::new();
             new_price.push(AresPriceData{
                 price: price.clone(),
                 account_id: who.clone(),
@@ -2314,7 +2328,10 @@ impl<T: Config> Pallet<T> {
                     };
                     if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
                         // Set price to abnormal list and pick out check_price
-                        <AresAbnormalPrice<T>>::append(key_str.clone(), check_price);
+                        <AresAbnormalPrice<T>>::append(
+                            key_str.clone(),
+                            (check_price, AvgPriceData { integer: average, fraction_len: fraction_length } )
+                        );
                         // abnormal_price_index_list
                         abnormal_price_index_list.push(index);
                     }
@@ -2361,7 +2378,7 @@ impl<T: Config> Pallet<T> {
         purchased_id_list
     }
 
-    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>, reached_type: u8)
+    fn handler_purchase_avg_price_storage(purchase_id: Vec<u8>, price_key: Vec<u8>, mut prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>, reached_type: u8)
         -> Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)>
     {
 
@@ -2384,7 +2401,10 @@ impl<T: Config> Pallet<T> {
                 if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
                     // Set price to abnormal list and pick out check_price
                     // TODO:: need update struct of AresAbnormalPrice , add the comparison value of the current deviation
-                    <AresAbnormalPrice<T>>::append(price_key.clone(), check_price);
+                    <AresAbnormalPrice<T>>::append(
+                        price_key.clone(),
+                        (check_price, AvgPriceData { integer: average, fraction_len: fraction_length })
+                    );
                     // abnormal_price_index_list
                     abnormal_price_index_list.push(index);
                 }
@@ -2407,7 +2427,8 @@ impl<T: Config> Pallet<T> {
             // get valid request price accounts
             let valid_request_account_id_list: Vec<T::AccountId> = prices_info.into_iter().map(
                 |x| {
-                    Self::get_stash_id(&x.account_id).unwrap()
+                    // Self::get_stash_id(&x.account_id).unwrap()
+                    x.account_id
                 }
             ).collect();
 
@@ -2470,7 +2491,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Calculate current average price. // fraction_length: FractionLength
-    fn average_price(prices_info: Vec<AresPriceData<T::AuthorityAres, T::BlockNumber>>, kind: u8) -> Option<(u64, FractionLength)> {
+    fn average_price(prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>, kind: u8) -> Option<(u64, FractionLength)> {
         let mut fraction_length_of_pool: FractionLength = 0;
         // Check and get fraction_length.
         prices_info
@@ -2516,7 +2537,7 @@ impl<T: Config> Pallet<T> {
         (interval, new_jump_block)
     }
 
-    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AuthorityAres, block_number: T::BlockNumber, price_list : Vec<PricePayloadSubPrice>) {
+    fn add_purchased_price(purchase_id: Vec<u8>, account_id: T::AccountId, block_number: T::BlockNumber, price_list : Vec<PricePayloadSubPrice>) {
         if <PurchasedOrderPool<T>>::contains_key(
             purchase_id.clone(),
             account_id.clone(),
@@ -2557,7 +2578,8 @@ impl<T: Config> Pallet<T> {
         Self::deposit_event(Event::NewPurchasedPrice(
             block_number.clone(),
             price_list.clone(),
-            Self::get_stash_id(&account_id).unwrap(),
+            // Self::get_stash_id(&account_id).unwrap(),
+            account_id,
         ));
     }
 
@@ -2697,7 +2719,7 @@ impl<T: Config> Pallet<T> {
         <PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone()).into_iter()
             .any(|(acc, _)| {
 
-                let _res = T::OracleFinanceHandler::record_submit_point(Self::get_stash_id(&acc).unwrap(),
+                let _res = T::OracleFinanceHandler::record_submit_point(acc,
                                                           purchase_id.clone(),
                                                           request_mission.create_bn,
                                                           request_mission.request_keys.len() as u32);
@@ -2953,10 +2975,11 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     //
     fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> bool {
         let mut task_list = <PreCheckTaskList<T>>::get();
-        let exists = task_list.iter().any(|(old_acc, _, _)|{ &stash == old_acc }) ;
-        if exists {
-            return false;
-        }
+
+        task_list.retain(|(old_acc, _, _)|{
+            &stash != old_acc
+        });
+
         task_list.push((stash.clone(), auth, bn));
         <PreCheckTaskList<T>>::put(task_list);
         <FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, PreCheckStatus::Review, Option::<PreCheckCompareLog>::None)));

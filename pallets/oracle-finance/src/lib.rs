@@ -161,9 +161,9 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		PurchaseRewardTaken(T::AccountId, BalanceOf<T>),
+		PurchaseRewardToken(T::BlockNumber, AskPeriodNum, T::AccountId, BalanceOf<T>),
 		// OracleFinanceDepositCreating(BalanceOf<T>),
-		PurchaseRewardSlashedAfterExpiration(BalanceOf<T>),
+		PurchaseRewardSlashedAfterExpiration(T::BlockNumber, AskPeriodNum, BalanceOf<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -208,15 +208,17 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
-		#[pallet::weight(10000)]
+		#[pallet::weight(1000)]
 		pub fn take_purchase_reward(origin: OriginFor<T>, ask_period: AskPeriodNum) -> DispatchResult {
 
 			let who = ensure_signed(origin)?;
 
 			let take_balance: BalanceOf<T> = Self::take_reward(ask_period, who.clone(), )?;
 
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+
 			// Emit an event.
-			Self::deposit_event(Event::PurchaseRewardTaken(who, take_balance));
+			Self::deposit_event(Event::PurchaseRewardToken(current_block_number, ask_period, who, take_balance));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
@@ -551,7 +553,8 @@ impl <T: Config> IForReward<T> for Pallet<T> {
 		<AskPeriodPoint<T>>::remove_prefix(check_period, None);
 		<AskPeriodPayment<T>>::remove_prefix(check_period, None);
 
-		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration(diff));
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
+		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration(current_block_number, check_period, diff));
 
 		Some(diff)
 	}
