@@ -14,66 +14,66 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 hex = { version = "0.4", default-features = false }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-frame-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-frame-system = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-core = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-keystore = { version = "0.10.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1", optional = true }
-sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-std = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
-sp-application-crypto = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
-pallet-aura = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-babe = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-session = { version = "4.0.0-dev", features = ["historical"], default-features = false, path = "../session" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
-pallet-balances = {  version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-oracle-finance = { version = "3.0.1", default-features = false, path= "../oracle-finance" }
-staking-extend = { version = "3.0.4", default-features = false, path= "../staking-extend" }
-ares-oracle-provider-support = { version = "3.0.1", default-features = false, path= "../ares-oracle-provider-support" }
+
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-keystore = { git = "https://github.com/paritytech/substrate.git", optional = true, branch = "polkadot-v0.9.10" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-consensus-babe = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+pallet-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+pallet-babe = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+
+oracle-finance = { default-features = false, path = "../oracle-finance" }
+staking-extend = { default-features = false, path = "../staking-extend" }
+ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
+pallet-session = { features = ["historical"], default-features = false, path = "../session" }
 
 
 [dev-dependencies]
-sp-staking = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "monthly-2021-09+1" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-09+1' }
+sp-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
+sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.10" }
 
 
 [features]
 default = ["std"]
 
-
 std = [
-	"sp-application-crypto/std",
-	"codec/std",
-	"frame-support/std",
-	"frame-system/std",
-	"lite-json/std",
-	"sp-core/std",
-	"sp-io/std",
-	"sp-keystore",
-	"sp-runtime/std",
-	"sp-std/std",
-	"log/std",
-	"hex/std",
-	"serde/std",
-	"serde_json/std",
-	"sp-consensus-babe/std",
-	"pallet-aura/std",
-	"pallet-babe/std",
-	"pallet-session/std",
-	"ares-oracle-provider-support/std",
-	"staking-extend/std", # Ares staking
-#	"sp-staking/std",
-#	"pallet-timestamp/std",
-	"sp-consensus-aura/std",
-	"pallet-balances/std",
-	"oracle-finance/std",
+    "sp-application-crypto/std",
+    "codec/std",
+    "frame-support/std",
+    "frame-system/std",
+    "lite-json/std",
+    "sp-core/std",
+    "sp-io/std",
+    "sp-keystore",
+    "sp-runtime/std",
+    "sp-std/std",
+    "log/std",
+    "hex/std",
+    "serde/std",
+    "serde_json/std",
+    "sp-consensus-babe/std",
+    "pallet-aura/std",
+    "pallet-babe/std",
+    "pallet-session/std",
+    "ares-oracle-provider-support/std",
+    "staking-extend/std", # Ares staking
+    #	"sp-staking/std",
+    #	"pallet-timestamp/std",
+    "sp-consensus-aura/std",
+    "pallet-balances/std",
+    "oracle-finance/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
