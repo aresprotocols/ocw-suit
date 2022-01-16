@@ -2975,10 +2975,20 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     //
     fn create_pre_check_task(stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber) -> bool {
         let mut task_list = <PreCheckTaskList<T>>::get();
-
-        task_list.retain(|(old_acc, _, _)|{
-            &stash != old_acc
+        let mut is_exists = false;
+        task_list.retain(|(old_acc, old_auth, _)|{
+            if &stash != old_acc {
+                return true;
+            }else {
+                if &auth == old_auth {
+                    is_exists = true;
+                }
+            }
+            false
         });
+        if is_exists {
+            return false;
+        }
 
         task_list.push((stash.clone(), auth, bn));
         <PreCheckTaskList<T>>::put(task_list);

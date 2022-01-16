@@ -462,14 +462,14 @@ fn test_fixbug_01161954 () {
             (stash_2, authority_3.clone(), 6)
         ]);
 
-        AresOcw::create_pre_check_task(stash_1, authority_1.clone(), 7);
+        AresOcw::create_pre_check_task(stash_1, authority_1.clone(), 7); // Not change because stash and authority are all the same.
         AresOcw::create_pre_check_task(stash_2, authority_2.clone(), 8);
         AresOcw::create_pre_check_task(stash_3, authority_3.clone(), 9);
         AresOcw::create_pre_check_task(stash_4, authority_4.clone(), 10);
 
         let pre_check_list = PreCheckTaskList::<Test>::get();
         assert_eq!(pre_check_list, vec![
-            (stash_1, authority_1.clone(), 7),
+            (stash_1, authority_1.clone(), 1),
             (stash_2, authority_2.clone(), 8),
             (stash_3, authority_3.clone(), 9),
             (stash_4, authority_4.clone(), 10),

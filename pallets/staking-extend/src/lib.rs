@@ -124,7 +124,6 @@ pub mod pallet {
 		// 	T::DataProvider::targets(maybe_max_len)
 		// }
 
-		// TODO:: kami:: develop for new feature, don't remove blew.
 		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)>
 		{
 			//

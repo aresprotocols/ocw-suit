@@ -29,6 +29,7 @@ use std::{cell::RefCell, collections::HashSet};
 use pallet_staking::{StakerStatus, EraIndex};
 // use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_core::{H256};
+use frame_system::limits::BlockWeights;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -236,7 +237,7 @@ impl pallet_session::historical::Config for Test {
 }
 
 impl pallet_authority_discovery::Config for Test {
-	type MaxAuthorities = MaxAuthorities;
+	// type MaxAuthorities = MaxAuthorities;
 }
 
 parameter_types! {
@@ -385,7 +386,7 @@ impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<Ac
 	type Error = (); // <Self as ElectionProvider<AccountId, BlockNumber>>::Error;
 	type DataProvider = TestDataProvider;// <Test as crate::Config>::DataProvider ;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
 		// let support = Support{
 		// 	total: 10000,
 		// 	voters: vec![]
@@ -403,12 +404,7 @@ impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<Ac
 			total: 0,
 			voters: vec![]
 		}));
-		// supports.push((CONST_VALIDATOR_ID_3, Support{
-		// 	total: 0,
-		// 	voters: vec![]
-		// }));
-
-		Ok(supports)
+		Ok((supports, 0))
 	}
 }
 
@@ -416,6 +412,7 @@ impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<Ac
 pub struct OnChainConfig<TestDataProvider>(PhantomData<TestDataProvider>);
 impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>>
 	onchain::Config for OnChainConfig<TestDataProvider> {
+	type BlockWeights = ();
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Accuracy = Perbill;
