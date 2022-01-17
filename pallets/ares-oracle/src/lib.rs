@@ -169,6 +169,10 @@ pub mod pallet {
         <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
     {
 
+        fn on_initialize(n: T::BlockNumber) -> Weight {
+            Self::check_and_clean_obsolete_task(14400u32.into())
+        }
+
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
             // To runtime v106
             if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral ||
@@ -2871,8 +2875,8 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     //
     fn check_and_clean_obsolete_task(maximum_due: T::BlockNumber) -> Weight {
         let mut old_task_list = <PreCheckTaskList<T>>::get();
+        let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
         if old_task_list.len() > 0 {
-            let current_block_num:T::BlockNumber= <system::Pallet<T>>::block_number() ;
             let old_count = old_task_list.len();
             old_task_list.retain(|(_, _, bn)|{
                     let duration_bn = current_block_num - *bn;
@@ -2882,6 +2886,19 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
                 <PreCheckTaskList<T>>::put(old_task_list);
             }
         }
+
+        // let mut old_final_check_list = <FinalPerCheckResult<T>>::;
+        for (key, val) in <FinalPerCheckResult<T>>::iter() {
+            if let Some((bn, per_status, _)) = val {
+                if per_status == PreCheckStatus::Pass {
+                    let duration_bn = current_block_num - bn;
+                    if duration_bn > maximum_due {
+                        <FinalPerCheckResult<T>>::remove(key);
+                    }
+                }
+            }
+        }
+
         0
     }
 
