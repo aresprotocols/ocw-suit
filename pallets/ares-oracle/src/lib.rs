@@ -188,12 +188,12 @@ pub mod pallet {
             let control_setting = <OcwControlSetting<T>>::get();
             let block_author = Self::get_block_author();
 
-            let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
-            log::debug!("######## conf_session_multi = {:?}", conf_session_multi);
-            let near_era_change = T::AresIStakingNpos::near_era_change(conf_session_multi);
-            log::debug!("######## near_era_change = {:?}", near_era_change);
-            let pending_npos = T::AresIStakingNpos::pending_npos();
-            log::debug!("######## pending_npos = {:?}", pending_npos);
+            // let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
+            // log::debug!("######## conf_session_multi = {:?}", conf_session_multi);
+            // let near_era_change = T::AresIStakingNpos::near_era_change(conf_session_multi);
+            // log::debug!("######## near_era_change = {:?}", near_era_change);
+            // let pending_npos = T::AresIStakingNpos::pending_npos();
+            // log::debug!("######## pending_npos = {:?}", pending_npos);
 
             match block_author {
                 None => {
@@ -2900,12 +2900,16 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
 
         // let mut old_final_check_list = <FinalPerCheckResult<T>>::;
         for (key, val) in <FinalPerCheckResult<T>>::iter() {
-            if let Some((bn, per_status, _)) = val {
-                if per_status == PreCheckStatus::Pass {
-                    let duration_bn = current_block_num.saturating_sub(bn);
-                    if duration_bn > maximum_due {
-                        <FinalPerCheckResult<T>>::remove(key);
-                    }
+            if let Some((bn, _per_status, _)) = val {
+                // if per_status == PreCheckStatus::Pass {
+                //     let duration_bn = current_block_num.saturating_sub(bn);
+                //     if duration_bn > maximum_due {
+                //         <FinalPerCheckResult<T>>::remove(key);
+                //     }
+                // }
+                let duration_bn = current_block_num.saturating_sub(bn);
+                if duration_bn > maximum_due {
+                    <FinalPerCheckResult<T>>::remove(key);
                 }
             }
         }
