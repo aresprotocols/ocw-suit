@@ -187,6 +187,14 @@ pub mod pallet {
         fn offchain_worker(block_number: T::BlockNumber) {
             let control_setting = <OcwControlSetting<T>>::get();
             let block_author = Self::get_block_author();
+
+            let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
+            log::debug!("######## conf_session_multi = {:?}", conf_session_multi);
+            let near_era_change = T::AresIStakingNpos::near_era_change(conf_session_multi);
+            log::debug!("######## near_era_change = {:?}", near_era_change);
+            let pending_npos = T::AresIStakingNpos::pending_npos();
+            log::debug!("######## pending_npos = {:?}", pending_npos);
+
             match block_author {
                 None => {
                     log::warn!(target: "ares_oracle::offchain_worker", "❗ Not found author.");
@@ -211,6 +219,7 @@ pub mod pallet {
                             if T::AresIStakingNpos::near_era_change(conf_session_multi) {
                                 log::debug!(" T::AresIStakingNpos::near_era_change is near will get npos data.");
                                 let pending_npos = T::AresIStakingNpos::pending_npos();
+                                log::debug!(" ******************* pending_npos: {:?}", pending_npos.clone());
                                 pending_npos.into_iter().any(|(stash_id, auth_id)| {
                                     // for v3.4.x --
                                     log::debug!("T::AresIStakingNpos::new validator, stash_id = {:?}, auth_id = {:?}", stash_id.clone(), &auth_id);
@@ -238,7 +247,6 @@ pub mod pallet {
                                     }
                                     false
                                 });
-
                             }
                         }
                     }
@@ -259,6 +267,8 @@ pub mod pallet {
                     }
                 }
             }
+
+
 
             if control_setting.open_paid_price_reporter {
                 if let Some(keystore_validator) = Self::keystore_validator_member() {
@@ -2880,8 +2890,8 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
         if old_task_list.len() > 0 {
             let old_count = old_task_list.len();
             old_task_list.retain(|(_, _, bn)|{
-                    let duration_bn = current_block_num - *bn;
-                    duration_bn <= maximum_due
+                let duration_bn = current_block_num.saturating_sub(*bn) ;
+                duration_bn <= maximum_due
             });
             if old_count > old_task_list.len() {
                 <PreCheckTaskList<T>>::put(old_task_list);
@@ -2892,14 +2902,13 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
         for (key, val) in <FinalPerCheckResult<T>>::iter() {
             if let Some((bn, per_status, _)) = val {
                 if per_status == PreCheckStatus::Pass {
-                    let duration_bn = current_block_num - bn;
+                    let duration_bn = current_block_num.saturating_sub(bn);
                     if duration_bn > maximum_due {
                         <FinalPerCheckResult<T>>::remove(key);
                     }
                 }
             }
         }
-
         0
     }
 

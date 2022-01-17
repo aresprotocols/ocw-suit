@@ -288,7 +288,6 @@ impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for T
 	}
 
 	fn old_npos()
-		// -> Vec<<T as frame_system::Config>::AccountId>
 		-> Vec<Self::StashId>
 	{
 		// get current era

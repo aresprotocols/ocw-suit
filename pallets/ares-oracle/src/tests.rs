@@ -474,6 +474,35 @@ fn test_fixbug_01161954 () {
             (stash_3, authority_3.clone(), 9),
             (stash_4, authority_4.clone(), 10),
         ]);
+
+        System::set_block_number(10);
+        // test clean
+        AresOcw::check_and_clean_obsolete_task(10);
+        let pre_check_list = PreCheckTaskList::<Test>::get();
+        assert_eq!(pre_check_list, vec![
+            (stash_1, authority_1.clone(), 1),
+            (stash_2, authority_2.clone(), 8),
+            (stash_3, authority_3.clone(), 9),
+            (stash_4, authority_4.clone(), 10),
+        ]);
+
+        System::set_block_number(12);
+        // test clean
+        AresOcw::check_and_clean_obsolete_task(10);
+        let pre_check_list = PreCheckTaskList::<Test>::get();
+        assert_eq!(pre_check_list, vec![
+            (stash_2, authority_2.clone(), 8),
+            (stash_3, authority_3.clone(), 9),
+            (stash_4, authority_4.clone(), 10),
+        ]);
+
+        System::set_block_number(20);
+        // test clean
+        AresOcw::check_and_clean_obsolete_task(10);
+        let pre_check_list = PreCheckTaskList::<Test>::get();
+        assert_eq!(pre_check_list, vec![
+            (stash_4, authority_4.clone(), 10),
+        ]);
     });
 }
 
