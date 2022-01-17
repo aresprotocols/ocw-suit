@@ -174,7 +174,7 @@ pub mod pallet {
         }
 
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
-            // To runtime v106
+            // To runtime v107
             if StorageVersion::<T>::get() == Releases::V1_0_0_Ancestral ||
                 StorageVersion::<T>::get() == Releases::V1_0_1_HttpErrUpgrade ||
                 StorageVersion::<T>::get() == Releases::V1_1_0_HttpErrUpgrade
