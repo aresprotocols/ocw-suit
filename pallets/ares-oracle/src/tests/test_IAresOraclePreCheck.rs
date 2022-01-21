@@ -48,7 +48,8 @@ fn test_has_pre_check_task() {
 
         assert!(!AresOcw::has_pre_check_task(stash_1));
         assert!(AresOcw::create_pre_check_task(stash_1, auth_1.clone(), current_bn));
-        assert!(AresOcw::has_pre_check_task(stash_1));
+        assert!(!AresOcw::has_pre_check_task(stash_1));
+
         assert!(!AresOcw::has_pre_check_task(stash_2));
     });
 }

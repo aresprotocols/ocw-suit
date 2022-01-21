@@ -82,6 +82,7 @@ use oracle_finance::traits::*;
 
 // use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use crate::AuthorityId as AuraId;
+use sp_runtime::offchain::OffchainDbExt;
 // use crate::AuthorityId::ID as ;
 
 // For testing the module, we construct a mock runtime.
@@ -431,6 +432,27 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 
         let avg_trace = <PurchasedAvgTrace<Test>>::iter().collect::<Vec<_>>();
         assert_eq!(avg_trace.len(), 0);
+    });
+}
+
+#[test]
+fn test_get_local_host_key () {
+    let mut t = new_test_ext();
+    let (offchain, _state) = testing::TestOffchainExt::new();
+    let (pool, _) = testing::TestTransactionPoolExt::new();
+    t.register_extension(OffchainDbExt::new(offchain.clone()));
+    t.register_extension(OffchainWorkerExt::new(offchain));
+    t.register_extension(TransactionPoolExt::new(pool));
+
+    t.execute_with(|| {
+        let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+        let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+
+        LocalXRay::<Test>::insert(1, (100, "a".encode(), vec![authority_1.clone()]));
+        assert_eq!(LocalXRay::<Test>::get(1), Some((100, "a".encode(), vec![authority_1.clone()])));
+
+        LocalXRay::<Test>::insert(1, (200, "b".encode(), vec![authority_2.clone()]));
+        assert_eq!(LocalXRay::<Test>::get(1), Some((200, "b".encode(), vec![authority_2.clone()])));
     });
 }
 

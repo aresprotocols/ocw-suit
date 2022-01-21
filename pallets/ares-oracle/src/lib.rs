@@ -20,7 +20,7 @@ use frame_support::traits::{FindAuthor, Get, OneSessionHandler};
 use serde::{Deserialize, Deserializer};
 use sp_std::{prelude::*, str};
 use frame_support::sp_runtime::sp_std::convert::TryInto;
-use frame_support::sp_runtime::traits::{IsMember, Verify};
+use frame_support::sp_runtime::traits::{IsMember, Verify, TrailingZeroInput};
 use frame_system::offchain::{SendUnsignedTransaction, Signer};
 use lite_json::NumberValue;
 pub use pallet::*;
@@ -42,6 +42,7 @@ use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreChec
 use sp_std::{collections::btree_map::BTreeMap};
 use frame_support::ConsensusEngineId;
 use sp_runtime::app_crypto::Public;
+use frame_support::sp_runtime::offchain::storage::StorageRetrievalError;
 
 pub mod types;
 pub mod traits;
@@ -54,6 +55,7 @@ pub mod migrations;
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
+pub const LOCAL_HOST_KEY: &[u8] = b"are-ocw::local_host_key";
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
@@ -101,6 +103,8 @@ pub mod pallet {
     use frame_system::{ensure_signed, ensure_none};
     use staking_extend::IStakingNpos;
     use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckTaskConfig};
+    use sp_consensus_aura::ConsensusLog::AuthoritiesChange;
+    use frame_system::offchain::SubmitTransaction;
 
     #[pallet::error]
     #[derive(PartialEq, Eq)]
@@ -188,12 +192,39 @@ pub mod pallet {
             let control_setting = <OcwControlSetting<T>>::get();
             let block_author = Self::get_block_author();
 
-            // let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
-            // log::debug!("######## conf_session_multi = {:?}", conf_session_multi);
-            // let near_era_change = T::AresIStakingNpos::near_era_change(conf_session_multi);
-            // log::debug!("######## near_era_change = {:?}", near_era_change);
-            // let pending_npos = T::AresIStakingNpos::pending_npos();
-            // log::debug!("######## pending_npos = {:?}", pending_npos);
+            // ##############
+            // For debug on test-chain.
+            let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
+
+            if T::AresIStakingNpos::near_era_change(conf_session_multi) {
+
+                // Get all ares authoritys.
+                let authority_list = T::AuthorityAres::all();
+
+
+                // Check not be validator.
+                let current_validator: Vec<(_, T::AuthorityAres)> = Authorities::<T>::get();
+                let online_authroitys = current_validator.into_iter().map(|(_, auth)| {
+                    auth
+                }).collect::<Vec<T::AuthorityAres>>();
+                let in_list = authority_list.iter().any(|local_authority|{
+                    online_authroitys.contains(local_authority)
+                });
+
+                log::debug!("XRay run 1 ...");
+                // submit offchain tx.
+                if !in_list {
+                    let host_key = Self::get_local_host_key();
+                    // Get request_domain.
+                    let request_domain = Self::get_local_storage_request_domain();
+                    log::debug!("XRay run 1.1 ... host_key = {:?}, request_domain = {:?}, authority_list = {:?}", host_key, request_domain, authority_list);
+                    // LocalXRay::<T>::put(host_key, (request_domain, authority_list));
+                    let call = Call::submit_local_xray(host_key, request_domain, authority_list);
+                    SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
+                }
+            }
+
+            // ##############
 
             match block_author {
                 None => {
@@ -220,8 +251,7 @@ pub mod pallet {
                                 log::debug!(" T::AresIStakingNpos::near_era_change is near will get npos data.");
                                 let pending_npos = T::AresIStakingNpos::pending_npos();
                                 log::debug!(" ******************* pending_npos: {:?}", pending_npos.clone());
-                                pending_npos.into_iter().any(|(stash_id, auth_id)| {
-                                    // for v3.4.x --
+                                for (stash_id, auth_id) in pending_npos {
                                     log::debug!("T::AresIStakingNpos::new validator, stash_id = {:?}, auth_id = {:?}", stash_id.clone(), &auth_id);
                                     if auth_id.is_none() {
                                         log::warn!(
@@ -245,8 +275,8 @@ pub mod pallet {
                                             }
                                         }
                                     }
-                                    false
-                                });
+                                }
+
                             }
                         }
                     }
@@ -284,9 +314,8 @@ pub mod pallet {
                 }
             }
 
-            // for v3.4.x . TO
+            //
             if let Some((stash, auth, _)) = Self::get_pre_task_by_authority_set(Self::get_ares_authority_list()) {
-
                 // Self::create_pre_check_task(stash_id.clone(), block_number);
                 log::debug!("Have my own pre-check task. stash = {:?}, auth = {:?}", stash.clone(), &auth);
                 // Get pre-check token list.
@@ -319,6 +348,20 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T>
     {
+
+        #[pallet::weight(0)]
+        pub fn submit_local_xray (
+            origin: OriginFor<T>,
+            host_key: u32,
+            request_domain: Vec<u8>,
+            authority_list: Vec<T::AuthorityAres>
+        ) -> DispatchResultWithPostInfo {
+            ensure_none(origin)?;
+
+            LocalXRay::<T>::insert(host_key, (<system::Pallet<T>>::block_number(), request_domain, authority_list));
+            Ok(().into())
+        }
+
         #[pallet::weight(1000)]
         pub fn submit_ask_price (
             origin: OriginFor<T>,
@@ -348,7 +391,6 @@ pub mod pallet {
             }
             Ok(().into())
         }
-
 
         #[pallet::weight(0)]
         pub fn submit_forced_clear_purchased_price_payload_signed (
@@ -893,9 +935,10 @@ pub mod pallet {
                     );
                     return InvalidTransaction::BadProof.into();
                 }
+
                 ValidTransaction::with_tag_prefix("ares-oracle::submit_create_pre_check_task")
                     .priority(T::UnsignedPriority::get())
-                    .and_provides(&payload.block_number) // next_unsigned_at
+                    .and_provides(payload.pre_check_stash.clone()) // next_unsigned_at
                     .longevity(5)
                     .propagate(true)
                     .build()
@@ -981,7 +1024,19 @@ pub mod pallet {
                     .longevity(5)
                     .propagate(true)
                     .build()
-            } else {
+            } else if let Call::submit_local_xray(ref host_key, ref request_domain, ref authority_list) = call {
+                log::debug!(
+                    "*** XRay ValidTransaction: {:?} ",
+                    <system::Pallet<T>>::block_number()
+                );
+                let current_blocknumber: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
+                ValidTransaction::with_tag_prefix("ares-oracle::submit_local_xray")
+                    .priority(T::UnsignedPriority::get())
+                    .and_provides(&current_blocknumber.saturating_add((*host_key).into()))
+                    .longevity(5)
+                    .propagate(true)
+                    .build()
+            }else {
                 InvalidTransaction::Call.into()
             }
         }
@@ -1192,6 +1247,9 @@ pub mod pallet {
     #[pallet::storage]
     pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
+    #[pallet::storage]
+    pub(crate) type LocalXRay<T: Config> = StorageMap<_, Blake2_128Concat, u32, (T::BlockNumber, Vec<u8>, Vec<T::AuthorityAres>)>;
+
     /// The current authority set.
     #[pallet::storage]
     #[pallet::getter(fn authorities)]
@@ -1389,6 +1447,25 @@ impl<T: Config> Pallet<T> {
                 )
                 .collect();
         result
+    }
+
+    fn get_local_host_key() -> u32 {
+        let storage_local_host_key =
+            StorageValueRef::persistent(LOCAL_HOST_KEY);
+
+        let old_key = storage_local_host_key.get::<u32>();
+        if let Some(storage_key) = old_key.unwrap() {
+            return storage_key;
+        }
+
+        let seed = sp_io::offchain::random_seed();
+        let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()));
+        if (random.is_ok()) {
+            let random = random.unwrap();
+            storage_local_host_key.set(&random);
+            return random;
+        }
+        0
     }
 
     // Get request domain, include TCP protocol, example: http://www.xxxx.com
@@ -2127,11 +2204,6 @@ impl<T: Config> Pallet<T> {
 
     fn get_ares_authority_list() -> Vec<T::AuthorityAres> {
         let authority_list = T::AuthorityAres::all();  // T::AuthorityAres::all();
-        if authority_list.len() > 1 {
-            log::warn!(target: "T::AuthorityAres", "❗ Multiple related `authority` are found, current count is {:?} , one binding related to the session should be kept, and the redundant ones should be deleted. ",
-                       authority_list.len()
-            );
-        }
         authority_list
     }
 
@@ -2847,7 +2919,7 @@ impl <T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNum
     fn has_pre_check_task(stash: T::AccountId) -> bool {
         if let Some((_, check_status)) = Self::get_pre_check_status(stash.clone()) {
             match check_status {
-                PreCheckStatus::Review => { return true ;}
+                PreCheckStatus::Review => { return false ;}
                 PreCheckStatus::Pass => { return true; }
                 PreCheckStatus::Prohibit => { return false; }
             }
