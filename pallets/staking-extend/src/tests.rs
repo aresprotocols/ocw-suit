@@ -1,7 +1,7 @@
-use crate::{mock::*};
+use crate::mock::*;
 use crate::IStakingNpos;
 
-use frame_support::{assert_ok};
+use frame_support::assert_ok;
 // use crate::traits::*;
 // use crate::types::*;
 // use frame_support::traits::OnInitialize;
@@ -10,22 +10,21 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Perbill
+	Perbill,
 };
 
 #[test]
 fn test_get_pending_npos_listd() {
 	new_test_ext().execute_with(|| {
-
 		advance_session();
 		// assert_eq!(<Test as crate::Config>::IStakingNpos::current_staking_era(), 0);
-		// assert_eq!(<Test as crate::Config>::IStakingNpos::old_npos(), vec![CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_1]) ;
-		// assert_eq!(<Test as crate::Config>::IStakingNpos::pending_npos().len(), 0) ;
-
+		// assert_eq!(<Test as crate::Config>::IStakingNpos::old_npos(), vec![CONST_VALIDATOR_ID_2,
+		// CONST_VALIDATOR_ID_1]) ; assert_eq!(<Test as crate::Config>::IStakingNpos::pending_npos().len(),
+		// 0) ;
 
 		assert_eq!(Test::current_staking_era(), 0);
-		assert_eq!(Test::old_npos(), vec![CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_1]) ;
-		assert_eq!(Test::pending_npos().len(), 0) ;
+		assert_eq!(Test::old_npos(), vec![CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_1]);
+		assert_eq!(Test::pending_npos().len(), 0);
 
 		// bound new validator
 		assert_eq!(Test::current_staking_era(), 0);
@@ -33,8 +32,12 @@ fn test_get_pending_npos_listd() {
 			Origin::signed(CONST_VALIDATOR_ID_3),
 			CONST_VALIDATOR_ID_3,
 			1500,
-			pallet_staking::RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(CONST_VALIDATOR_ID_3), pallet_staking::ValidatorPrefs::default()));
+			pallet_staking::RewardDestination::Controller
+		));
+		assert_ok!(Staking::validate(
+			Origin::signed(CONST_VALIDATOR_ID_3),
+			pallet_staking::ValidatorPrefs::default()
+		));
 
 		advance_session();
 		advance_session();
@@ -48,18 +51,22 @@ fn test_get_pending_npos_listd() {
 		advance_session();
 
 		// Set session key
-		assert_ok!(Session::set_keys(Origin::signed(CONST_VALIDATOR_ID_3), UintAuthorityId(8).into(), vec![]));
+		assert_ok!(Session::set_keys(
+			Origin::signed(CONST_VALIDATOR_ID_3),
+			UintAuthorityId(8).into(),
+			vec![]
+		));
 
 		advance_session();
 		advance_session();
 
 		//
 		assert_eq!(Test::current_staking_era(), 1);
-		assert_eq!(Test::pending_npos().len(), 1) ;
-		assert_eq!(Test::pending_npos(),
-				   vec![
-					   (CONST_VALIDATOR_ID_3, Some(UintAuthorityId(8))),
-				   ]) ;
+		assert_eq!(Test::pending_npos().len(), 1);
+		assert_eq!(
+			Test::pending_npos(),
+			vec![(CONST_VALIDATOR_ID_3, Some(UintAuthorityId(8))),]
+		);
 
 		advance_session();
 		advance_session();
@@ -120,7 +127,6 @@ fn test_calculate_near_era_change_period_eq_ear_triple() {
 #[test]
 fn test_near_era_change() {
 	new_test_ext().execute_with(|| {
-
 		advance_session(); // 1
 		assert_eq!(Test::current_staking_era(), 0);
 		assert!(!Test::near_era_change(2));
@@ -174,6 +180,5 @@ fn test_near_era_change() {
 		advance_session(); // 13
 		assert_eq!(Test::current_staking_era(), 1);
 		assert!(!Test::near_era_change(2));
-
 	});
 }

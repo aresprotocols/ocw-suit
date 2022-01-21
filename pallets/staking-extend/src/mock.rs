@@ -1,6 +1,6 @@
 use crate as member_extend;
 use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
-use frame_support::sp_runtime::traits::{IdentifyAccount, Verify, Convert, OpaqueKeys};
+use frame_support::sp_runtime::traits::{Convert, IdentifyAccount, OpaqueKeys, Verify};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
@@ -11,25 +11,25 @@ use frame_support::{
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
-	traits::{IdentityLookup, Zero, BlakeTwo256},
+	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 
-use frame_system as system;
 use frame_election_provider_support;
+use frame_system as system;
 // use pallet_balances;
 // use pallet_balances::{BalanceLock, Error as BalancesError};
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
-use frame_election_provider_support::{ElectionProvider, onchain, data_provider, VoteWeight, Supports, Support};
-use frame_support::traits::{ValidatorSet, OneSessionHandler, Hooks, Get};
-use frame_support::sp_runtime::Perbill;
+use frame_election_provider_support::{data_provider, onchain, ElectionProvider, Support, Supports, VoteWeight};
 use frame_support::pallet_prelude::PhantomData;
+use frame_support::sp_runtime::Perbill;
+use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
+use pallet_staking::{EraIndex, StakerStatus};
 use std::borrow::BorrowMut;
 use std::{cell::RefCell, collections::HashSet};
-use pallet_staking::{StakerStatus, EraIndex};
 // use sp_core::{crypto::key_types::DUMMY, H256};
-use sp_core::{H256};
 use frame_system::limits::BlockWeights;
+use sp_core::H256;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -59,17 +59,17 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 	type Key = UintAuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(_: I)
-		where
-			I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
-			AccountId: 'a,
+	where
+		I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
+		AccountId: 'a,
 	{
 		// println!(" Debug . on_genesis_session ");
 	}
 
 	fn on_new_session<'a, I: 'a>(_: bool, validators: I, queued_validators: I)
-		where
-			I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
-			AccountId: 'a,
+	where
+		I: Iterator<Item = (&'a AccountId, UintAuthorityId)>,
+		AccountId: 'a,
 	{
 		// println!(" Debug . on_new_session ");
 		// let current_validators = validators.map(|(_, k)| k).collect::<Vec<_>>();
@@ -77,9 +77,7 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 		// println!("*** LINDEBUG:: current_validators == {:?}", current_validators);
 		// println!("*** LINDEBUG:: next_authorities == {:?}", next_authorities);
 
-		SESSION.with(|x| {
-			*x.borrow_mut() = (validators.map(|x| x.0.clone()).collect(), HashSet::new())
-		});
+		SESSION.with(|x| *x.borrow_mut() = (validators.map(|x| x.0.clone()).collect(), HashSet::new()));
 	}
 
 	fn on_disabled(validator_index: usize) {
@@ -91,7 +89,6 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 		})
 	}
 }
-
 
 // -------------------------
 
@@ -185,14 +182,13 @@ impl crate::Config for Test {
 
 	// type StashId = AccountId;// <Self as frame_system::Config>::AccountId;
 	// type IStakingNpos = Self;
-	type DataProvider = Staking  ;// TestStakingDataProvider;
-	// type DebugError = <<Self as staking_extend::Config>::ElectionProvider as ElectionProvider<<Self as frame_system::Config>::AccountId, <Self as frame_system::Config>::BlockNumber>>::Error;
+	type DataProvider = Staking; // TestStakingDataProvider;
+							 // type DebugError = <<Self as staking_extend::Config>::ElectionProvider as ElectionProvider<<Self
+							 // as frame_system::Config>::AccountId, <Self as frame_system::Config>::BlockNumber>>::Error;
 	type ElectionProvider = TestElectionProvider<member_extend::Pallet<Self>>;
 	type OnChainAccuracy = Perbill;
 
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
-		OnChainConfig<member_extend::Pallet<Self>>,
-	>;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<OnChainConfig<member_extend::Pallet<Self>>>;
 
 	type AresOraclePreCheck = ();
 }
@@ -221,7 +217,8 @@ impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	// type SessionHandler = (StakingExtend,); // (OtherSessionHandler,); // (StakingExtend); // (OtherSessionHandler,);
+	// type SessionHandler = (StakingExtend,); // (OtherSessionHandler,); // (StakingExtend); //
+	// (OtherSessionHandler,);
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Event = Event;
 	type ValidatorId = AccountId;
@@ -269,8 +266,8 @@ pallet_staking_reward_curve::build! {
 
 pub type Extrinsic = TestXt<Call, ()>;
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
-	where
-		Call: From<LocalCall>,
+where
+	Call: From<LocalCall>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
@@ -304,22 +301,20 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	// type ElectionProvider =  ElectionProviderMultiPhase;
-	type ElectionProvider = StakingExtend ;// StakingExtend;// // ElectionProviderMultiPhase;
-	// type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
-	// 	pallet_election_provider_multi_phase::OnChainConfig<Self>,
-	// >;
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
-		crate::OnChainConfig<Self>,
-	>;
+	type ElectionProvider = StakingExtend; // StakingExtend;// // ElectionProviderMultiPhase;
+									   // type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
+									   // 	pallet_election_provider_multi_phase::OnChainConfig<Self>,
+									   // >;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<crate::OnChainConfig<Self>>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Test>;
 }
 
-pub(crate) const CONST_VALIDATOR_ID_1:AccountId= 1001;
-pub(crate) const CONST_VALIDATOR_ID_2:AccountId= 1002;
-pub(crate) const CONST_VALIDATOR_ID_3:AccountId= 1003;
-pub(crate) const CONST_VALIDATOR_ID_4:AccountId= 1004;
-pub(crate) const CONST_VALIDATOR_ID_5:AccountId= 1005;
-pub(crate) const CONST_VALIDATOR_ID_6:AccountId= 1006;
+pub(crate) const CONST_VALIDATOR_ID_1: AccountId = 1001;
+pub(crate) const CONST_VALIDATOR_ID_2: AccountId = 1002;
+pub(crate) const CONST_VALIDATOR_ID_3: AccountId = 1003;
+pub(crate) const CONST_VALIDATOR_ID_4: AccountId = 1004;
+pub(crate) const CONST_VALIDATOR_ID_5: AccountId = 1005;
+pub(crate) const CONST_VALIDATOR_ID_6: AccountId = 1006;
 pub(crate) const CONST_VOTER_ID_1: AccountId = 1011;
 pub(crate) const CONST_VOTER_ID_2: AccountId = 1012;
 
@@ -329,7 +324,7 @@ impl Convert<AccountId, Option<AccountId>> for TestStashOf<AccountId> {
 		Some(controller)
 	}
 }
-pub struct TestValidatorSet ;
+pub struct TestValidatorSet;
 impl ValidatorSet<AccountId> for TestValidatorSet {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = TestStashOf<AccountId>;
@@ -349,8 +344,8 @@ impl ValidatorSet<AccountId> for TestValidatorSet {
 }
 
 // pub struct TestStakingDataProvider ;
-// impl frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber> for TestStakingDataProvider {
-// 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
+// impl frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber> for
+// TestStakingDataProvider { 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 //
 // 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 // 		// submit 3 times. 3% , 2/3 10 block submit.
@@ -363,8 +358,8 @@ impl ValidatorSet<AccountId> for TestValidatorSet {
 // 		])
 // 	}
 //
-// 	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-// 		Ok(vec![
+// 	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(AccountId, VoteWeight,
+// Vec<AccountId>)>> { 		Ok(vec![
 // 			(CONST_VOTER_ID_1, 100, vec![CONST_VALIDATOR_ID_4, CONST_FEATURE_VALIDATOR_ID_5]),
 // 			(CONST_VOTER_ID_2, 100, vec![CONST_FEATURE_VALIDATOR_ID_5])
 // 		])
@@ -380,11 +375,12 @@ impl ValidatorSet<AccountId> for TestValidatorSet {
 // }
 
 pub struct TestElectionProvider<TestDataProvider>(PhantomData<TestDataProvider>);
-impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>>
-	frame_election_provider_support::ElectionProvider<AccountId, BlockNumber> for TestElectionProvider<TestDataProvider> {
+impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>>
+	frame_election_provider_support::ElectionProvider<AccountId, BlockNumber> for TestElectionProvider<TestDataProvider>
+{
 	// type Error = T::DebugError;
 	type Error = (); // <Self as ElectionProvider<AccountId, BlockNumber>>::Error;
-	type DataProvider = TestDataProvider;// <Test as crate::Config>::DataProvider ;
+	type DataProvider = TestDataProvider; // <Test as crate::Config>::DataProvider ;
 
 	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
 		// let support = Support{
@@ -396,29 +392,35 @@ impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<Ac
 		// 	total: 10000,
 		// 	voters: vec![(CONST_VOTER_ID_1, 5000), (CONST_VOTER_ID_2, 5000), ]
 		// }));
-		supports.push((CONST_VALIDATOR_ID_1, Support{
-			total: 0,
-			voters: vec![]
-		}));
-		supports.push((CONST_VALIDATOR_ID_2, Support{
-			total: 0,
-			voters: vec![]
-		}));
+		supports.push((
+			CONST_VALIDATOR_ID_1,
+			Support {
+				total: 0,
+				voters: vec![],
+			},
+		));
+		supports.push((
+			CONST_VALIDATOR_ID_2,
+			Support {
+				total: 0,
+				voters: vec![],
+			},
+		));
 		Ok((supports, 0))
 	}
 }
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 pub struct OnChainConfig<TestDataProvider>(PhantomData<TestDataProvider>);
-impl <TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>>
-	onchain::Config for OnChainConfig<TestDataProvider> {
+impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>> onchain::Config
+	for OnChainConfig<TestDataProvider>
+{
 	type BlockWeights = ();
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Accuracy = Perbill;
 	type DataProvider = TestDataProvider;
 }
-
 
 // pallet_election_provider_multi_phase
 
@@ -430,10 +432,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(CONST_VALIDATOR_ID_2, 2000000000100),
 			(CONST_VALIDATOR_ID_3, 3000000000100),
 			(CONST_VALIDATOR_ID_4, 4000000000100),
-			// (CONST_VALIDATOR_ID_5, 5000000000100),
-			// (CONST_VALIDATOR_ID_6, 6000000000100)
+			/* (CONST_VALIDATOR_ID_5, 5000000000100),
+			 * (CONST_VALIDATOR_ID_6, 6000000000100) */
 		],
-	}.assimilate_storage(&mut t)
+	}
+	.assimilate_storage(&mut t)
 	.unwrap();
 
 	pallet_staking::GenesisConfig::<Test> {
@@ -442,17 +445,28 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		invulnerables: vec![],
 		slash_reward_fraction: Perbill::from_percent(10),
 		stakers: vec![
-			(CONST_VALIDATOR_ID_1, CONST_VALIDATOR_ID_1, 1000,StakerStatus::Validator),
-			(CONST_VALIDATOR_ID_2, CONST_VALIDATOR_ID_2, 1000,StakerStatus::Validator),
+			(
+				CONST_VALIDATOR_ID_1,
+				CONST_VALIDATOR_ID_1,
+				1000,
+				StakerStatus::Validator,
+			),
+			(
+				CONST_VALIDATOR_ID_2,
+				CONST_VALIDATOR_ID_2,
+				1000,
+				StakerStatus::Validator,
+			),
 		],
 		..Default::default()
-	}.assimilate_storage(&mut t)
+	}
+	.assimilate_storage(&mut t)
 	.unwrap();
 
 	// crate::GenesisConfig::<Test> {
 	// 	_pt: Default::default()
 	// }.assimilate_storage(&mut t).unwrap();
-	
+
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
