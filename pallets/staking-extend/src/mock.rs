@@ -3,7 +3,7 @@ use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
 use frame_support::sp_runtime::traits::{Convert, IdentifyAccount, OpaqueKeys, Verify};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
+	traits::{Contains, GenesisBuild, SortedMembers},
 	weights::Weight,
 	PalletId,
 };
@@ -30,6 +30,7 @@ use std::{cell::RefCell, collections::HashSet};
 // use sp_core::{crypto::key_types::DUMMY, H256};
 use frame_system::limits::BlockWeights;
 use sp_core::H256;
+// use crate::OnChainConfig;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -80,14 +81,7 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
 		SESSION.with(|x| *x.borrow_mut() = (validators.map(|x| x.0.clone()).collect(), HashSet::new()));
 	}
 
-	fn on_disabled(validator_index: usize) {
-		// println!(" Debug . on_disabled ");
-		SESSION.with(|d| {
-			let mut d = d.borrow_mut();
-			let value = d.0[validator_index];
-			d.1.insert(value);
-		})
-	}
+	fn on_disabled(validator_index: u32) {}
 }
 
 // -------------------------
@@ -102,11 +96,11 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config},
-
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 		// ElectionProviderMultiPhase: pallet_election_provider_multi_phase::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		// Historical: pallet_session::historical::{Pallet},
+		Historical: pallet_session::historical::{Pallet, Storage},
 		StakingExtend: crate::{Pallet},
 
 		MemberExtend: member_extend::{Pallet},
@@ -120,6 +114,20 @@ impl Contains<Call> for BaseFilter {
 	fn contains(_call: &Call) -> bool {
 		true
 	}
+}
+
+const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
+	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
+parameter_types! {
+	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+}
+
+impl pallet_bags_list::Config for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	type VoteWeightProvider = Staking;
+	type BagThresholds = BagThresholds;
 }
 
 parameter_types! {
@@ -175,21 +183,11 @@ parameter_types! {
 impl crate::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorSet = TestValidatorSet;
-
-	// type WithSessionHandler = OtherSessionHandler ;
-	// type AuthorityId = <OtherSessionHandler as OneSessionHandler<AccountId>>::Key;
 	type AuthorityId = UintAuthorityId;
-
-	// type StashId = AccountId;// <Self as frame_system::Config>::AccountId;
-	// type IStakingNpos = Self;
-	type DataProvider = Staking; // TestStakingDataProvider;
-							 // type DebugError = <<Self as staking_extend::Config>::ElectionProvider as ElectionProvider<<Self
-							 // as frame_system::Config>::AccountId, <Self as frame_system::Config>::BlockNumber>>::Error;
+	type DataProvider = Staking;
 	type ElectionProvider = TestElectionProvider<member_extend::Pallet<Self>>;
 	type OnChainAccuracy = Perbill;
-
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<OnChainConfig<member_extend::Pallet<Self>>>;
-
+	// type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type AresOraclePreCheck = ();
 }
 
@@ -213,6 +211,11 @@ impl From<UintAuthorityId> for SessionKeys {
 	}
 }
 
+impl pallet_session::historical::Config for Test {
+	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
+}
+
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
@@ -223,18 +226,14 @@ impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	// type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Config for Test {
-	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
-}
 
 impl pallet_authority_discovery::Config for Test {
-	// type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = MaxAuthorities;
 }
 
 parameter_types! {
@@ -279,7 +278,13 @@ parameter_types! {
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 4; // 1/2 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 	pub OffchainRepeat: BlockNumber = 5;
+}
+
+impl onchain::Config for Test {
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
 }
 
 impl pallet_staking::Config for Test {
@@ -300,12 +305,14 @@ impl pallet_staking::Config for Test {
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+	type SortedListProvider = BagsList;
 	// type ElectionProvider =  ElectionProviderMultiPhase;
 	type ElectionProvider = StakingExtend; // StakingExtend;// // ElectionProviderMultiPhase;
 									   // type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<
 									   // 	pallet_election_provider_multi_phase::OnChainConfig<Self>,
 									   // >;
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<crate::OnChainConfig<Self>>;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Test>;
 }
 
@@ -380,18 +387,10 @@ impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<Acc
 {
 	// type Error = T::DebugError;
 	type Error = (); // <Self as ElectionProvider<AccountId, BlockNumber>>::Error;
-	type DataProvider = TestDataProvider; // <Test as crate::Config>::DataProvider ;
+	type DataProvider = TestDataProvider;
 
-	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
-		// let support = Support{
-		// 	total: 10000,
-		// 	voters: vec![]
-		// };
+	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		let mut supports = Supports::<AccountId>::new();
-		// supports.push((CONST_FEATURE_VALIDATOR_ID_5, Support{
-		// 	total: 10000,
-		// 	voters: vec![(CONST_VOTER_ID_1, 5000), (CONST_VOTER_ID_2, 5000), ]
-		// }));
 		supports.push((
 			CONST_VALIDATOR_ID_1,
 			Support {
@@ -406,21 +405,19 @@ impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<Acc
 				voters: vec![],
 			},
 		));
-		Ok((supports, 0))
+		Ok(supports)
 	}
 }
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
-pub struct OnChainConfig<TestDataProvider>(PhantomData<TestDataProvider>);
-impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>> onchain::Config
-	for OnChainConfig<TestDataProvider>
-{
-	type BlockWeights = ();
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type Accuracy = Perbill;
-	type DataProvider = TestDataProvider;
-}
+// pub struct OnChainConfig<TestDataProvider>(PhantomData<TestDataProvider>);
+// impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>> onchain::Config
+// 	for OnChainConfig<TestDataProvider>
+// {
+// 	type Accuracy = Perbill;
+// 	type DataProvider = TestDataProvider;
+// }
+
 
 // pallet_election_provider_multi_phase
 

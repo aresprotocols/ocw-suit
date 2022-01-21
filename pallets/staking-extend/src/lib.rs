@@ -75,11 +75,11 @@ pub mod pallet {
 			DataProvider = Pallet<Self>,
 		>;
 
-		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
-			Self::AccountId,
-			Self::BlockNumber,
-			DataProvider = Pallet<Self>,
-		>;
+		// type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+		// 	Self::AccountId,
+		// 	Self::BlockNumber,
+		// 	DataProvider = Pallet<Self>,
+		// >;
 
 		type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
 	}
@@ -134,7 +134,7 @@ pub mod pallet {
 				// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}",
 				// &current_validators);
 				let mut old_target_list = Vec::new();
-				let (new_target, weight) = result.unwrap();
+				let new_target = result.unwrap();
 				let mut new_target = new_target.clone();
 				new_target.retain(|target_acc| {
 					let is_new_target = !current_validators.iter().any(|current_acc| {
@@ -207,11 +207,13 @@ pub mod pallet {
 }
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
-pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
-impl<T: Config> onchain::Config for OnChainConfig<T> {
-	type Accuracy = T::OnChainAccuracy;
-	type DataProvider = T::DataProvider;
-}
+// pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
+// impl<T: Config> onchain::Config for OnChainConfig<T> {
+// 	// type Accuracy = T::OnChainAccuracy;
+// 	// type DataProvider = T::DataProvider;
+// 	type Accuracy = T::OnChainAccuracy;
+// 	type DataProvider = T::DataProvider;
+// }
 
 impl<T: Config> Pallet<T> {}
 

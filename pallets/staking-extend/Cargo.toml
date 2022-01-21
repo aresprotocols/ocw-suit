@@ -46,6 +46,8 @@ pallet-session = { features = ["historical"], default-features = false, path = "
 
 [dev-dependencies]
 serde = { version = '1.0.130'}
+sp-npos-elections = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
+pallet-bags-list = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
 
 [features]
 default = ["std"]
