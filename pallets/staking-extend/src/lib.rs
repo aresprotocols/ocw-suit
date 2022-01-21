@@ -123,7 +123,7 @@ pub mod pallet {
 		// 	T::DataProvider::targets(maybe_max_len)
 		// }
 
-		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
 			//
 			let result = T::DataProvider::targets(maybe_max_len);
 			// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
@@ -165,7 +165,7 @@ pub mod pallet {
 					is_new_target
 				});
 				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
-				return Ok((old_target_list, weight));
+				return Ok(old_target_list);
 			}
 			return result;
 			// result
@@ -173,11 +173,11 @@ pub mod pallet {
 
 		fn voters(
 			maybe_max_len: Option<usize>,
-		) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+		) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
 			T::DataProvider::voters(maybe_max_len)
 		}
 
-		fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		fn desired_targets() -> data_provider::Result<u32> {
 			T::DataProvider::desired_targets()
 			// let result = T::DataProvider::desired_targets();
 			// log::debug!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}",
@@ -200,7 +200,7 @@ pub mod pallet {
 		>>::Error;
 		type DataProvider = T::DataProvider;
 
-		fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+		fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 			T::ElectionProvider::elect()
 		}
 	}
@@ -209,9 +209,6 @@ pub mod pallet {
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
 impl<T: Config> onchain::Config for OnChainConfig<T> {
-	type BlockWeights = T::BlockWeights;
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
 	type Accuracy = T::OnChainAccuracy;
 	type DataProvider = T::DataProvider;
 }
