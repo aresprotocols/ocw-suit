@@ -6,7 +6,6 @@ use frame_support::BoundedVec;
 use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
-use std::fmt::Formatter;
 
 //TODO
 pub type MaximumPurchaseLength = ConstU32<200>;
