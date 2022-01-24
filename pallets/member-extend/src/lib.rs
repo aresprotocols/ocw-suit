@@ -10,7 +10,7 @@ pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	// use pallet_ocw::{ValidatorHandler};
-	use frame_support::sp_runtime::traits::IsMember;
+	use frame_support::sp_runtime::traits::{IsMember, MaybeSerializeDeserialize};
 	use frame_support::sp_runtime::RuntimeAppPublic;
 	use frame_support::sp_std::convert::TryInto;
 	use frame_support::sp_std::fmt::Debug;
