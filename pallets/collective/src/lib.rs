@@ -69,7 +69,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
-mod ares;
+pub mod ares;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
