@@ -25,7 +25,7 @@ pub mod pallet {
 			+ RuntimeAppPublic
 			+ Default
 			+ Ord
-			+ MaybeSerializeDeserializ
+			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
 			+ UncheckedFrom<[u8; 32]>;
 		type Member: IsMember<Self::MemberAuthority>;
