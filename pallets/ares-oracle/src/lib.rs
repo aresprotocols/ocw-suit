@@ -31,16 +31,16 @@ use sp_std::{prelude::*, str};
 
 use crate::traits::*;
 use ares_oracle_provider_support::{
-	IAresOraclePreCheck, JsonNumberValue, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig,
+	IAresOraclePreCheck, JsonNumberValue, PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig,
 };
 use frame_support::pallet_prelude::{PhantomData, StorageMap};
-use frame_support::sp_runtime::offchain::storage::StorageRetrievalError;
 use frame_support::sp_runtime::{MultiSignature, MultiSigner, Percent};
+use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
 use frame_support::weights::Weight;
-use frame_support::ConsensusEngineId;
+use frame_support::{BoundedVec, ConsensusEngineId};
 use hex;
 use oracle_finance::traits::{IForPrice, IForReporter};
-use oracle_finance::types::BalanceOf;
+use oracle_finance::types::{BalanceOf, PurchaseId};
 use sp_runtime::app_crypto::Public;
 use sp_runtime::traits::{Saturating, UniqueSaturatedInto};
 use sp_std::collections::btree_map::BTreeMap;
@@ -98,14 +98,14 @@ where
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckTaskConfig};
+	use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckTaskConfig, TokenList};
 	use frame_support::pallet_prelude::*;
 	use frame_support::sp_runtime::traits::{IdentifyAccount, IsMember};
 	use frame_system::offchain::SubmitTransaction;
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 	use frame_system::{ensure_none, ensure_signed};
 	use oracle_finance::traits::*;
-	use oracle_finance::types::{BalanceOf, OcwPaymentResult};
+	use oracle_finance::types::{BalanceOf, OcwPaymentResult, PurchaseId};
 	use sp_consensus_aura::ConsensusLog::AuthoritiesChange;
 	use sp_core::crypto::UncheckedFrom;
 	use staking_extend::IStakingNpos;
@@ -229,7 +229,11 @@ pub mod pallet {
 						authority_list
 					);
 					// LocalXRay::<T>::put(host_key, (request_domain, authority_list));
-					let call = Call::submit_local_xray(host_key, request_domain, authority_list);
+					let call = Call::submit_local_xray {
+						host_key,
+						request_domain,
+						authority_list,
+					};
 					SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 				}
 			}
@@ -398,7 +402,8 @@ pub mod pallet {
 				return Err(Error::<T>::InsufficientMaxFee.into());
 			}
 			let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
-			let payment_result: OcwPaymentResult<T> = T::OracleFinanceHandler::reserve_for_ask_quantity(
+			let purchase_id: PurchaseId = purchase_id.clone().try_into().expect("id is too long");
+			let payment_result: OcwPaymentResult<BalanceOf<T>> = T::OracleFinanceHandler::reserve_for_ask_quantity(
 				who.clone(),
 				purchase_id.clone(),
 				request_keys.len() as u32,
@@ -424,21 +429,21 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			let purchase_id_list: Vec<Vec<u8>> = price_payload.purchase_id_list;
+			let purchase_id_list: Vec<PurchaseId> = price_payload.purchase_id_list;
 			purchase_id_list.iter().any(|x| {
 				// check that the validator threshold is up to standard.
-				if Self::is_validator_purchased_threshold_up_on(x.to_vec()) {
+				if Self::is_validator_purchased_threshold_up_on(x.clone()) {
 					// update report work point
-					if Self::update_reporter_point(x.to_vec()).is_ok() {
+					if Self::update_reporter_point(x.clone()).is_ok() {
 						// Calculate the average price
-						Self::update_purchase_avg_price_storage(x.to_vec(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+						Self::update_purchase_avg_price_storage(x.clone(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
 					}
-					Self::purchased_storage_clean(x.to_vec());
+					Self::purchased_storage_clean(x.clone());
 				} else {
 					// Get `ask owner`
-					let refund_result = T::OracleFinanceHandler::unreserve_ask(x.to_vec());
+					let refund_result = T::OracleFinanceHandler::unreserve_ask(x.clone());
 					if refund_result.is_ok() {
-						Self::purchased_storage_clean(x.to_vec());
+						Self::purchased_storage_clean(x.clone());
 						Self::deposit_event(Event::InsufficientCountOfValidators);
 					} else {
 						log::error!(
@@ -468,10 +473,10 @@ pub mod pallet {
 			);
 			// check whether purchased request still exists
 			if false == <PurchasedRequestPool<T>>::contains_key(price_payload.purchase_id.clone()) {
-				Self::deposit_event(Event::PurchasedRequestWorkHasEnded(
-					price_payload.purchase_id.clone(),
-					Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
-				));
+				Self::deposit_event(Event::PurchasedRequestWorkHasEnded {
+					purchase_id: price_payload.purchase_id.clone(),
+					who: Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
+				});
 				return Ok(().into());
 			}
 
@@ -479,7 +484,7 @@ pub mod pallet {
 				price_payload.purchase_id.clone(),
 				Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
 				price_payload.block_number.clone(),
-				price_payload.price.clone(),
+				price_payload.price,
 			);
 			// check
 			if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
@@ -510,7 +515,7 @@ pub mod pallet {
 			);
 			// Nodes with the right to increase prices
 			let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
-			let mut event_result: Vec<(Vec<u8>, u64, FractionLength)> = Vec::new();
+			let mut event_result: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
 			let mut price_key_list = Vec::new();
 			for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value, timestamp) in
 				price_list.clone()
@@ -549,11 +554,11 @@ pub mod pallet {
 
 			log::debug!("🚅 Submit jump block list on chain, count = {:?}", jump_block.len());
 
-			Self::deposit_event(Event::NewPrice(
-				event_result,
-				jump_block,
-				Self::get_stash_id(&price_payload.auth).unwrap(),
-			));
+			Self::deposit_event(Event::NewPrice {
+				results: event_result,
+				jump_blocks: jump_block,
+				who: Self::get_stash_id(&price_payload.auth).unwrap(),
+			});
 			Ok(().into())
 		}
 
@@ -594,11 +599,11 @@ pub mod pallet {
 				preresult_payload.block_number,
 				preresult_payload.pre_check_list.clone(),
 			);
-			Self::deposit_event(Event::NewPreCheckResult(
-				preresult_payload.pre_check_stash,
-				preresult_payload.block_number,
-				preresult_payload.pre_check_list,
-			));
+			Self::deposit_event(Event::NewPreCheckResult {
+				who: preresult_payload.pre_check_stash,
+				created_at: preresult_payload.block_number,
+				pre_check_list: preresult_payload.pre_check_list,
+			});
 			Ok(().into())
 		}
 
@@ -658,6 +663,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn revoke_update_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
+			let price_key: PriceKey = price_key.clone().try_into().expect("price_key is too long");
 			<PricesRequests<T>>::mutate(|prices_request| {
 				for (index, (old_price_key, _, _, _, _)) in prices_request.clone().into_iter().enumerate() {
 					if &price_key == &old_price_key {
@@ -669,7 +675,7 @@ pub mod pallet {
 				}
 			});
 			Self::remove_jump_block_number(price_key.clone());
-			Self::deposit_event(Event::RevokePriceRequest(price_key));
+			Self::deposit_event(Event::RevokePriceRequest { price_key });
 			Ok(())
 		}
 
@@ -677,38 +683,41 @@ pub mod pallet {
 		pub fn update_request_propose(
 			origin: OriginFor<T>,
 			price_key: Vec<u8>,
-			prase_token: Vec<u8>,
+			price_token: Vec<u8>,
 			parse_version: u32,
 			fraction_num: FractionLength,
 			request_interval: RequestInterval,
 		) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
+			let price_key: PriceKey = price_key.clone().try_into().expect("price_key is too long");
+			let price_token: PriceToken = price_token.clone().try_into().expect("price_token is too long");
 			<PricesRequests<T>>::mutate(|prices_request| {
 				let mut find_old = false;
-				for (index, (old_price_key, _old_prase_token, _old_parse_version, old_fraction_count, _)) in
+				for (index, (old_price_key, _old_price_token, _old_parse_version, old_fraction_count, _)) in
 					prices_request.clone().into_iter().enumerate()
 				{
 					if &price_key == &old_price_key {
-						if &"".as_bytes().to_vec() != &prase_token {
+						let price_token_tmp = price_token.to_vec();
+						if &"".as_bytes().to_vec() != &price_token_tmp {
 							// add input value
 							prices_request.push((
 								price_key.clone(),
-								prase_token.clone(),
+								price_token.clone(),
 								parse_version,
 								fraction_num.clone(),
 								request_interval.clone(),
 							));
-							Self::deposit_event(Event::UpdatePriceRequest(
-								price_key.clone(),
-								prase_token.clone(),
-								parse_version.clone(),
-								fraction_num.clone(),
-							));
+							Self::deposit_event(Event::UpdatePriceRequest {
+								price_key: price_key.clone(),
+								price_token: price_token.clone(),
+								parse_version: parse_version.clone(),
+								fraction: fraction_num.clone(),
+							});
 						}
 						// remove old one
 						prices_request.remove(index);
 						// check fraction number on change
-						if &old_fraction_count != &fraction_num || &"".as_bytes().to_vec() == &prase_token {
+						if &old_fraction_count != &fraction_num || &"".as_bytes().to_vec() == &price_token_tmp {
 							if <AresPrice<T>>::contains_key(&price_key) {
 								// if exists will be empty
 								<AresPrice<T>>::remove(&price_key);
@@ -727,17 +736,17 @@ pub mod pallet {
 				if !find_old {
 					prices_request.push((
 						price_key.clone(),
-						prase_token.clone(),
+						price_token.clone(),
 						parse_version.clone(),
 						fraction_num.clone(),
 						request_interval.clone(),
 					));
-					Self::deposit_event(Event::AddPriceRequest(
+					Self::deposit_event(Event::AddPriceRequest {
 						price_key,
-						prase_token,
+						price_token,
 						parse_version,
-						fraction_num,
-					));
+						fraction: fraction_num,
+					});
 				}
 			});
 			Ok(())
@@ -788,7 +797,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn update_pre_check_token_list(origin: OriginFor<T>, token_list: Vec<Vec<u8>>) -> DispatchResult {
+		pub fn update_pre_check_token_list(origin: OriginFor<T>, token_list: TokenList) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			ensure!(token_list.len() > 0, Error::<T>::PreCheckTokenListNotEmpty);
 			<ConfPreCheckTokenList<T>>::put(token_list);
@@ -815,40 +824,71 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// (price_key, price_val, fraction len)
-		NewPrice(
-			Vec<(Vec<u8>, u64, FractionLength)>,
-			Vec<PricePayloadSubJumpBlock>,
-			T::AccountId,
-		),
+		NewPrice {
+			results: Vec<(PriceKey, u64, FractionLength)>,
+			jump_blocks: PricePayloadSubJumpBlockList,
+			who: T::AccountId,
+		},
 		// TODO:: Feature at 105.
 		AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
 		// The report request was closed when the price was submitted
-		PurchasedRequestWorkHasEnded(Vec<u8>, T::AccountId),
-		NewPurchasedPrice(T::BlockNumber, Vec<PricePayloadSubPrice>, T::AccountId),
-		NewPurchasedRequest(PurchasedId, PurchasedRequestData<T>, BalanceOf<T>),
+		PurchasedRequestWorkHasEnded {
+			purchase_id: PurchaseId,
+			who: T::AccountId,
+		},
+		NewPurchasedPrice {
+			created_at: T::BlockNumber,
+			price_list: PricePayloadSubPriceList,
+			who: T::AccountId,
+		},
+		NewPurchasedRequest {
+			purchase_id: PurchaseId,
+			request_data: PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+			value: BalanceOf<T>,
+		},
 		PurchasedAvgPrice(
-			PurchasedId,
+			PurchaseId,
 			Vec<Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)>>,
 		),
 		UpdatePurchasedDefaultSetting(PurchasedDefaultData),
 		UpdateOcwControlSetting(OcwControlData),
-		RevokePriceRequest(Vec<u8>),
-		AddPriceRequest(Vec<u8>, Vec<u8>, u32, FractionLength),
-		UpdatePriceRequest(Vec<u8>, Vec<u8>, u32, FractionLength),
+		RevokePriceRequest {
+			price_key: PriceKey,
+		},
+		AddPriceRequest {
+			price_key: PriceKey,
+			price_token: PriceToken,
+			parse_version: u32,
+			fraction: FractionLength,
+		},
+		UpdatePriceRequest {
+			price_key: PriceKey,
+			price_token: PriceToken,
+			parse_version: u32,
+			fraction: FractionLength,
+		},
 		PricePoolDepthUpdate(u32),
 		PriceAllowableOffsetUpdate(u8),
 		InsufficientCountOfValidators,
 		ProblemWithRefund,
 		// -- TODO add New events to UML
 		NewPreCheckTask(T::AccountId, T::AuthorityAres, T::BlockNumber),
-		NewPreCheckResult(T::AccountId, T::BlockNumber, Vec<PreCheckStruct>),
+		NewPreCheckResult {
+			who: T::AccountId,
+			created_at: T::BlockNumber,
+			pre_check_list: PreCheckList,
+		},
 	}
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
+			if let Call::submit_price_unsigned_with_signed_payload {
+				price_payload: ref payload,
+				signature: ref signature,
+			} = call
+			{
 				log::debug!(
 					"🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
 					payload.block_number.clone(),
@@ -874,7 +914,11 @@ pub mod pallet {
 				}
 
 				Self::validate_transaction_parameters_of_ares(&payload.block_number, payload.price.to_vec())
-			} else if let Call::submit_purchased_price_unsigned_with_signed_payload(ref payload, ref signature) = call {
+			} else if let Call::submit_purchased_price_unsigned_with_signed_payload {
+				price_payload: ref payload,
+				ref signature,
+			} = call
+			{
 				log::debug!(
 					"🚅 Validate purchased price payload data, on block: {:?} ",
 					<system::Pallet<T>>::block_number()
@@ -906,7 +950,11 @@ pub mod pallet {
 					.longevity(5)
 					.propagate(true)
 					.build()
-			} else if let Call::submit_forced_clear_purchased_price_payload_signed(ref payload, ref signature) = call {
+			} else if let Call::submit_forced_clear_purchased_price_payload_signed {
+				price_payload: ref payload,
+				ref signature,
+			} = call
+			{
 				// submit_forced_clear_purchased_price_payload_signed
 				log::debug!(
 					"🚅 Validate forced clear purchased price payload data, on block: {:?} ",
@@ -937,7 +985,11 @@ pub mod pallet {
 				.longevity(5)
 				.propagate(true)
 				.build()
-			} else if let Call::submit_create_pre_check_task(ref payload, ref signature) = call {
+			} else if let Call::submit_create_pre_check_task {
+				precheck_payload: ref payload,
+				ref signature,
+			} = call
+			{
 				log::debug!(
 					"🚅 Validate submit_create_pre_check_task, on block: {:?}/{:?}, author: {:?} ",
 					payload.block_number.clone(),
@@ -966,7 +1018,11 @@ pub mod pallet {
 					.longevity(5)
 					.propagate(true)
 					.build()
-			} else if let Call::submit_offchain_http_err_trace_result(ref payload, ref signature) = call {
+			} else if let Call::submit_offchain_http_err_trace_result {
+				err_payload: ref payload,
+				ref signature,
+			} = call
+			{
 				// submit_offchain_http_err_trace_result
 				log::debug!(
 					"🚅 Validate purchased price payload data, on block: {:?} ",
@@ -999,7 +1055,11 @@ pub mod pallet {
 					.longevity(5)
 					.propagate(true)
 					.build()
-			} else if let Call::submit_offchain_pre_check_result(ref payload, ref signature) = call {
+			} else if let Call::submit_offchain_pre_check_result {
+				preresult_payload: ref payload,
+				ref signature,
+			} = call
+			{
 				log::debug!(
                     "🚅 Validate submit_offchain_pre_check_result, on block: {:?}/{:?}, stash: {:?}, auth: {:?}, pub: {:?}, pre_check_list: {:?}",
                     payload.block_number.clone(),
@@ -1045,7 +1105,12 @@ pub mod pallet {
 					.longevity(5)
 					.propagate(true)
 					.build()
-			} else if let Call::submit_local_xray(ref host_key, ref request_domain, ref authority_list) = call {
+			} else if let Call::submit_local_xray {
+				ref host_key,
+				ref request_domain,
+				ref authority_list,
+			} = call
+			{
 				log::debug!("*** XRay ValidTransaction: {:?} ", <system::Pallet<T>>::block_number());
 				let current_blocknumber: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 				ValidTransaction::with_tag_prefix("ares-oracle::submit_local_xray")
@@ -1073,8 +1138,8 @@ pub mod pallet {
 	pub(super) type PurchasedRequestPool<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		PurchasedId, // purchased_id
-		PurchasedRequestData<T>,
+		PurchaseId, // purchased_id
+		PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 		ValueQuery,
 	>;
 
@@ -1084,9 +1149,9 @@ pub mod pallet {
 	pub(super) type PurchasedPricePool<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		PurchasedId, // purchased_id,
+		PurchaseId, // purchased_id,
 		Blake2_128Concat,
-		PriceKey, // price_key,,
+		PriceKey, // price_key,
 		Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
 		ValueQuery,
 	>;
@@ -1096,7 +1161,7 @@ pub mod pallet {
 	pub(super) type PurchasedAvgPrice<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		PurchasedId, // purchased_id,
+		PurchaseId, // purchased_id,
 		Blake2_128Concat,
 		PriceKey, // price_key,,
 		PurchasedAvgPriceData,
@@ -1108,7 +1173,7 @@ pub mod pallet {
 	pub(super) type PurchasedAvgTrace<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		PurchasedId, // pricpurchased_ide_key
+		PurchaseId, // pricpurchased_ide_key
 		T::BlockNumber,
 		ValueQuery,
 	>;
@@ -1118,7 +1183,7 @@ pub mod pallet {
 	pub(super) type PurchasedOrderPool<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		PurchasedId, // purchased_id,
+		PurchaseId, // purchased_id,
 		Blake2_128Concat,
 		T::AccountId,
 		T::BlockNumber,
@@ -1208,7 +1273,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn symbol_fraction)]
-	pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, FractionLength>;
+	pub(super) type SymbolFraction<T: Config> = StorageMap<_, Blake2_128Concat, PriceKey, FractionLength>;
 
 	// pre_check_session_multi A parameter used to determine the pre-verification
 	// task a few session cycles before the validator election, the type is BlockNumber.
@@ -1221,7 +1286,7 @@ pub mod pallet {
 	#[pallet::getter(fn conf_pre_check_token_list)]
 	pub(super) type ConfPreCheckTokenList<T: Config> = StorageValue<
 		_,
-		Vec<Vec<u8>>, // Vec<price_key>
+		TokenList, // Vec<price_key>
 		ValueQuery,
 	>;
 
@@ -1279,6 +1344,20 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			if !self.price_requests.is_empty() {
+				// let price_requests: Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> = self
+				// 	.price_requests
+				// 	.iter()
+				// 	.map(|(price_key, price_token, parse_version, fraction, request_interval)| {
+				// 		let price_key: PriceKey = price_key.to_vec().try_into().expect("price key is too long");
+				// 		let price_token: PriceToken = price_token.to_vec().try_into().expect("price key is too long");
+				// 		(price_key, price_token, *parse_version, *fraction, *request_interval)
+				// 	})
+				// 	.collect();
+				// let price_requests: BoundedVec<
+				// 	(PriceKey, PriceToken, u32, FractionLength, RequestInterval),
+				// 	MaximumPricesRequestList,
+				// > = price_requests.try_into().expect("price_requests is too long");
+				// PricesRequests::<T>::put(&price_requests);
 				PricesRequests::<T>::put(&self.price_requests);
 				self.price_requests
 					.iter()
@@ -1298,10 +1377,14 @@ pub mod pallet {
 			ConfPreCheckAllowableOffset::<T>::put(Percent::from_percent(10));
 			let session_multi: T::BlockNumber = 2u32.into();
 			ConfPreCheckSessionMulti::<T>::put(session_multi);
-			let mut token_list = Vec::new();
-			token_list.push("btc-usdt".as_bytes().to_vec());
-			token_list.push("eth-usdt".as_bytes().to_vec());
-			token_list.push("dot-usdt".as_bytes().to_vec());
+			let mut token_list: TokenList = Vec::default();
+			token_list.push(b"btc-usdt".to_vec());
+			token_list.push(b"eth-usdt".to_vec());
+			token_list.push(b"dot-usdt".to_vec());
+			// token_list.try_push(b"btc-usdt".to_vec().try_into().expect("symbol is too long"));
+			// token_list.try_push(b"eth-usdt".to_vec().try_into().expect("symbol is too long"));
+			// token_list.try_push(b"dot-usdt".to_vec().try_into().expect("symbol is too long"));
+
 			ConfPreCheckTokenList::<T>::put(token_list);
 			// V1_2_0
 			StorageVersion::<T>::put(Releases::V1_2_0);
@@ -1311,6 +1394,8 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<(T::AccountId, T::AuthorityAres)>) {
+		// let new: BoundedVec<(T::AccountId, T::AuthorityAres), MaximumAuthorities> =
+		// 	new.try_into().expect("authorities is too long");
 		<Authorities<T>>::put(&new);
 	}
 
@@ -1320,6 +1405,8 @@ impl<T: Config> Pallet<T> {
 				<Authorities<T>>::get().is_empty(),
 				"Ares Authorities are already initialized!"
 			);
+			// let authorities: BoundedVec<(T::AccountId, T::AuthorityAres), MaximumAuthorities> =
+			// 	authorities.try_into().expect("authorities is too long");
 			<Authorities<T>>::put(authorities);
 		}
 	}
@@ -1411,15 +1498,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// get uri key raw of ARES price
-	fn get_raw_price_source_list() -> Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> {
-		let result: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get()
+	fn get_raw_price_source_list() -> Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> {
+		let result: Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get()
 			.into_iter()
 			.map(
-				|(price_key, request_url, parse_version, fraction_length, request_interval)| {
+				|(price_key, price_token, parse_version, fraction_length, request_interval)| {
 					(
 						price_key,
 						// sp_std::str::from_utf8(&request_url).unwrap().clone(),
-						request_url,
+						price_token,
 						parse_version,
 						fraction_length,
 						request_interval,
@@ -1440,7 +1527,7 @@ impl<T: Config> Pallet<T> {
 
 		let seed = sp_io::offchain::random_seed();
 		let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()));
-		if (random.is_ok()) {
+		if random.is_ok() {
 			let random = random.unwrap();
 			storage_local_host_key.set(&random);
 			return random;
@@ -1511,7 +1598,10 @@ impl<T: Config> Pallet<T> {
 						auth: account_id.clone(),
 						public: account.public.clone(),
 					},
-					|payload, signature| Call::submit_forced_clear_purchased_price_payload_signed(payload, signature),
+					|payload, signature| Call::submit_forced_clear_purchased_price_payload_signed {
+						price_payload: payload,
+						signature,
+					},
 				)
 				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 			result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1590,6 +1680,7 @@ impl<T: Config> Pallet<T> {
 				));
 			}
 		}
+		let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price list is too long");
 		log::debug!("🚅 fetch purchased price count: {:?}", price_list.len());
 		if price_list.len() > 0 {
 			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
@@ -1604,7 +1695,10 @@ impl<T: Config> Pallet<T> {
 						auth: account_id.clone(),
 						public: account.public.clone(),
 					},
-					|payload, signature| Call::submit_purchased_price_unsigned_with_signed_payload(payload, signature),
+					|payload, signature| Call::submit_purchased_price_unsigned_with_signed_payload {
+						price_payload: payload,
+						signature,
+					},
 				)
 				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 			result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1616,7 +1710,7 @@ impl<T: Config> Pallet<T> {
 		stash_id: T::AccountId,
 		auth_id: T::AuthorityAres,
 		block_number: T::BlockNumber,
-		pre_check_list: Vec<PreCheckStruct>,
+		pre_check_list: PreCheckList,
 	) -> Result<(), &'static str>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -1633,7 +1727,10 @@ impl<T: Config> Pallet<T> {
 					pre_check_list: pre_check_list.clone(),
 					public: account.public.clone(),
 				},
-				|payload, signature| Call::submit_offchain_pre_check_result(payload, signature),
+				|payload, signature| Call::submit_offchain_pre_check_result {
+					preresult_payload: payload,
+					signature,
+				},
 			)
 			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 		result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1642,7 +1739,7 @@ impl<T: Config> Pallet<T> {
 
 	fn trace_network_error(
 		account_id: T::AuthorityAres,
-		_format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
+		_format_arr: RawSourceKeys,
 		http_err: HttpError,
 		tip: Vec<u8>,
 	) -> Result<(), &'static str>
@@ -1650,6 +1747,7 @@ impl<T: Config> Pallet<T> {
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
 	{
 		let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+		// let tip: BoundedVec<u8, MaximumErrorTip> = tip.try_into().expect("tip is too long");
 		// Singer
 		let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
 			.with_filter(sign_public_keys)
@@ -1665,7 +1763,10 @@ impl<T: Config> Pallet<T> {
 					auth: account_id.clone(),
 					public: account.public.clone(),
 				},
-				|payload, signature| Call::submit_offchain_http_err_trace_result(payload, signature),
+				|payload, signature| Call::submit_offchain_http_err_trace_result {
+					err_payload: payload,
+					signature,
+				},
 			)
 			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 		result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1693,7 +1794,10 @@ impl<T: Config> Pallet<T> {
 					auth: account_id.clone(),
 					public: account.public.clone(),
 				},
-				|payload, signature| Call::submit_create_pre_check_task(payload, signature),
+				|payload, signature| Call::submit_create_pre_check_task {
+					precheck_payload: payload,
+					signature,
+				},
 			)
 			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 		result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1748,6 +1852,7 @@ impl<T: Config> Pallet<T> {
 			price_list.len(),
 			jump_block.len()
 		);
+		let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price_list is too long");
 		if price_list.len() > 0 || jump_block.len() > 0 {
 			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 			// Singer
@@ -1761,7 +1866,10 @@ impl<T: Config> Pallet<T> {
 						auth: account_id.clone(),
 						public: account.public.clone(),
 					},
-					|payload, signature| Call::submit_price_unsigned_with_signed_payload(payload, signature),
+					|payload, signature| Call::submit_price_unsigned_with_signed_payload {
+						price_payload: payload,
+						signature,
+					},
 				)
 				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
 			result.map_err(|()| "⛔ Unable to submit transaction")?;
@@ -1770,7 +1878,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	//
-	fn make_bulk_price_request_url(format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>) -> (Vec<u8>, Vec<u8>) {
+	fn make_bulk_price_request_url(format: RawSourceKeys) -> (Vec<u8>, Vec<u8>) {
 		let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
 			"/api/getBulkCurrencyPrices?currency=usdt".as_bytes().to_vec(),
 		);
@@ -1778,9 +1886,14 @@ impl<T: Config> Pallet<T> {
 		let mut request_url = Vec::new();
 		for (_, extract_key, _) in format {
 			if request_url.len() == 0 {
-				request_url = [raw_request_url.clone(), "&symbol=".as_bytes().to_vec(), extract_key].concat();
+				request_url = [
+					raw_request_url.clone(),
+					"&symbol=".as_bytes().to_vec(),
+					extract_key.to_vec(),
+				]
+				.concat();
 			} else {
-				request_url = [request_url, "_".as_bytes().to_vec(), extract_key].concat();
+				request_url = [request_url, "_".as_bytes().to_vec(), extract_key.to_vec()].concat();
 			}
 		}
 		(request_url, "usdt".as_bytes().to_vec())
@@ -1788,31 +1901,30 @@ impl<T: Config> Pallet<T> {
 
 	// Use to filter out those format_data of price that need to jump block.
 	fn filter_jump_block_data(
-		fomat_data: Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>,
+		format_data: Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)>,
 		account: T::AccountId,
 		_block_number: T::BlockNumber,
-	) -> (Vec<(Vec<u8>, Vec<u8>, FractionLength)>, Vec<PricePayloadSubJumpBlock>) {
+	) -> (RawSourceKeys, PricePayloadSubJumpBlockList) {
 		// isNeedUpdateJumpBlock
-		let mut new_format_data = Vec::new();
-		let mut jump_format_data = Vec::new();
+		let mut new_format_data: RawSourceKeys = Vec::default();
+		let mut jump_format_data: PricePayloadSubJumpBlockList = Vec::default();
 
-		fomat_data
+		format_data
 			.iter()
-			.any(|(price_key, prase_key, fraction_length, request_interval)| {
+			.any(|(price_key, price_token, fraction_length, request_interval)| {
 				if Self::is_need_update_jump_block(price_key.clone(), account.clone()) {
-					jump_format_data.push(PricePayloadSubJumpBlock(price_key.to_vec(), *request_interval));
+					jump_format_data.push(PricePayloadSubJumpBlock(price_key.clone(), *request_interval));
 				} else {
-					new_format_data.push((price_key.to_vec(), prase_key.to_vec(), *fraction_length));
+					new_format_data.push((price_key.clone(), price_token.clone(), *fraction_length));
 				}
 				false
 			});
-
 		(new_format_data, jump_format_data)
 	}
 
 	// Judge the author who submitted the price last time, and return true if it is consistent with this
 	// time.
-	fn is_need_update_jump_block(price_key: Vec<u8>, account: T::AccountId) -> bool {
+	fn is_need_update_jump_block(price_key: PriceKey, account: T::AccountId) -> bool {
 		if !Self::is_aura() || 1 == T::AuthorityCount::get_validators_count() {
 			return false;
 		}
@@ -1849,16 +1961,16 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Store the list of authors in the price list.
-	fn update_last_price_list_for_author(price_list: Vec<Vec<u8>>, author: T::AccountId) {
+	fn update_last_price_list_for_author(price_list: Vec<PriceKey>, author: T::AccountId) {
 		price_list.iter().any(|price_key| {
 			// find_author()
-			<LastPriceAuthor<T>>::insert(price_key.to_vec(), author.clone());
+			<LastPriceAuthor<T>>::insert(price_key.clone(), author.clone());
 			false
 		});
 	}
 
 	// Get
-	fn get_last_price_author(price_key: Vec<u8>) -> Option<T::AccountId> {
+	fn get_last_price_author(price_key: PriceKey) -> Option<T::AccountId> {
 		if <LastPriceAuthor<T>>::contains_key(&price_key) {
 			return Some(<LastPriceAuthor<T>>::get(price_key).into());
 		}
@@ -1881,7 +1993,7 @@ impl<T: Config> Pallet<T> {
 	// Make bulk request format array.
 	fn make_bulk_price_format_data(
 		block_number: T::BlockNumber,
-	) -> Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)> {
+	) -> Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)> {
 		let mut format = Vec::new();
 
 		// price_key, request_url, parse_version, fraction_length
@@ -1904,11 +2016,13 @@ impl<T: Config> Pallet<T> {
 
 	//
 	fn fetch_bulk_price_with_http(
-		format_arr: Vec<(Vec<u8>, Vec<u8>, u32)>,
-	) -> Result<Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue, u64)>, HttpError> {
+		format_arr: RawSourceKeys,
+	) -> Result<Vec<(PriceKey, Option<u64>, FractionLength, NumberValue, u64)>, HttpError> {
 		// make request url
 		let (request_url_vu8, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
 		let request_url = sp_std::str::from_utf8(&request_url_vu8).unwrap();
+		// let bounded_request_url: BoundedVec<u8, MaximumURLLength> =
+		// 	request_url_vu8.clone().try_into().expect("url is too long");
 
 		// request and return http body.
 		if "" == request_url {
@@ -2039,8 +2153,8 @@ impl<T: Config> Pallet<T> {
 	fn bulk_parse_price_of_ares(
 		price_str: &str,
 		base_coin: Vec<u8>,
-		format: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
-	) -> Vec<(Vec<u8>, Option<u64>, FractionLength, NumberValue, u64)> {
+		format: RawSourceKeys,
+	) -> Vec<(PriceKey, Option<u64>, FractionLength, NumberValue, u64)> {
 		let val = lite_json::parse_json(price_str);
 
 		let mut result_vec = Vec::new();
@@ -2061,7 +2175,7 @@ impl<T: Config> Pallet<T> {
 							.unwrap();
 
 						for (price_key, extract_key, fraction_length) in format {
-							let new_extract_key = [extract_key, base_coin.clone()].concat();
+							let new_extract_key = [extract_key.to_vec(), base_coin.clone()].concat();
 							let extract_key = sp_std::str::from_utf8(&new_extract_key).unwrap();
 							let extract_price_grp =
 								Self::extract_bulk_price_by_json_value(v_data.clone(), extract_key, fraction_length);
@@ -2130,32 +2244,32 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn filter_raw_price_source_list(
-		request_data: Vec<Vec<u8>>,
-	) -> Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)> {
+		request_data: RequestKeys,
+	) -> Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)> {
 		let source_list = Self::get_raw_price_source_list();
 		let mut result = Vec::new();
 		source_list
 			.iter()
-			.any(|(price_key, parse_key, _version, fraction, interval)| {
+			.any(|(price_key, price_token, _version, fraction, interval)| {
 				if request_data.iter().any(|x| x == price_key) {
-					result.push((price_key.to_vec(), parse_key.to_vec(), *fraction, *interval));
+					result.push((price_key.clone(), price_token.clone(), *fraction, *interval));
 				}
 				false
 			});
 		result
 	}
 
-	fn purchased_storage_clean(p_id: Vec<u8>) {
-		<PurchasedPricePool<T>>::remove_prefix(p_id.to_vec(), None);
-		<PurchasedRequestPool<T>>::remove(p_id.to_vec());
-		<PurchasedOrderPool<T>>::remove_prefix(p_id.to_vec(), None);
+	fn purchased_storage_clean(p_id: PurchaseId) {
+		<PurchasedPricePool<T>>::remove_prefix(p_id.clone(), None);
+		<PurchasedRequestPool<T>>::remove(p_id.clone());
+		<PurchasedOrderPool<T>>::remove_prefix(p_id.clone(), None);
 	}
 
 	//
 	fn fetch_purchased_request_keys(who: T::AuthorityAres) -> Option<PurchasedSourceRawKeys> // Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>
 	{
 		let mut raw_source_keys = Vec::new();
-		let mut raw_purchase_id: Vec<u8> = Vec::new();
+		let mut raw_purchase_id: PurchaseId = Vec::default();
 
 		let stash_id = Self::get_stash_id(&who).unwrap();
 		// Iter
@@ -2176,7 +2290,7 @@ impl<T: Config> Pallet<T> {
 		if raw_source_keys.len() == 0 {
 			return None;
 		}
-
+		let raw_source_keys: RawSourceKeys = raw_source_keys.clone().try_into().expect("raw_source_keys is too long");
 		Some(PurchasedSourceRawKeys {
 			purchase_id: raw_purchase_id,
 			raw_source_keys,
@@ -2197,8 +2311,10 @@ impl<T: Config> Pallet<T> {
 		// Get add up number
 		let mut add_u8_vec: Vec<u8> = add_up.encode();
 		account_vec.append(&mut add_u8_vec);
+
+		let purchase_id: PurchaseId = account_vec.clone().try_into().expect("id is too long");
 		// Check id exists.
-		if <PurchasedRequestPool<T>>::contains_key(&account_vec) {
+		if PurchasedRequestPool::<T>::contains_key(&purchase_id) {
 			return Self::make_purchase_price_id(who, add_up.saturating_add(1));
 		}
 		account_vec
@@ -2210,9 +2326,9 @@ impl<T: Config> Pallet<T> {
 		offer: BalanceOf<T>,
 		submit_threshold: u8,
 		max_duration: u64,
-		purchase_id: Vec<u8>,
-		request_keys: Vec<Vec<u8>>,
-	) -> Result<Vec<u8>, Error<T>> {
+		purchase_id: PurchaseId,
+		request_keys: RequestKeys,
+	) -> Result<PurchaseId, Error<T>> {
 		// Judge submit_threshold range is (0,100]
 		if 0 >= submit_threshold || 100 < submit_threshold {
 			return Err(Error::<T>::SubmitThresholdRangeError);
@@ -2230,7 +2346,11 @@ impl<T: Config> Pallet<T> {
 			request_keys,
 		};
 		<PurchasedRequestPool<T>>::insert(purchase_id.clone(), request_data.clone());
-		Self::deposit_event(Event::NewPurchasedRequest(purchase_id.clone(), request_data, offer));
+		Self::deposit_event(Event::NewPurchasedRequest {
+			purchase_id: purchase_id.clone(),
+			request_data,
+			value: offer,
+		});
 		Ok(purchase_id)
 	}
 
@@ -2238,7 +2358,7 @@ impl<T: Config> Pallet<T> {
 	fn add_price(
 		who: T::AccountId,
 		price: u64,
-		price_key: Vec<u8>,
+		price_key: PriceKey,
 		fraction_length: FractionLength,
 		json_number_value: JsonNumberValue,
 		max_len: u32,
@@ -2314,7 +2434,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn check_and_update_avg_price_storage(key_str: Vec<u8>, max_len: u32) {
+	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) {
 		let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).len();
 		if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
 			// println!("update_avg_price_storage price count = {:?}", ares_price_list_len);
@@ -2323,7 +2443,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// TODO:: remove max_len ?
-	fn update_avg_price_storage(key_str: Vec<u8>, max_len: u32) {
+	fn update_avg_price_storage(key_str: PriceKey, max_len: u32) {
 		let prices_info = <AresPrice<T>>::get(key_str.clone());
 		let average_price_result = Self::average_price(prices_info, T::CalculationKind::get());
 		if let Some((average, fraction_length)) = average_price_result {
@@ -2379,14 +2499,15 @@ impl<T: Config> Pallet<T> {
 	}
 	// to determine whether the submit price period has expired but there is still no submit.
 	// This function returns a list of purchased_id.
-	fn get_expired_purchased_transactions() -> Vec<Vec<u8>> {
+	fn get_expired_purchased_transactions() -> Vec<PurchaseId> {
 		// let a : PurchasedRequestData<T> ;
-		let mut purchased_id_list: Vec<Vec<u8>> = Vec::new();
+		let mut purchased_id_list: Vec<PurchaseId> = Vec::default();
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 
+		//TODO should be return Result<>
 		<PurchasedRequestPool<T>>::iter().any(|(p_id, p_d)| {
 			if current_block >= p_d.max_duration {
-				purchased_id_list.push(p_id.to_vec());
+				purchased_id_list.push(p_id.clone());
 			}
 			false
 		});
@@ -2394,11 +2515,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn handler_purchase_avg_price_storage(
-		purchase_id: Vec<u8>,
-		price_key: Vec<u8>,
+		purchase_id: PurchaseId,
+		price_key: PriceKey,
 		mut prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
 		reached_type: u8,
-	) -> Option<(Vec<u8>, PurchasedAvgPriceData, Vec<T::AccountId>)> {
+	) -> Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)> {
 		let (average, fraction_length) =
 			Self::average_price(prices_info.clone(), T::CalculationKind::get()).expect("The average is not empty.");
 
@@ -2473,16 +2594,16 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	fn update_purchase_avg_price_storage(purchase_id: Vec<u8>, reached_type: u8) {
+	fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) {
 		// Get purchase price pool
 		let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
 		//
 		let mut event_result_list = Vec::new();
 		//
 		price_key_list.iter().any(|x| {
-			let prices_info = <PurchasedPricePool<T>>::get(purchase_id.clone(), x.to_vec());
+			let prices_info = <PurchasedPricePool<T>>::get(purchase_id.clone(), x.clone());
 			let result =
-				Self::handler_purchase_avg_price_storage(purchase_id.clone(), x.to_vec(), prices_info, reached_type);
+				Self::handler_purchase_avg_price_storage(purchase_id.clone(), x.clone(), prices_info, reached_type);
 			event_result_list.push(result);
 			false
 		});
@@ -2491,7 +2612,10 @@ impl<T: Config> Pallet<T> {
 		Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
 	}
 
-	fn check_and_clear_expired_purchased_average_price_storage(purchase_id: Vec<u8>, current_block_num: u64) -> bool {
+	fn check_and_clear_expired_purchased_average_price_storage(
+		purchase_id: PurchaseId,
+		current_block_num: u64,
+	) -> bool {
 		if !<PurchasedAvgTrace<T>>::contains_key(&purchase_id) {
 			return false;
 		}
@@ -2508,7 +2632,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	//
-	fn clear_price_storage_data(price_key: Vec<u8>) {
+	fn clear_price_storage_data(price_key: PriceKey) {
 		<AresPrice<T>>::remove(&price_key);
 		<AresAvgPrice<T>>::remove(&price_key);
 	}
@@ -2558,17 +2682,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn add_purchased_price(
-		purchase_id: Vec<u8>,
+		purchase_id: PurchaseId,
 		account_id: T::AccountId,
 		block_number: T::BlockNumber,
-		price_list: Vec<PricePayloadSubPrice>,
+		price_list: PricePayloadSubPriceList,
 	) {
 		if <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), account_id.clone()) {
 			return ();
 		}
 		let current_block = <system::Pallet<T>>::block_number();
 		price_list.iter().any(|PricePayloadSubPrice(a, b, c, d, timestamp)| {
-			let mut price_data_vec = <PurchasedPricePool<T>>::get(purchase_id.clone(), a.to_vec());
+			let mut price_data_vec = <PurchasedPricePool<T>>::get(purchase_id.clone(), a.clone());
 			price_data_vec.push(AresPriceData {
 				price: *b,
 				account_id: account_id.clone(),
@@ -2578,28 +2702,27 @@ impl<T: Config> Pallet<T> {
 				timestamp: timestamp.clone(),
 			});
 			//
-			<PurchasedPricePool<T>>::insert(purchase_id.clone(), a.to_vec(), price_data_vec);
+			<PurchasedPricePool<T>>::insert(purchase_id.clone(), a.clone(), price_data_vec);
 			false
 		});
 
 		<PurchasedOrderPool<T>>::insert(purchase_id.clone(), account_id.clone(), current_block.clone());
 
-		Self::deposit_event(Event::NewPurchasedPrice(
-			block_number.clone(),
-			price_list.clone(),
-			// Self::get_stash_id(&account_id).unwrap(),
-			account_id,
-		));
+		Self::deposit_event(Event::NewPurchasedPrice {
+			created_at: block_number.clone(),
+			price_list,
+			who: account_id,
+		});
 	}
 
 	// Judge whether the predetermined conditions of the validator of the current
 	// purchased_id meet the requirements, and return true if it is
-	fn is_validator_purchased_threshold_up_on(purchased_id: Vec<u8>) -> bool {
-		if false == <PurchasedRequestPool<T>>::contains_key(purchased_id.clone()) {
+	fn is_validator_purchased_threshold_up_on(purchase_id: PurchaseId) -> bool {
+		if false == <PurchasedRequestPool<T>>::contains_key(purchase_id.clone()) {
 			return false;
 		}
 
-		let reporter_count = <PurchasedOrderPool<T>>::iter_prefix_values(purchased_id.clone()).count();
+		let reporter_count = <PurchasedOrderPool<T>>::iter_prefix_values(purchase_id.clone()).count();
 		if 0 == reporter_count {
 			return false;
 		}
@@ -2610,18 +2733,18 @@ impl<T: Config> Pallet<T> {
 
 		let div_val = (reporter_count * 100) / (validator_count);
 
-		let purchased_request = <PurchasedRequestPool<T>>::get(purchased_id.clone());
+		let purchased_request = <PurchasedRequestPool<T>>::get(purchase_id.clone());
 		let submit_threshold = purchased_request.submit_threshold as u64;
 
 		div_val >= submit_threshold
 	}
 
-	fn is_all_validator_submitted_price(purchased_id: Vec<u8>) -> bool {
+	fn is_all_validator_submitted_price(purchased_id: PurchaseId) -> bool {
 		if false == <PurchasedRequestPool<T>>::contains_key(purchased_id.clone()) {
 			return false;
 		}
 
-		let reporter_count = <PurchasedOrderPool<T>>::iter_prefix_values(purchased_id.clone()).count();
+		let reporter_count = PurchasedOrderPool::<T>::iter_prefix_values(purchased_id.clone()).count();
 		if 0 == reporter_count {
 			return false;
 		}
@@ -2632,11 +2755,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Split purchased_request by the commas.
-	fn extract_purchased_request(request: Vec<u8>) -> Vec<Vec<u8>> {
+	fn extract_purchased_request(request: Vec<u8>) -> RequestKeys {
 		// convert to str
 		let purchased_str = sp_std::str::from_utf8(request.as_slice());
 		if purchased_str.is_err() {
-			return Vec::new();
+			return Vec::default();
 		}
 		let purchased_str = purchased_str.unwrap();
 		// remove space char.
@@ -2650,15 +2773,17 @@ impl<T: Config> Pallet<T> {
 		for x in purchased_vec {
 			if x != "" {
 				if false == result.iter().any(|a| a == &x.as_bytes().to_vec()) {
-					result.push(x.as_bytes().to_vec());
+					let price_key: PriceKey = x.as_bytes().to_vec().try_into().expect("price_key is too long");
+					result.push(price_key);
 				}
 			}
 		}
+		let result: RequestKeys = result.clone().try_into().expect("request_keys is too long");
 		result
 	}
 
 	// Increase jump block number, PARAM:: price_key, interval
-	fn increase_jump_block_number(price_key: Vec<u8>, interval: u64) -> (u64, u64) {
+	fn increase_jump_block_number(price_key: PriceKey, interval: u64) -> (u64, u64) {
 		let (old_interval, jump_number) =
 			Self::handle_calculate_jump_block((interval, Self::get_jump_block_number(price_key.clone())));
 		<JumpBlockNumber<T>>::insert(&price_key, jump_number.clone());
@@ -2666,12 +2791,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Get jump block number
-	fn get_jump_block_number(price_key: Vec<u8>) -> u64 {
+	fn get_jump_block_number(price_key: PriceKey) -> u64 {
 		<JumpBlockNumber<T>>::get(&price_key).unwrap_or(0)
 	}
 
 	// delete a jump block info.
-	fn remove_jump_block_number(price_key: Vec<u8>) {
+	fn remove_jump_block_number(price_key: PriceKey) {
 		<JumpBlockNumber<T>>::remove(&price_key);
 	}
 
@@ -2712,13 +2837,14 @@ impl<T: Config> Pallet<T> {
 			.build()
 	}
 
-	fn update_reporter_point(purchase_id: Vec<u8>) -> Result<(), Error<T>> {
+	fn update_reporter_point(purchase_id: PurchaseId) -> Result<(), Error<T>> {
 		// transfer balance to pallet account.
 		if T::OracleFinanceHandler::pay_to_ask(purchase_id.clone()).is_err() {
 			return Err(Error::<T>::PayToPurchaseFeeFailed);
 		}
 
-		let request_mission: PurchasedRequestData<T> = <PurchasedRequestPool<T>>::get(purchase_id.clone());
+		let request_mission: PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber> =
+			PurchasedRequestPool::<T>::get(purchase_id.clone());
 		// update report work point
 		<PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone())
 			.into_iter()
@@ -2796,14 +2922,14 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
 			let next_authorities = validators
 				.map(|(stash, auth)| (stash.clone(), auth))
 				.collect::<Vec<_>>();
-			let last_authorities = Self::authorities();
+			let last_authorities = Self::authorities().to_vec();
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
 			}
 		}
 	}
 
-	fn on_disabled(_i: usize) {}
+	fn on_disabled(_i: u32) {}
 }
 
 pub struct FindAresAccountFromAuthority<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
@@ -2828,11 +2954,13 @@ where
 
 impl<T: Config> SymbolInfo for Pallet<T> {
 	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
-		AresAvgPrice::<T>::try_get(symbol)
+		let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
+		AresAvgPrice::<T>::try_get(&bounded_symbol)
 	}
 
 	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
-		SymbolFraction::<T>::get(symbol)
+		let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
+		SymbolFraction::<T>::get(&bounded_symbol)
 	}
 }
 
@@ -2915,7 +3043,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 	}
 
 	// Obtain a set of price data according to the task configuration structure.
-	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
+	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList {
 		let mut raw_price_source_list = Self::get_raw_price_source_list();
 		raw_price_source_list.retain(|x| {
 			check_config.check_token_list.clone().iter().any(|check_price_key| {
@@ -2925,18 +3053,17 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 			})
 		});
 
-		let format_data: Vec<(Vec<u8>, Vec<u8>, FractionLength)> = raw_price_source_list
+		let format_data: Vec<(PriceKey, PriceToken, FractionLength)> = raw_price_source_list
 			.into_iter()
 			.map(|(price_key, parse_key, _version, fraction_len, _request_interval)| {
 				(price_key, parse_key, fraction_len)
 			})
 			.collect();
-
+		let format_data: RawSourceKeys = format_data.clone().try_into().expect("format_data is too long");
 		// // check_config
-		let reponse_result = Self::fetch_bulk_price_with_http(format_data);
-		let reponse_result = reponse_result.unwrap_or(Vec::new());
-
-		reponse_result
+		let response_result = Self::fetch_bulk_price_with_http(format_data);
+		let response_result = response_result.unwrap_or(Vec::new());
+		let response_result: Vec<PreCheckStruct> = response_result
 			.into_iter()
 			.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
 				let number_val = JsonNumberValue::new(number_val);
@@ -2947,16 +3074,21 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 					timestamp,
 				}
 			})
-			.collect()
+			.collect();
+		let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
+		return response_result;
 	}
 
 	// Record the per check results and add them to the storage structure.
-	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: Vec<PreCheckStruct>) {
+	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: PreCheckList) {
 		assert!(pre_check_list.len() > 0, "⛔️ Do not receive empty result check.");
 		// get avg price.
+		// let mut chain_avg_price_list = BoundedBTreeMap::<PriceKey, (u64, FractionLength),
+		// MaximumMapCapacity>::new(); let mut validator_up_price_list = BoundedBTreeMap::<PriceKey, (u64,
+		// FractionLength), MaximumMapCapacity>::new();
 		let mut chain_avg_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
 		let mut validator_up_price_list = BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
-		let raw_precheck_list = pre_check_list.clone();
+
 		let check_result = pre_check_list.iter().all(|checked_struct| {
 			// Check price key exists.
 			if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
@@ -2989,7 +3121,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 		let pre_check_log = PreCheckCompareLog {
 			chain_avg_price_list,
 			validator_up_price_list,
-			raw_precheck_list,
+			raw_precheck_list: pre_check_list.clone(),
 		};
 		<FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus, Some(pre_check_log))));
 		let mut task_list = <PreCheckTaskList<T>>::get();

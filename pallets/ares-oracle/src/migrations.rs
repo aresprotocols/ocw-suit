@@ -1,5 +1,5 @@
 use super::*;
-
+use oracle_finance::types::PurchaseId;
 // PurchasedDefaultSetting
 pub mod v1_2_0 {
 	use super::*;
@@ -74,7 +74,7 @@ pub mod v1_2_0 {
 		pub(super) type OldPurchasedOrderPool<T: Config> = StorageDoubleMap<
 			OldPurchasedOrderPoolPrefix<T>,
 			Blake2_128Concat,
-			PurchasedId, // purchased_id,
+			PurchaseId, // purchased_id,
 			Blake2_128Concat,
 			T::AuthorityAres,
 			T::BlockNumber,

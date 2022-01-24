@@ -1,16 +1,44 @@
 use super::*;
-
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
+use frame_support::traits::ConstU32;
+use frame_support::BoundedVec;
+use oracle_finance::types::PurchaseId;
+use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
+use std::fmt::Formatter;
+
+//TODO
+pub type MaximumPurchaseLength = ConstU32<200>;
+pub type MaximumURLLength = ConstU32<200>;
+pub type MaximumMapCapacity = ConstU32<200>;
+pub type MaximumPriceKeyList = ConstU32<500>;
+pub type MaximumErrorTip = ConstU32<100>;
+pub type MaximumJumpBlockList = ConstU32<500>;
+pub type MaximumSubPriceList = ConstU32<500>;
+pub type MaximumAuthorities = ConstU32<500>;
+pub type MaximumPricesRequestList = ConstU32<500>;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
 pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
 
-pub type PurchasedId = Vec<u8>;
+// pub type PriceKey = BoundedVec<u8, ares_oracle_provider_support::SymbolKeyLimit>;
+// pub type PriceToken = BoundedVec<u8, ares_oracle_provider_support::SymbolKeyLimit>;
+// pub type RawSourceKeys = BoundedVec<(PriceKey, PriceToken, FractionLength), MaximumPriceKeyList>;
+// pub type RequestKeys = BoundedVec<PriceKey, MaximumPriceKeyList>;
+// pub type PricePayloadSubPriceList = BoundedVec<PricePayloadSubPrice, MaximumSubPriceList>;
+// pub type PricePayloadSubJumpBlockList = BoundedVec<PricePayloadSubJumpBlock, MaximumSubPriceList>;
+
 pub type PriceKey = Vec<u8>;
 pub type PriceToken = Vec<u8>;
+pub type RawSourceKeys = Vec<(PriceKey, PriceToken, FractionLength)>;
+pub type RequestKeys = Vec<PriceKey>;
+pub type PricePayloadSubPriceList = Vec<PricePayloadSubPrice>;
+pub type PricePayloadSubJumpBlockList = Vec<PricePayloadSubJumpBlock>;
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct OcwControlData {
 	pub need_verifier_check: bool,
 	pub open_free_price_reporter: bool,
@@ -28,7 +56,7 @@ impl Default for OcwControlData {
 }
 
 // Migration
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PurchasedDefaultData {
 	pub submit_threshold: u8,
 	pub max_duration: u64,
@@ -65,17 +93,17 @@ impl Default for PurchasedDefaultData {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub struct PurchasedSourceRawKeys {
-	pub purchase_id: Vec<u8>,
-	pub raw_source_keys: Vec<(Vec<u8>, Vec<u8>, FractionLength)>,
+	pub purchase_id: PurchaseId,
+	pub raw_source_keys: RawSourceKeys,
 }
 
 impl Default for PurchasedSourceRawKeys {
 	fn default() -> Self {
 		Self {
-			purchase_id: Vec::new(),
-			raw_source_keys: Vec::new(),
+			purchase_id: Vec::default(),
+			raw_source_keys: Vec::default(),
 		}
 	}
 }
@@ -97,49 +125,50 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 		write!(
 			f,
 			"{{( purchase_id: {:?}, raw_source_keys: {:?} )}}",
-			HexDisplay::from(&self.purchase_id),
+			HexDisplay::from(&self.purchase_id.as_ref()),
 			// str::from_utf8(&self.0).map_err(|_| fmt::Error)?,
 			raw_keys,
 		)
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PurchasedRequestData<T: Config> {
-	pub account_id: T::AccountId,
-	pub offer: BalanceOf<T>,
-	pub create_bn: T::BlockNumber,
+//TODO debug fmt requestKeys
+#[derive(Default, Encode, Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
+pub struct PurchasedRequestData<AccountId, Balance, BlockNumber> {
+	pub account_id: AccountId,
+	pub offer: Balance,
+	pub create_bn: BlockNumber,
 	pub submit_threshold: u8,
 	pub max_duration: u64,
-	pub request_keys: Vec<Vec<u8>>,
+	pub request_keys: RequestKeys,
 }
 
-impl<T: Config> Default for PurchasedRequestData<T> {
-	fn default() -> Self {
-		Self {
-			account_id: Default::default(),
-			offer: 0u32.into(),
-			create_bn: Default::default(),
-			submit_threshold: 0,
-			max_duration: 0,
-			request_keys: Vec::new(),
-		}
-	}
-}
+// impl<T: Config> Default for PurchasedRequestData<T> {
+// 	fn default() -> Self {
+// 		Self {
+// 			account_id: Default::default(),
+// 			offer: 0u32.into(),
+// 			create_bn: Default::default(),
+// 			submit_threshold: 0,
+// 			max_duration: 0,
+// 			request_keys: BoundedVec::default(),
+// 		}
+// 	}
+// }
 
 // Impl debug.
-impl<T: Config> fmt::Debug for PurchasedRequestData<T> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let request_keys: Vec<_> = self.request_keys.iter().map(|x| str::from_utf8(x).unwrap()).collect();
-		write!(
-			f,
-			"{{( account_id: {:?}, offer: {:?}, submit_threshold: {:?}, max_duration: {:?}, request_keys: {:?} )}}",
-			&self.account_id, &self.offer, &self.submit_threshold, &self.max_duration, request_keys,
-		)
-	}
-}
+// impl<T: Config> fmt::Debug for PurchasedRequestData<T> {
+// 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+// 		let request_keys: Vec<_> = self.request_keys.iter().map(|x|
+// str::from_utf8(x).unwrap()).collect(); 		write!(
+// 			f,
+// 			"{{( account_id: {:?}, offer: {:?}, submit_threshold: {:?}, max_duration: {:?}, request_keys:
+// {:?} )}}", 			&self.account_id, &self.offer, &self.submit_threshold, &self.max_duration,
+// request_keys, 		)
+// 	}
+// }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PurchasedAvgPriceData {
 	pub create_bn: u64,
 	pub reached_type: u8,
@@ -156,7 +185,7 @@ impl Default for PurchasedAvgPriceData {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct AresPriceData<AccountId, BlockNumber> {
 	pub price: u64,
 	pub account_id: AccountId,
@@ -167,20 +196,23 @@ pub struct AresPriceData<AccountId, BlockNumber> {
 }
 
 // migrated
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct AvgPriceData {
 	pub integer: u64,
 	pub fraction_len: FractionLength,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PreCheckCompareLog {
-	pub chain_avg_price_list: BTreeMap<Vec<u8>, (u64, FractionLength)>,
-	pub validator_up_price_list: BTreeMap<Vec<u8>, (u64, FractionLength)>,
-	pub raw_precheck_list: Vec<PreCheckStruct>,
+	// pub chain_avg_price_list: BoundedBTreeMap<PriceKey, (u64, FractionLength), MaximumMapCapacity>,
+	// pub validator_up_price_list: BoundedBTreeMap<PriceKey, (u64, FractionLength), MaximumMapCapacity>,
+	// pub raw_precheck_list: PreCheckList,
+	pub chain_avg_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
+	pub validator_up_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
+	pub raw_precheck_list: PreCheckList,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
 	// pub request_list: Vec<(Vec<u8>, Vec<u8>, u32)>,
@@ -190,12 +222,12 @@ pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
 }
 
 /// data required to submit a transaction.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PricePayload<Public, BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
 	// price_key,price_val, fraction len
-	pub price: Vec<PricePayloadSubPrice>,
-	pub jump_block: Vec<PricePayloadSubJumpBlock>,
+	pub price: PricePayloadSubPriceList,
+	pub jump_block: PricePayloadSubJumpBlockList,
 	pub auth: AuthorityId,
 	pub public: Public,
 }
@@ -206,10 +238,10 @@ impl<T: SigningTypes + Config> SignedPayload<T> for PricePayload<T::Public, T::B
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PurchasedForceCleanPayload<Public, BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
-	pub purchase_id_list: Vec<Vec<u8>>,
+	pub purchase_id_list: Vec<PurchaseId>,
 	pub auth: AuthorityId,
 	pub public: Public,
 }
@@ -222,11 +254,11 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PurchasedPricePayload<Public, BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
-	pub purchase_id: Vec<u8>,
-	pub price: Vec<PricePayloadSubPrice>,
+	pub purchase_id: PurchaseId,
+	pub price: PricePayloadSubPriceList,
 	pub auth: AuthorityId,
 	pub public: Public,
 }
@@ -238,7 +270,7 @@ impl<T: SigningTypes + Config> SignedPayload<T> for PurchasedPricePayload<T::Pub
 }
 
 /// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
 	pub block_number: BlockNumber,
 	pub pre_check_stash: AccountId,
@@ -255,10 +287,10 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
 	pub block_number: BlockNumber,
-	pub pre_check_list: Vec<PreCheckStruct>,
+	pub pre_check_list: PreCheckList,
 	pub pre_check_stash: AccountId,
 	pub pre_check_auth: AuthorityId,
 	pub public: Public,
@@ -272,7 +304,7 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct HttpErrTracePayload<Public, BlockNumber, AuthorityId, AccountId> {
 	pub trace_data: HttpErrTraceData<BlockNumber, AccountId>,
 	pub auth: AuthorityId,
@@ -287,10 +319,10 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct PricePayloadSubPrice(pub PriceKey, pub u64, pub FractionLength, pub JsonNumberValue, pub u64);
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub struct PricePayloadSubJumpBlock(pub PriceKey, pub RequestInterval); // price_key ,request_interval
 
 // Impl debug.
@@ -307,7 +339,7 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum HttpError {
 	IoErr(Vec<u8>),
 	TimeOut(Vec<u8>),
@@ -315,7 +347,7 @@ pub enum HttpError {
 	ParseErr(Vec<u8>),
 }
 
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub(crate) enum Releases {
 	V1_0_0_Ancestral,
 	V1_0_1_HttpErrUpgrade,

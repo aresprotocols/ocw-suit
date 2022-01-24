@@ -2547,7 +2547,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		// AresOcw::add_price(Default::default(), number3.to_price(3), price_key.clone(), 3,
 		// number3.clone(), 2); let btc_price_list =
 		// AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()); assert_eq!(vec![
-		// (number2.to_price(3),Default::default(), BN, 3, number2.clone()),                  
+		// (number2.to_price(3),Default::default(), BN, 3, number2.clone()),
 		// (number3.to_price(3), Default::default(), BN, 3, number3.clone())                 ],
 		// btc_price_list); let bet_avg_price =
 		// AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone()); // assert_eq!
