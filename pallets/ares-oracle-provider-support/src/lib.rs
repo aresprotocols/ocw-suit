@@ -15,11 +15,17 @@ pub type FractionLength = u32;
 
 // TODO extract this config to one package
 pub type MaximumSymbolList = ConstU32<500>;
+pub type MaximumPreCheckList = ConstU32<500>;
+pub type SymbolKeyLimit = ConstU32<50>;
 
-pub type StringLimit = ConstU32<50>;
+// pub type PreCheckList = BoundedVec<PreCheckStruct, MaximumPreCheckList>;
+// pub type TokenList = BoundedVec<BoundedVec<u8, SymbolKeyLimit>, MaximumSymbolList>;
+
+pub type PreCheckList = Vec<PreCheckStruct>;
+pub type TokenList = Vec<Vec<u8>>;
 
 // warp NumberValue
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct JsonNumberValue {
 	pub integer: u64,
 	pub fraction: u64,
@@ -63,9 +69,9 @@ impl Default for JsonNumberValue {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug,  TypeInfo)]
 pub struct PreCheckStruct {
-	pub price_key: BoundedVec<u8, StringLimit>,
+	pub price_key: Vec<u8>,
 	pub number_val: JsonNumberValue,
 	pub max_offset: Percent,
 	pub timestamp: u64,
@@ -86,9 +92,9 @@ impl Default for PreCheckStatus {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug,  TypeInfo)]
 pub struct PreCheckTaskConfig {
-	pub check_token_list: BoundedVec<BoundedVec<u8, StringLimit>, MaximumSymbolList>,
+	pub check_token_list: TokenList,
 	pub allowable_offset: Percent,
 	/* pub max_repeat_times: u8, // The current version is forbidden first.
 	 * pub pass_percent: Percent, // The current version is forbidden first. */
@@ -97,7 +103,7 @@ pub struct PreCheckTaskConfig {
 impl Default for PreCheckTaskConfig {
 	fn default() -> Self {
 		Self {
-			check_token_list: BoundedVec::default(),
+			check_token_list: Vec::default(),
 			allowable_offset: Percent::from_percent(0),
 			/* max_repeat_times: 5,
 			 * pass_percent: Percent::from_percent(100), */
@@ -116,10 +122,10 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
 
 	// Obtain a set of price data according to the task configuration structure.
-	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct>;
+	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList;
 
 	// Record the per check results and add them to the storage structure.
-	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: Vec<PreCheckStruct>);
+	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList);
 
 	//
 	fn get_pre_check_status(stash: AccountId) -> Option<(BlockNumber, PreCheckStatus)>;
@@ -144,11 +150,11 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 		0
 	}
 
-	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> Vec<PreCheckStruct> {
-		Vec::new()
+	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> PreCheckList {
+		Vec::default()
 	}
 
-	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: Vec<PreCheckStruct>) {}
+	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) {}
 
 	fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
 		None
