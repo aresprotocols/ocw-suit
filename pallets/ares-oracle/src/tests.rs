@@ -372,7 +372,7 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = TestSessionConvertInto<Self>;
 	type Keys = UintAuthorityId;
 	type Event = Event;
-	type DisabledValidatorsThreshold = (); // pallet_session::PeriodicSessions<(), ()>;
+	// type DisabledValidatorsThreshold = (); // pallet_session::PeriodicSessions<(), ()>;
 	type NextSessionRotation = (); //pallet_session::PeriodicSessions<(), ()>;
 	type WeightInfo = ();
 }
@@ -395,7 +395,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
 	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(_: bool, _: &[(AccountId, Ks)], _: &[(AccountId, Ks)]) {}
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
 mod test_IAresOraclePreCheck;
@@ -658,7 +658,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 {price_payload: body, signature: signature}) =
 			tx.call
 		{
 			// println!("signature = {:?}", signature);
@@ -701,7 +702,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -736,7 +739,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload:body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -821,7 +826,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -987,7 +994,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -1064,7 +1073,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_forced_clear_purchased_price_payload_signed(body, signature)) = tx.call
+		if let Call::AresOcw(crate::Call::submit_forced_clear_purchased_price_payload_signed
+							 { price_payload: body, signature }
+		) = tx.call
 		{
 			// Test purchased submit call
 			AresOcw::submit_forced_clear_purchased_price_payload_signed(Origin::none(), body, signature);
@@ -1177,7 +1188,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -1237,7 +1250,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -1297,7 +1312,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload(body, signature)) =
+		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) =
 			tx.call
 		{
 			// Test purchased submit call
@@ -1379,7 +1396,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_forced_clear_purchased_price_payload_signed(body, signature)) = tx.call
+		if let Call::AresOcw(crate::Call::submit_forced_clear_purchased_price_payload_signed
+							 { price_payload: body, signature }
+		) = tx.call
 		{
 			// Test purchased submit call
 			AresOcw::submit_forced_clear_purchased_price_payload_signed(Origin::none(), body, signature);
@@ -1459,7 +1478,7 @@ fn test_submit_ask_price() {
 		let avg_trace = <PurchasedAvgTrace<Test>>::iter().collect::<Vec<_>>();
 		assert_eq!(avg_trace.len(), 0);
 
-		let request_data: PurchasedRequestData<Test> =
+		let request_data: PurchasedRequestData<AccountId, Balance, BlockNumber> =
 			<PurchasedRequestPool<Test>>::get(purchased_key.purchase_id.clone());
 		assert_eq!(request_data.account_id.clone(), AccountId::from_raw([1; 32]));
 		assert_eq!(
@@ -3006,7 +3025,9 @@ fn save_fetch_ares_price_and_send_payload_signed() {
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
 			// println!("signature = {:?}", signature);
 			assert_eq!(body.clone(), price_payload_b1);
 			let signature_valid = <PricePayload<
@@ -3249,7 +3270,9 @@ fn test_jump_block_submit() {
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
 			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
 		}
 
@@ -3282,7 +3305,9 @@ fn test_jump_block_submit() {
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
 			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
 		}
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);
@@ -3311,7 +3336,9 @@ fn test_jump_block_submit() {
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(3, authority_2.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload(body, signature)) = tx.call {
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
 			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
 		}
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);

@@ -33,7 +33,7 @@ fn test_reserve_for_ask_quantity() {
 
 		// check storage status
 		let payment_trace = <PaymentTrace<Test>>::get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
-		assert_eq!(payment_trace, PaidValue::<Test> {
+		assert_eq!(payment_trace, PaidValue::<BlockNumber,Balance> {
 			amount: calculate_result,
 			create_bn: current_bn,
 			is_income: true,
@@ -78,7 +78,7 @@ fn test_unreserve_ask() {
 
 		// check storage status
 		let payment_trace = <PaymentTrace<Test>>::get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
-		assert_eq!(payment_trace, PaidValue::<Test> {
+		assert_eq!(payment_trace, PaidValue::<BlockNumber, Balance> {
 			amount: 3000000000000,
 			create_bn: current_bn,
 			is_income: true,
