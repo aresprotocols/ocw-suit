@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "common",
+#    "common",
     "pallets/ares-oracle",
     "pallets/oracle-finance",
     "pallets/staking-extend",
