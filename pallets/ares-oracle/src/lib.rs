@@ -2969,13 +2969,13 @@ where
 
 impl<T: Config> SymbolInfo for Pallet<T> {
 	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
-		let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
-		AresAvgPrice::<T>::try_get(&bounded_symbol)
+		// let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
+		AresAvgPrice::<T>::try_get(symbol)
 	}
 
 	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
-		let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
-		SymbolFraction::<T>::get(&bounded_symbol)
+		// let bounded_symbol: PriceKey = symbol.clone().try_into().expect("symbol is too long");
+		SymbolFraction::<T>::get(symbol)
 	}
 }
 

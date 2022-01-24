@@ -17,6 +17,7 @@ use types::{
 	MaximumUnsignedMembers, MaximumWinners, MultiplierOption, StringLimit, SymbolEstimatesConfig,
 };
 
+use ares_oracle::traits::SymbolInfo;
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -46,12 +47,6 @@ use sp_runtime::{
 use sp_core::sp_std::convert::TryInto;
 
 pub type FractionLength = u32;
-
-pub trait SymbolInfo {
-	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()>;
-
-	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength>;
-}
 
 type BalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
