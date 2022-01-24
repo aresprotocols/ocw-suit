@@ -66,7 +66,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
+	// #[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -77,7 +77,7 @@ pub mod pallet {
 		PurchaseId, // purchased_id,
 		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId, // pay or pay to account. ,,
-		PaidValue<T>,
+		PaidValue<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>,
 		ValueQuery,
 	>;
 
@@ -110,8 +110,8 @@ pub mod pallet {
 	pub type RewardPeriod<T> = StorageMap<
 		_,
 		Blake2_128Concat,
-		<T as frame_system::Config>::AccountId,       //,
-		Vec<(AskPeriodNum, AskPointNum, PurchaseId)>, // pay or pay to account. ,
+		<T as frame_system::Config>::AccountId,                                    //,
+		BoundedVec<(AskPeriodNum, AskPointNum, PurchaseId), MaximumRewardPeriods>, // pay or pay to account. ,
 		ValueQuery,
 	>;
 
@@ -154,12 +154,20 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		PurchaseRewardToken(T::BlockNumber, AskPeriodNum, T::AccountId, BalanceOf<T>),
+		PurchaseRewardToken {
+			created_at: T::BlockNumber,
+			period: AskPeriodNum,
+			who: T::AccountId,
+			reward: BalanceOf<T>,
+		},
 		// OracleFinanceDepositCreating(BalanceOf<T>),
-		PurchaseRewardSlashedAfterExpiration(T::BlockNumber, AskPeriodNum, BalanceOf<T>),
+		PurchaseRewardSlashedAfterExpiration {
+			created_at: T::BlockNumber,
+			period: AskPeriodNum,
+			slash: BalanceOf<T>,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -188,6 +196,8 @@ pub mod pallet {
 		UnReserveBalanceError,
 		//
 		TransferBalanceError,
+
+		VectorIsFull
 	}
 
 	#[pallet::hooks]
@@ -212,12 +222,12 @@ pub mod pallet {
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 
 			// Emit an event.
-			Self::deposit_event(Event::PurchaseRewardToken(
-				current_block_number,
-				ask_period,
+			Self::deposit_event(Event::PurchaseRewardToken {
+				created_at: current_block_number,
+				period: ask_period,
 				who,
-				take_balance,
-			));
+				reward: take_balance,
+			});
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
@@ -245,7 +255,7 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		p_id: PurchaseId,
 		price_count: u32,
-	) -> OcwPaymentResult<T> {
+	) -> OcwPaymentResult<BalanceOf<T>> {
 		let reserve_balance = Self::calculate_fee_of_ask_quantity(price_count);
 		// T::Currency::reserve(&account_id, reserve_balance.clone());
 		// let res = T::Currency::transfer(
@@ -313,7 +323,7 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 	fn pay_to_ask(p_id: PurchaseId) -> Result<(), Error<T>> {
 		let payment_list = <PaymentTrace<T>>::iter_prefix(p_id.clone());
 
-		let mut opt_paid_value: Option<(T::AccountId, PaidValue<T>)> = None;
+		let mut opt_paid_value: Option<(T::AccountId, PaidValue<T::BlockNumber, BalanceOf<T>>)> = None;
 		payment_list.into_iter().into_iter().any(|(who, paid_value)| {
 			if paid_value.is_income {
 				opt_paid_value = Some((who, paid_value));
@@ -368,16 +378,15 @@ impl<T: Config> IForReporter<T> for Pallet<T> {
 		}
 		<AskPeriodPoint<T>>::insert(ask_period, (who.clone(), p_id.clone()), ask_point);
 		// Get reward period vec.
-		let mut reward_period = <RewardPeriod<T>>::get(who.clone());
-		// reward_period.retain(|(x_period, x_point, x_id)| {
-		// 	if x_period < &Self::get_earliest_reward_period(bn) {
-		// 		return false;
-		// 	}
-		// 	true
-		// });
-		reward_period.push((ask_period, ask_point, p_id));
-		<RewardPeriod<T>>::insert(who.clone(), reward_period);
-		Ok(())
+		// let mut reward_period = <RewardPeriod<T>>::get(who.clone());
+		// reward_period.push((ask_period, ask_point, p_id));
+		// <RewardPeriod<T>>::insert(who.clone(), reward_period);
+
+		//TODO new method should be test
+		RewardPeriod::<T>::try_mutate(who.clone(),|reward_period|{
+			reward_period.try_push((ask_period, ask_point, p_id)).map_err(|e|Error::<T>::PointRecordIsAlreadyExists)
+		})
+		// Ok(())
 	}
 
 	fn get_record_point(ask_period: u64, who: T::AccountId, p_id: PurchaseId) -> Option<AskPointNum> {
@@ -481,14 +490,26 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 		<RewardTrace<T>>::insert(ask_period.clone(), who.clone(), (current_block_number, reward_balance));
 
 		// AskPeriodNum, AskPointNum, PurchaseId
-		let mut reward_period_vec = <RewardPeriod<T>>::get(who.clone());
-		reward_period_vec.retain(|(period_num, _, _)| {
-			if period_num == &ask_period {
-				return false;
-			}
-			true
+		// let mut reward_period_vec = <RewardPeriod<T>>::get(who.clone());
+		// reward_period_vec.retain(|(period_num, _, _)| {
+		// 	if period_num == &ask_period {
+		// 		return false;
+		// 	}
+		// 	true
+		// });
+		// <RewardPeriod<T>>::insert(who, reward_period_vec);
+
+		// TODO new method should be test
+		RewardPeriod::<T>::mutate(who.clone(),|reward_period_vec|{
+			reward_period_vec.retain(|(period_num, _, _)| {
+				if period_num == &ask_period {
+					return false;
+				}
+				true
+			});
+			//<RewardPeriod<T>>::insert(who, reward_period_vec);
 		});
-		<RewardPeriod<T>>::insert(who, reward_period_vec);
+		// let mut reward_period_vec = <RewardPeriod<T>>::get(who.clone());
 
 		Ok(reward_balance)
 	}
@@ -560,11 +581,11 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 		<AskPeriodPayment<T>>::remove_prefix(check_period, None);
 
 		let current_block_number = <frame_system::Pallet<T>>::block_number();
-		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration(
-			current_block_number,
-			check_period,
-			diff,
-		));
+		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration {
+			created_at: current_block_number,
+			period: check_period,
+			slash: diff,
+		});
 
 		Some(diff)
 	}

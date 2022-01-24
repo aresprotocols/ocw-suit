@@ -13,7 +13,7 @@ pub trait IForPrice<T: Config>: IForBase<T> {
 	fn calculate_fee_of_ask_quantity(price_count: u32) -> BalanceOf<T> ;
 
 	// Pay purchased price request fee.
-	fn reserve_for_ask_quantity(who: T::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<T> ;
+	fn reserve_for_ask_quantity(who: T::AccountId, p_id: PurchaseId, price_count: u32) -> OcwPaymentResult<BalanceOf<T>> ;
 
 	// Refund fee of purchased price reqest.
 	fn unreserve_ask (p_id: PurchaseId) -> Result<(), Error<T>>;
