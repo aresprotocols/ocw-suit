@@ -575,11 +575,11 @@ pub mod pallet {
 				precheck_payload.block_number,
 			);
 			ensure!(result, Error::<T>::PerCheckTaskAlreadyExists);
-			Self::deposit_event(Event::NewPreCheckTask(
-				precheck_payload.pre_check_stash,
-				precheck_payload.pre_check_auth,
-				precheck_payload.block_number,
-			));
+			Self::deposit_event(Event::NewPreCheckTask {
+				who: precheck_payload.pre_check_stash,
+				authority: precheck_payload.pre_check_auth,
+				block: precheck_payload.block_number,
+			});
 			Ok(().into())
 		}
 
@@ -638,7 +638,7 @@ pub mod pallet {
 			ensure!(max_duration > 0, Error::<T>::DruationNumberNotBeZero);
 			let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, avg_keep_duration);
 			<PurchasedDefaultSetting<T>>::put(setting_data.clone());
-			Self::deposit_event(Event::UpdatePurchasedDefaultSetting(setting_data));
+			Self::deposit_event(Event::UpdatePurchasedDefaultSetting { setting: setting_data });
 			Ok(().into())
 		}
 
@@ -656,7 +656,7 @@ pub mod pallet {
 				open_paid_price_reporter,
 			};
 			<OcwControlSetting<T>>::put(setting_data.clone());
-			Self::deposit_event(Event::UpdateOcwControlSetting(setting_data));
+			Self::deposit_event(Event::UpdateOcwControlSetting { setting: setting_data });
 			Ok(().into())
 		}
 
@@ -756,7 +756,7 @@ pub mod pallet {
 		pub fn update_allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			<PriceAllowableOffset<T>>::put(offset);
-			Self::deposit_event(Event::PriceAllowableOffsetUpdate(offset));
+			Self::deposit_event(Event::PriceAllowableOffsetUpdate { offset });
 			Ok(())
 		}
 
@@ -769,7 +769,7 @@ pub mod pallet {
 			let old_depth = <PricePoolDepth<T>>::get();
 			assert_ne!(old_depth, depth, "⛔ Depth of change cannot be the same.");
 			<PricePoolDepth<T>>::set(depth.clone());
-			Self::deposit_event(Event::PricePoolDepthUpdate(depth));
+			Self::deposit_event(Event::PricePoolDepthUpdate { depth });
 			if depth < old_depth {
 				<PricesRequests<T>>::get().into_iter().any(|(price_key, _, _, _, _)| {
 					// clear average.
@@ -830,7 +830,7 @@ pub mod pallet {
 			who: T::AccountId,
 		},
 		// TODO:: Feature at 105.
-		AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
+		// AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
 		// The report request was closed when the price was submitted
 		PurchasedRequestWorkHasEnded {
 			purchase_id: PurchaseId,
@@ -846,12 +846,16 @@ pub mod pallet {
 			request_data: PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 			value: BalanceOf<T>,
 		},
-		PurchasedAvgPrice(
-			PurchaseId,
-			Vec<Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)>>,
-		),
-		UpdatePurchasedDefaultSetting(PurchasedDefaultData),
-		UpdateOcwControlSetting(OcwControlData),
+		PurchasedAvgPrice {
+			purchase_id: PurchaseId,
+			event_results: Vec<Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)>>,
+		},
+		UpdatePurchasedDefaultSetting {
+			setting: PurchasedDefaultData,
+		},
+		UpdateOcwControlSetting {
+			setting: OcwControlData,
+		},
 		RevokePriceRequest {
 			price_key: PriceKey,
 		},
@@ -867,12 +871,20 @@ pub mod pallet {
 			parse_version: u32,
 			fraction: FractionLength,
 		},
-		PricePoolDepthUpdate(u32),
-		PriceAllowableOffsetUpdate(u8),
+		PricePoolDepthUpdate {
+			depth: u32,
+		},
+		PriceAllowableOffsetUpdate {
+			offset: u8,
+		},
 		InsufficientCountOfValidators,
 		ProblemWithRefund,
 		// -- TODO add New events to UML
-		NewPreCheckTask(T::AccountId, T::AuthorityAres, T::BlockNumber),
+		NewPreCheckTask {
+			who: T::AccountId,
+			authority: T::AuthorityAres,
+			block: T::BlockNumber,
+		},
 		NewPreCheckResult {
 			who: T::AccountId,
 			created_at: T::BlockNumber,
@@ -2607,7 +2619,10 @@ impl<T: Config> Pallet<T> {
 			event_result_list.push(result);
 			false
 		});
-		Self::deposit_event(Event::PurchasedAvgPrice(purchase_id.clone(), event_result_list));
+		Self::deposit_event(Event::PurchasedAvgPrice {
+			purchase_id: purchase_id.clone(),
+			event_results: event_result_list,
+		});
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 		Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
 	}
