@@ -69,6 +69,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
+mod ares;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -554,6 +555,7 @@ pub mod pallet {
 
 			let seats = Self::members().len() as MemberCount;
 
+			/// Ares Call
 			Self::check_ares_call(
 				proposal.as_ref().clone(),
 				proposal_hash,
