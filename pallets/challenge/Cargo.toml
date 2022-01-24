@@ -15,24 +15,24 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dev-dependencies]
 serde = "1.0.126"
-sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
+sp-io = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
 
 [dependencies]
 # -- snip --
 codec = { package = "parity-scale-codec", features = ['derive'], version = "2.0.0", default-features = false }
 sp-std = { default-features = false, version = '3.0.0' }
 log = { version = "0.4.14", default-features = false }
-scale-info = {  features = ['derive'], version = "1.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
-frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.13" }
-frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-sp-consensus-babe = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-sp-consensus-slots = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
-pallet-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.13" }
+frame-benchmarking = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.13-fix" }
+frame-system = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+frame-support = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+sp-core = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+sp-runtime = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+sp-consensus-aura = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+sp-consensus-babe = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+sp-consensus-slots = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+pallet-aura = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
 # -- snip --
 
 [features]
