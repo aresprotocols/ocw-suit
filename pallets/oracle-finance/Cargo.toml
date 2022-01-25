@@ -16,16 +16,16 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 hex = { version = "0.4", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
-frame-support = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-frame-system = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-frame-benchmarking = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.13-fix" }
-sp-io = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-sp-runtime = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-sp-core = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-sp-application-crypto = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
-sp-std = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+frame-support = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+frame-system = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+frame-benchmarking = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.15-fix" }
+sp-io = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+sp-runtime = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+sp-core = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+sp-application-crypto = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
+sp-std = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
 
-pallet-balances = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.13-fix" }
+pallet-balances = { git = "https://github.com/zzm-Zhong/substrate", default-features = false, branch = "polkadot-v0.9.15-fix" }
 
 [dev-dependencies]
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
