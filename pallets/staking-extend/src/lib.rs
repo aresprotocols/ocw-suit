@@ -20,6 +20,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+/// Errors of the on-chain election.
+#[derive(Eq, PartialEq, Debug)]
+pub enum Error {
+	/// An internal error in the NPoS elections crate.
+	NposElections(sp_npos_elections::Error),
+	/// Errors from the data provider.
+	DataProvider(&'static str),
+}
+
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 pub trait Config: frame_system::Config {
@@ -136,7 +145,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	// 	<T as frame_system::Config>::AccountId,
 	// 	<T as frame_system::Config>::BlockNumber,
 	// >>::Error;
-	type Error = &'static str;
+	type Error = Error;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
