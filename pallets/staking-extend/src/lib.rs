@@ -132,10 +132,11 @@ where
 
 impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	// type Error = T::DebugError;
-	type Error = <T::ElectionProvider as ElectionProvider<
-		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
-	>>::Error;
+	// type Error = <T::ElectionProvider as ElectionProvider<
+	// 	<T as frame_system::Config>::AccountId,
+	// 	<T as frame_system::Config>::BlockNumber,
+	// >>::Error;
+	type Error = &'static str;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
