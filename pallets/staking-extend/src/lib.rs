@@ -1,21 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 use frame_election_provider_support::onchain;
-use frame_support::traits::{EstimateNextSessionRotation, Get};
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
-pub use pallet::*;
-// use pallet_session::{ShouldEndSession, PeriodicSessions};
-// use frame_support::sp_std::marker::PhantomData;
+use frame_election_provider_support::{
+	data_provider, ElectionDataProvider, ElectionProvider, PerThing128, Supports, VoteWeight,
+};
+use frame_support::pallet_prelude::*;
+use frame_support::sp_runtime::traits::IsMember;
 use frame_support::sp_runtime::traits::{OpaqueKeys, Zero};
 use frame_support::sp_runtime::RuntimeAppPublic;
-// use sp_consensus_aura::{AURA_ENGINE_ID, AuthorityIndex, ConsensusLog};
-// use sp_runtime::DigestItem;
-// use frame_support::pallet_prelude::Encode;
+use frame_support::sp_std::fmt::Debug;
+use frame_support::traits::ValidatorSet;
+use frame_support::traits::{EstimateNextSessionRotation, Get};
 use sp_core::sp_std::vec::Vec;
-// use sp_std::boxed::Box;
-// use frame_support::sp_runtime::sp_std::iter::FromIterator;
 
 #[cfg(test)]
 mod mock;
@@ -23,201 +20,130 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[frame_support::pallet]
-pub mod pallet {
-	use frame_support::pallet_prelude::*;
-	// use frame_system::pallet_prelude::*;
-	// use pallet_ocw::{ValidatorHandler};
-	use sp_std::vec::Vec;
-	// use sp_std::boxed::Box;
-	use frame_election_provider_support::{
-		data_provider, ElectionDataProvider, ElectionProvider, PerThing128, Supports, VoteWeight,
-	};
-	use frame_support::sp_runtime::traits::IsMember;
-	use frame_support::sp_runtime::RuntimeAppPublic;
-	use frame_support::sp_std::fmt::Debug;
-	use frame_support::traits::ValidatorSet;
-	// use crate::IStakingNpos;
-	use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
-	// frame-election-provider-support
+pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
-	// type Aura<T> = pallet_aura::Pallet<T>;
+pub trait Config: frame_system::Config {
+	/// The accuracy used to compute the election:
+	type Accuracy: PerThing128;
+	/// Something that provides the data for election.
+	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
-	/// Configure the pallet by specifying the parameters and types on which it depends.
-	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		// type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type ValidatorId: IsType<<Self as frame_system::Config>::AccountId> + Encode + Debug + PartialEq;
-		type ValidatorSet: ValidatorSet<Self::ValidatorId>;
+	type ValidatorId: IsType<<Self as frame_system::Config>::AccountId> + Encode + Debug + PartialEq;
+	type ValidatorSet: ValidatorSet<Self::ValidatorId>;
 
-		// for aura authorityid.
-		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize;
+	// for aura authorityid.
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize;
 
-		// type StashId: Parameter
-		// + Member
-		// + MaybeSerializeDeserialize
-		// + Debug
-		// + MaybeDisplay
-		// + Ord
-		// + Default
-		// + MaxEncodedLen;
+	type ElectionProvider: ElectionProvider<Self::AccountId, Self::BlockNumber>;
 
-		// type IStakingNpos: IStakingNpos<Self::AuthorityId, Self::BlockNumber>;
-		// type WithSessionHandler: OneSessionHandler<Self::AccountId>;
+	type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
+}
 
-		type OnChainAccuracy: PerThing128;
+impl<T: Config> IsMember<T::ValidatorId> for OnChainSequentialPhragmen<T>
+where
+	T::ValidatorId: PartialEq<<T::ValidatorSet as ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>,
+	T::ValidatorSet: ValidatorSet<<T as frame_system::Config>::AccountId>,
+{
+	fn is_member(authority_id: &T::ValidatorId) -> bool {
+		let validator_list = T::ValidatorSet::validators();
 
-		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
-		type ElectionProvider: frame_election_provider_support::ElectionProvider<
-			Self::AccountId,
-			Self::BlockNumber,
-			// we only accept an election provider that has staking as data provider.
-			DataProvider = Pallet<Self>,
-		>;
-
-		// type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
-		// 	Self::AccountId,
-		// 	Self::BlockNumber,
-		// 	DataProvider = Pallet<Self>,
-		// >;
-
-		type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
-	}
-
-	#[pallet::error]
-	#[derive(PartialEq, Eq)]
-	pub enum Error<T> {}
-
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
-
-	impl<T: Config> IsMember<T::ValidatorId> for Pallet<T>
-	// where T::ValidatorId: PartialEq<<T::ValidatorSet as
-	// ValidatorSet<<T as
-	// frame_system::Config>::AccountId>>::ValidatorId>
-	where
-		T::ValidatorId:
-			PartialEq<<T::ValidatorSet as ValidatorSet<<T as frame_system::Config>::AccountId>>::ValidatorId>,
-		T::ValidatorSet: ValidatorSet<<T as frame_system::Config>::AccountId>,
-	{
-		fn is_member(authority_id: &T::ValidatorId) -> bool {
-			let validator_list = T::ValidatorSet::validators();
-
-			validator_list.iter().any(|id| {
-				log::info!("validator_list id = {:?} == author_id = {:?}", &id, &authority_id);
-				authority_id == id
-			})
-		}
-	}
-
-	impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber> for Pallet<T>
-	where
-		<<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId:
-			PartialEq<<T as frame_system::Config>::AccountId>,
-	{
-		const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-
-		// fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>>
-		// {
-		// 	T::DataProvider::targets(maybe_max_len)
-		// }
-
-		fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-			//
-			let result = T::DataProvider::targets(maybe_max_len);
-			// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
-
-			if result.is_ok() {
-				// check current validator
-				let current_validators = T::ValidatorSet::validators();
-				// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}",
-				// &current_validators);
-				let mut old_target_list = Vec::new();
-				let new_target = result.unwrap();
-				let mut new_target = new_target.clone();
-				new_target.retain(|target_acc| {
-					let is_new_target = !current_validators.iter().any(|current_acc| {
-						let is_exists = &current_acc == &target_acc;
-						// log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc,
-						// &target_acc); log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
-						if is_exists {
-							old_target_list.push(target_acc.clone());
-						}
-						is_exists
-					});
-
-					if is_new_target {
-						// check pre-price has success.
-						if let Some((_, new_target_status)) =
-							T::AresOraclePreCheck::get_pre_check_status(target_acc.clone())
-						{
-							match new_target_status {
-								PreCheckStatus::Review => {}
-								PreCheckStatus::Prohibit => {}
-								PreCheckStatus::Pass => {
-									old_target_list.push(target_acc.clone());
-								}
-							}
-						}
-					}
-
-					is_new_target
-				});
-				log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
-				return Ok(old_target_list);
-			}
-			return result;
-			// result
-		}
-
-		fn voters(
-			maybe_max_len: Option<usize>,
-		) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-			T::DataProvider::voters(maybe_max_len)
-		}
-
-		fn desired_targets() -> data_provider::Result<u32> {
-			T::DataProvider::desired_targets()
-			// let result = T::DataProvider::desired_targets();
-			// log::debug!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}",
-			// result); result
-		}
-
-		fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-			// let result = T::DataProvider::next_election_prediction(now);
-			// log::debug!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}",
-			// result); result
-			T::DataProvider::next_election_prediction(now)
-		}
-	}
-
-	impl<T: Config> frame_election_provider_support::ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
-		// type Error = T::DebugError;
-		type Error = <T::ElectionProvider as ElectionProvider<
-			<T as frame_system::Config>::AccountId,
-			<T as frame_system::Config>::BlockNumber,
-		>>::Error;
-		type DataProvider = T::DataProvider;
-
-		fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-			T::ElectionProvider::elect()
-		}
+		validator_list.iter().any(|id| {
+			log::info!("validator_list id = {:?} == author_id = {:?}", &id, &authority_id);
+			authority_id == id
+		})
 	}
 }
 
-/// Wrapper type that implements the configurations needed for the on-chain backup.
-// pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
-// impl<T: Config> onchain::Config for OnChainConfig<T> {
-// 	// type Accuracy = T::OnChainAccuracy;
-// 	// type DataProvider = T::DataProvider;
-// 	type Accuracy = T::OnChainAccuracy;
-// 	type DataProvider = T::DataProvider;
-// }
+impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T>
+where
+	<<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId:
+		PartialEq<<T as frame_system::Config>::AccountId>,
+{
+	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 
-impl<T: Config> Pallet<T> {}
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+		//
+		let result = T::DataProvider::targets(maybe_max_len);
+		// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
 
-// type StashId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+		if result.is_ok() {
+			// check current validator
+			let current_validators = T::ValidatorSet::validators();
+			// log::debug!(target: "staking_extend", "******* LINDEBUG:: current validator:: == {:?}",
+			// &current_validators);
+			let mut old_target_list = Vec::new();
+			let new_target = result.unwrap();
+			let mut new_target = new_target.clone();
+			new_target.retain(|target_acc| {
+				let is_new_target = !current_validators.iter().any(|current_acc| {
+					let is_exists = &current_acc == &target_acc;
+					// log::debug!(target: "staking_extend", "current_acc {:?} == target_acc {:?} ", &current_acc,
+					// &target_acc); log::debug!(target: "staking_extend", "Result = {:?} ", &is_exists);
+					if is_exists {
+						old_target_list.push(target_acc.clone());
+					}
+					is_exists
+				});
+
+				if is_new_target {
+					// check pre-price has success.
+					if let Some((_, new_target_status)) =
+						T::AresOraclePreCheck::get_pre_check_status(target_acc.clone())
+					{
+						match new_target_status {
+							PreCheckStatus::Review => {}
+							PreCheckStatus::Prohibit => {}
+							PreCheckStatus::Pass => {
+								old_target_list.push(target_acc.clone());
+							}
+						}
+					}
+				}
+
+				is_new_target
+			});
+			log::debug!(target: "staking_extend", "******* LINDEBUG:: new validator:: == {:?}", &new_target);
+			return Ok(old_target_list);
+		}
+		return result;
+		// result
+	}
+
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+		T::DataProvider::voters(maybe_max_len)
+	}
+
+	fn desired_targets() -> data_provider::Result<u32> {
+		T::DataProvider::desired_targets()
+		// let result = T::DataProvider::desired_targets();
+		// log::debug!(target: "staking_extend", "******* LINDEBUG:: desired_targets:: == {:?}",
+		// result); result
+	}
+
+	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
+		// let result = T::DataProvider::next_election_prediction(now);
+		// log::debug!(target: "staking_extend", "******* LINDEBUG:: next_election_prediction:: == {:?}",
+		// result); result
+		T::DataProvider::next_election_prediction(now)
+	}
+}
+
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+	// type Error = T::DebugError;
+	type Error = <T::ElectionProvider as ElectionProvider<
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::BlockNumber,
+	>>::Error;
+	type DataProvider = T::DataProvider;
+
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		T::ElectionProvider::elect()
+	}
+}
+
+pub struct StakingNPOS<T: Config>(PhantomData<T>);
 
 pub trait IStakingNpos<AuthorityId, BlockNumber> // : frame_system::Config (remove later.)
 {
@@ -234,15 +160,16 @@ pub trait IStakingNpos<AuthorityId, BlockNumber> // : frame_system::Config (remo
 	fn pending_npos() -> sp_core::sp_std::vec::Vec<(Self::StashId, Option<AuthorityId>)>;
 }
 
-impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for T
+impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for StakingNPOS<T>
 where
 	T: pallet_staking::Config + pallet_session::Config + crate::Config,
 	<T as pallet_session::Config>::ValidatorId: From<<T as frame_system::Config>::AccountId>,
-	/* <T as frame_system::Config>::AccountId: Copy,
-	 * <T as pallet_session::Config>::ValidatorId: From<Self::StashId>,
-	 * Self::StashId: Copy, */
 {
 	type StashId = <T as frame_system::Config>::AccountId;
+	fn current_staking_era() -> u32 {
+		pallet_staking::CurrentEra::<T>::get().unwrap_or(0)
+	}
+
 	fn near_era_change(period_multiple: T::BlockNumber) -> bool {
 		let current_blocknum = <frame_system::Pallet<T>>::block_number();
 		let per_era: T::BlockNumber = T::SessionsPerEra::get().into();
@@ -283,10 +210,6 @@ where
 		);
 		// (n + (2*40)) % 40
 		(current_bn + (period_multiple * session_length)) % round_num == check_session_length
-	}
-
-	fn current_staking_era() -> u32 {
-		pallet_staking::CurrentEra::<T>::get().unwrap_or(0)
 	}
 
 	fn old_npos() -> Vec<Self::StashId> {
