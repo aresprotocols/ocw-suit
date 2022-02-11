@@ -623,8 +623,8 @@ impl<T: Config> Pallet<T> {
 		ErasStartSessionIndex::<T>::remove(era_index);
 		Self::check_and_slash_expired_rewards(era_index);
 	}
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::ValidatorId>> {
-		// println!("new_session =  {:?}", session_index);
+
+	fn check_start_new_era(session_index: SessionIndex) ->bool {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -634,13 +634,21 @@ impl<T: Config> Pallet<T> {
 				});
 			let era_length =
 				session_index.checked_sub(current_era_start_session_index).unwrap_or(0);
-
 			// println!("current_era_start_session_index = {:?} era_length {:?} >= T::AskPerEra::get() {:?}",
 			// 	current_era_start_session_index,
 			// 		 era_length,
 			// 		 T::AskPerEra::get()
 			// );
 			if era_length >= T::AskPerEra::get() {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::ValidatorId>> {
+		if let Some(_current_era) = Self::current_era() {
+			if Self::check_start_new_era(session_index) {
 				let new_planned_era = CurrentEra::<T>::mutate(|s| {
 					*s = Some(s.map(|s| s + 1).unwrap_or(0));
 					s.unwrap()
@@ -659,7 +667,7 @@ impl<T: Config> Pallet<T> {
 		if is_genesis {
 			return T::SessionManager::new_session_genesis(session_index);
 		}
-
+		// println!("new_session =  {:?} current_index = {:?}", session_index, Self::current_era());
 		T::SessionManager::new_session(session_index)
 	}
 	fn start_session(session_index: SessionIndex) {
@@ -667,14 +675,19 @@ impl<T: Config> Pallet<T> {
 		T::SessionManager::start_session(session_index)
 	}
 	fn end_session(session_index: SessionIndex) {
-		// println!("end_session =  {:?}", session_index);
-
-		Self::deposit_event(Event::EndOfAskEra {
-			era: Self::current_era_num(),
-			era_income: Self::get_era_income(Self::current_era_num()),
-			era_points: Self::get_era_point(Self::current_era_num()),
-			session_index
-		});
+		// println!("end_session =  {:?} # current_era = {:?}  # new_session_index = {:?}",
+		// 		 session_index,
+		// 		 Self::current_era_num(),
+		// 		 Self::eras_start_session_index(Self::current_era_num()),
+		// );
+		if Self::check_start_new_era(session_index + 2) {
+			Self::deposit_event(Event::EndOfAskEra {
+				era: Self::current_era_num(),
+				era_income: Self::get_era_income(Self::current_era_num()),
+				era_points: Self::get_era_point(Self::current_era_num()),
+				session_index
+			});
+		}
 		T::SessionManager::end_session(session_index)
 	}
 }

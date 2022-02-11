@@ -691,3 +691,27 @@ fn test_rpc_request() {
 	// println!("Old title : Vec<u8> encode {:?} ", HexDisplay::from(target_json));
 	assert!(true);
 }
+
+#[test]
+fn test_end_session_event() {
+	new_test_ext().execute_with(|| {
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+		advance_session();
+		println!("-----------");
+	});
+}
