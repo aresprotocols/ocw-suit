@@ -108,9 +108,8 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
-	pub const AskPeriod: BlockNumber = 10;
-	pub const RewardPeriodCycle: AskPeriodNum = 2;
-	pub const RewardSlot: AskPeriodNum = 1;
+	pub const AskPerEra: SessionIndex = 2;
+	pub const HistoryDepth: u32 = 2;
 }
 
 impl oracle_finance::Config for Test {
@@ -118,10 +117,11 @@ impl oracle_finance::Config for Test {
 	type PalletId = AresFinancePalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type BasicDollars = BasicDollars;
-	type AskPeriod = AskPeriod;
-	type RewardPeriodCycle = RewardPeriodCycle;
-	type RewardSlot = RewardSlot;
 	type OnSlash = ();
+	type ValidatorId = AccountId;
+	type SessionManager = ();
+	type AskPerEra = AskPerEra;
+	type HistoryDepth = HistoryDepth;
 }
 
 parameter_types! {
@@ -633,6 +633,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 		Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
 		assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
+
+		// TODO:: remove under line.
 		let result =
 			OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
 
@@ -756,7 +758,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				888,
 				AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -764,7 +766,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				888,
 				AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -772,7 +774,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				888,
 				AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -783,7 +785,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		println!("public_key_4 = {:?}", public_key_4);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				888,
 				AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -843,7 +845,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				OracleFinance::current_era_num(),
 				AresOcw::get_stash_id(&public_key_1).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -851,7 +853,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				OracleFinance::current_era_num(),
 				AresOcw::get_stash_id(&public_key_2).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -859,7 +861,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				OracleFinance::current_era_num(),
 				AresOcw::get_stash_id(&public_key_3).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -867,7 +869,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
-				OracleFinance::make_period_num(2),
+				OracleFinance::current_era_num(),
 				AresOcw::get_stash_id(&public_key_4).unwrap(),
 				pub_purchase_id.clone(),
 			),
@@ -880,30 +882,6 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let avg_trace = <PurchasedAvgTrace<Test>>::iter().collect::<Vec<_>>();
 		assert_eq!(avg_trace.len(), 1);
 	});
-
-	// t.execute_with(|| {
-	//     System::set_block_number(2);
-	//
-	//     let purchased_key_option: Option<PurchasedSourceRawKeys>  =
-	// AresOcw::fetch_purchased_request_keys(public_key_5.clone());     assert!
-	// (purchased_key_option.is_none());
-	//
-	//     let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
-	//     assert_eq!(price_pool.len(), 0 );
-	//
-	//     let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
-	//     assert_eq!(request_pool.len(), 0);
-	//
-	//     let order_pool = <PurchasedOrderPool<Test>>::iter().collect::<Vec<_>>();
-	//     assert_eq!(order_pool.len(), 0);
-	//
-	//     let order_pool = <PurchasedAvgPrice<Test>>::iter().collect::<Vec<_>>();
-	//     assert_eq!(order_pool.len(), 1);
-	//
-	//     let avg_trace = <PurchasedAvgTrace<Test>>::iter().collect::<Vec<_>>();
-	//     assert_eq!(avg_trace.len(), 1);
-	//
-	// });
 }
 
 #[test]

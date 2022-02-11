@@ -12,14 +12,16 @@ pub type NegativeImbalanceOf<T> =
 
 // TODO
 pub type MaximumIdLength = ConstU32<100>;
-pub type MaximumRewardPeriods = ConstU32<100>;
+pub type MaximumRewardEras = ConstU32<100>;
 
 // pub type PurchaseId = BoundedVec<u8, MaximumIdLength>;
 pub type PurchaseId = Vec<u8>;
 
-pub type AskPeriodNum = u64;
-
 pub type AskPointNum = u32;
+
+pub type SessionIndex = u32;
+
+pub type EraIndex = u32;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum OcwPaymentResult<Balance> {
@@ -31,8 +33,9 @@ pub enum OcwPaymentResult<Balance> {
 // }
 
 #[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct PaidValue<BlockNumber, Balance> {
+pub struct PaidValue<BlockNumber, Balance, EraIndexT> {
 	pub create_bn: BlockNumber,
+	pub paid_era: EraIndexT,
 	pub amount: Balance,
 	pub is_income: bool,
 }

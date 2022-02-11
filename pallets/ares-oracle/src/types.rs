@@ -292,6 +292,7 @@ pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
 	pub pre_check_list: PreCheckList,
 	pub pre_check_stash: AccountId,
 	pub pre_check_auth: AuthorityId,
+	pub task_at: BlockNumber,
 	pub public: Public,
 }
 

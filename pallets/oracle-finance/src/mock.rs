@@ -3,9 +3,10 @@ use crate as oracle_finance;
 // use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
 use frame_support::{
 	 parameter_types,
-	traits::{Contains, GenesisBuild},
+	traits::{Get, Contains, GenesisBuild, Hooks},
 	PalletId,
 };
+// use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
 
 
 use frame_system as system;
@@ -14,8 +15,10 @@ use pallet_balances;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
+use sp_runtime::testing::UintAuthorityId;
+use crate::types::EraIndex;
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
 
@@ -26,7 +29,7 @@ pub(crate) type AccountId = u64;
 /// Balance of an account.
 pub type Balance = u64;
 pub type BlockNumber = u64;
-pub type AskPeriodNum = u64;
+pub type SessionIndex = u32;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
 frame_support::construct_runtime!(
@@ -36,6 +39,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
 	}
@@ -82,11 +87,21 @@ impl system::Config for Test {
 }
 
 parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
+impl pallet_timestamp::Config for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
+}
+
+parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
-	pub const AskPeriod: BlockNumber = 10;
-	pub const RewardPeriodCycle: AskPeriodNum = 2;
-	pub const RewardSlot: AskPeriodNum = 1;
+	// pub const AskPeriod: BlockNumber = 10;
+	pub const AskPerEra: SessionIndex = 2;
+	pub const HistoryDepth: u32 = 2;
 }
 
 impl oracle_finance::Config for Test {
@@ -94,10 +109,39 @@ impl oracle_finance::Config for Test {
 	type PalletId = AresFinancePalletId;
 	type Currency = pallet_balances::Pallet<Self>;
 	type BasicDollars = BasicDollars;
-	type AskPeriod = AskPeriod;
-	type RewardPeriodCycle = RewardPeriodCycle;
-	type RewardSlot = RewardSlot;
+	type ValidatorId = AccountId;
+	// type AskPeriod = AskPeriod;
+	type AskPerEra = AskPerEra;
+	type HistoryDepth = HistoryDepth;
+	type SessionManager = ();
+	// type RewardEraCycle = RewardEraCycle;
+	// type RewardSlot = RewardSlot;
 	type OnSlash = ();
+}
+
+parameter_types! {
+	pub const Period: u64 = 5;
+	pub const Offset: u64 = 0;
+}
+impl pallet_session::Config for Test {
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type SessionManager = OracleFinance;
+	type SessionHandler = TestSessionHandler;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = ();
+	type Keys = UintAuthorityId;
+	type Event = Event;
+	// type DisabledValidatorsThreshold = (); // pallet_session::PeriodicSessions<(), ()>;
+	type NextSessionRotation = (); //pallet_session::PeriodicSessions<(), ()>;
+	type WeightInfo = ();
+}
+
+pub struct TestSessionHandler;
+impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(_: bool, _: &[(AccountId, Ks)], _: &[(AccountId, Ks)]) {}
+	fn on_disabled(_: u32) {}
 }
 
 parameter_types! {
@@ -134,4 +178,51 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 pub fn to_test_vec(to_str: &str) -> Vec<u8> {
 	to_str.as_bytes().to_vec()
+}
+
+// -------------- Session Management.
+
+pub const INIT_TIMESTAMP: u64 = 30_000;
+pub const BLOCK_TIME: u64 = 1000;
+
+pub(crate) fn run_to_block(n: BlockNumber) {
+	OracleFinance::on_finalize(System::block_number());
+	for b in (System::block_number() + 1)..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		<OracleFinance as Hooks<u64>>::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+		if b != n {
+			OracleFinance::on_finalize(System::block_number());
+		}
+	}
+}
+
+/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+pub(crate) fn start_session(session_index: SessionIndex) {
+	let end: u64 = if Offset::get().is_zero() {
+		(session_index as u64) * Period::get()
+	} else {
+		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+	};
+	run_to_block(end);
+	// session must have progressed properly.
+	assert_eq!(
+		Session::current_index(),
+		session_index,
+		"current session index = {}, expected = {}",
+		Session::current_index(),
+		session_index,
+	);
+}
+
+/// Go one session forward.
+pub(crate) fn advance_session() {
+	let current_index = Session::current_index();
+	start_session(current_index + 1);
+}
+
+/// Progress until the given era.
+pub(crate) fn start_active_era(era_index: EraIndex) {
+	start_session((era_index * <AskPerEra as Get<u32>>::get()).into());
 }

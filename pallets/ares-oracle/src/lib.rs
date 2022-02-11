@@ -335,7 +335,7 @@ pub mod pallet {
 			}
 
 			//
-			if let Some((stash, auth, _)) = Self::get_pre_task_by_authority_set(Self::get_ares_authority_list()) {
+			if let Some((stash, auth, task_at)) = Self::get_pre_task_by_authority_set(Self::get_ares_authority_list()) {
 				// Self::create_pre_check_task(stash_id.clone(), block_number);
 				log::debug!(
 					"Have my own pre-check task. stash = {:?}, auth = {:?}",
@@ -354,7 +354,13 @@ pub mod pallet {
 				// get check result
 				let take_price_list = Self::take_price_for_pre_check(check_config);
 				// Sending transaction to chain. Use PreCheckResultPayload
-				match Self::save_offchain_pre_check_result(stash, auth, block_number, take_price_list) {
+				match Self::save_offchain_pre_check_result(
+					stash,
+					auth,
+					block_number,
+					take_price_list,
+					task_at
+				) {
 					Ok(_) => {}
 					Err(e) => {
 						log::warn!(
@@ -604,6 +610,7 @@ pub mod pallet {
 				who: preresult_payload.pre_check_stash,
 				created_at: preresult_payload.block_number,
 				pre_check_list: preresult_payload.pre_check_list,
+				task_at: preresult_payload.task_at,
 			});
 			Ok(().into())
 		}
@@ -890,6 +897,7 @@ pub mod pallet {
 			who: T::AccountId,
 			created_at: T::BlockNumber,
 			pre_check_list: PreCheckList,
+			task_at: T::BlockNumber,
 		},
 	}
 
@@ -1724,6 +1732,7 @@ impl<T: Config> Pallet<T> {
 		auth_id: T::AuthorityAres,
 		block_number: T::BlockNumber,
 		pre_check_list: PreCheckList,
+		task_at: T::BlockNumber,
 	) -> Result<(), &'static str>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -1738,6 +1747,7 @@ impl<T: Config> Pallet<T> {
 					pre_check_auth: auth_id.clone(),
 					block_number,
 					pre_check_list: pre_check_list.clone(),
+					task_at,
 					public: account.public.clone(),
 				},
 				|payload, signature| Call::submit_offchain_pre_check_result {
