@@ -198,8 +198,6 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let control_setting = <OcwControlSetting<T>>::get();
 			let block_author = Self::get_block_author();
-
-			// ##############
 			// For debug on test-chain.
 			let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
 
@@ -217,14 +215,13 @@ pub mod pallet {
 					.iter()
 					.any(|local_authority| online_authroitys.contains(local_authority));
 
-				log::debug!("XRay run 1 ...");
 				// submit offchain tx.
 				if !in_list {
 					let host_key = Self::get_local_host_key();
 					// Get request_domain.
 					let request_domain = Self::get_local_storage_request_domain();
 					log::debug!(
-						"XRay run 1.1 ... host_key = {:?}, request_domain = {:?}, authority_list = {:?}",
+						"Host_key = {:?}, request_domain = {:?}, authority_list = {:?}",
 						host_key,
 						request_domain,
 						authority_list
@@ -238,8 +235,6 @@ pub mod pallet {
 					SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 				}
 			}
-
-			// ##############
 
 			match block_author {
 				None => {

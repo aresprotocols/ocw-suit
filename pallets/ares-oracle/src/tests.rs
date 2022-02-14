@@ -452,8 +452,26 @@ fn test_get_local_host_key() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	t.execute_with(|| {
+		System::set_block_number(100);
 		let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
 		let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+
+		let local_host_key = AresOcw::get_local_host_key();
+		println!("HOST KEY = {:?}", local_host_key);
+		let local_host_key = AresOcw::get_local_host_key();
+		println!("HOST KEY = {:?}", local_host_key);
+
+		// let host_u8 = AresOcw::get_local_host_key_bytes();
+		// println!("HOST KEY u8 = {:?}", &host_u8);
+		// println!("{:?}", &hex::encode(local_host_key.encode().clone()));
+
+		// 0x513f053a # 973,422,417 # 973422417
+
+		println!("{:?}", &hex::encode(973422417u32.encode().clone()));
+		println!("{:?}\n{:?}", hex::decode("513f053a"), 973422417u32.encode());
+		let mut number =[0u8; 4]; // 0x 3a 05 3f 51
+		number[..].copy_from_slice(hex::decode("513f053a").unwrap().as_slice());
+		println!("{:?} result = {:?}", number, u32::from_be_bytes(number));
 
 		LocalXRay::<Test>::insert(1, (100, "a".encode(), vec![authority_1.clone()]));
 		assert_eq!(
@@ -466,6 +484,7 @@ fn test_get_local_host_key() {
 			LocalXRay::<Test>::get(1),
 			Some((200, "b".encode(), vec![authority_2.clone()]))
 		);
+
 	});
 }
 
@@ -3696,6 +3715,21 @@ fn test_is_aura() {
 		assert!(AresOcw::is_aura());
 	});
 }
+
+// #[test]
+// fn test_local_host_key() {
+// 	let mut t = new_test_ext();
+// 	//     let (offchain, _state) = TestOffchainExt::new();
+// //     let (pool, state) = TestTransactionPoolExt::new();
+// //     t.register_extension(OffchainDbExt::new(offchain.clone()));
+// //     t.register_extension(OffchainWorkerExt::new(offchain));
+// //     t.register_extension(TransactionPoolExt::new(pool));
+// 	t.execute_with(|| {
+// 		let local_host_key = AresOcw::get_local_host_key();
+// 		println!("local_host_key = {:?}", local_host_key);
+// 	});
+// }
+
 
 // test construct LocalPriceRequestStorage
 // TODO::Test is out of date, but it's best not to delete it.
