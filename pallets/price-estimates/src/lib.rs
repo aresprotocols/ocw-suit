@@ -50,6 +50,10 @@ pub type FractionLength = u32;
 
 type BalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+/// The target used for logging.
+/// pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
+const TARGET: &str = "ares::price-estimates";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -271,7 +275,12 @@ pub mod pallet {
 			let mut to_active_symbol: Vec<BoundedVec<u8, StringLimit>> = vec![];
 			PreparedEstimates::<T, I>::iter().for_each(|(_symbol, config)| {
 				if config.start <= n {
-					log::info!("symbol: {:?} to active .. config: {:?}", &_symbol, config);
+					log::debug!(
+						target: TARGET,
+						"symbol: {:?} to active .. config: {:?}",
+						&_symbol,
+						config
+					);
 					to_active_symbol.push(_symbol);
 				}
 			});
@@ -293,7 +302,7 @@ pub mod pallet {
 				return;
 			}
 			if !Self::can_submit_unsigned() {
-				// log::info!("can not run offchian worker...");
+				log::debug!(target: TARGET, "can not run offchian worker(ares:price-estimates)...");
 				return;
 			}
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
@@ -307,7 +316,11 @@ pub mod pallet {
 					Self::do_synchronized_offchain_worker(now);
 				}
 				Err(deadline) => {
-					log::error!("offchain worker lock not released, deadline is {:?}", deadline);
+					log::error!(
+						target: TARGET,
+						"offchain worker lock not released, deadline is {:?}",
+						deadline
+					);
 				}
 			};
 		}
@@ -329,6 +342,7 @@ pub mod pallet {
 				let symbol = &payload.symbol;
 				let round_id = *(&payload.estimates_id.clone());
 				log::info!(
+					target: TARGET,
 					"validate_unsigned-->estimates_price, on block: {:?}, symbol: {:?}, round_id: {:?} ",
 					frame_system::Pallet::<T>::block_number(),
 					sp_std::str::from_utf8(symbol).unwrap(),
@@ -341,19 +355,19 @@ pub mod pallet {
 				}
 				let config = config.unwrap();
 				if round_id != config.id {
-					log::warn!("round id is not equal");
+					log::warn!(target: TARGET, "round id is not equal");
 					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
 				}
 
 				let members = UnsignedMembers::<T, I>::try_get();
 				if members.is_err() {
-					log::warn!("can not found any unsigned members");
+					log::warn!(target: TARGET, "can not found any unsigned members");
 					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
 				}
 				let members = members.unwrap();
 				let signed_account: T::AccountId = payload.public.clone().into_account();
 				if !members.contains(&signed_account) {
-					log::warn!("signed_account is not  member");
+					log::warn!(target: TARGET, "signed_account is not  member");
 					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
 				}
 				ValidTransaction::with_tag_prefix("ares-estimates")
@@ -501,7 +515,7 @@ pub mod pallet {
 			ensure!(r.is_ok(), Error::<T, I>::AddressInvalid);
 			ensure!(is_hex_address(&bytes), Error::<T, I>::AddressInvalid);
 
-			log::info!("price {:?}", estimated_price);
+			log::info!(target: TARGET, "price {:?}", estimated_price);
 
 			let config = ActiveEstimates::<T, I>::get(&symbol);
 			if config.is_none() {
@@ -764,7 +778,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Self::send_unsigned(now, vec![], &config, (0, 0));
 				} else {
 					let price: Result<(u64, FractionLength), ()> = T::PriceProvider::price(&symbol);
-					log::info!("accounts: {:?}, price: {:?}", accounts, price);
+					log::info!(target: TARGET, "accounts: {:?}, price: {:?}", accounts, price);
 					let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
 					let mut total_reward = BalanceOf::<T, I>::from(0u32);
 					if _total_reward.is_some() {
@@ -781,7 +795,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								accounts,
 								price.unwrap(),
 							);
-						log::info!("winners: {:?}", winners);
+						log::info!(target: TARGET, "winners: {:?}", winners);
 						Self::send_unsigned(now, winners, &config, price.unwrap())
 					}
 				}
@@ -847,7 +861,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let div_price: u64 = deviation.unwrap().mul_ceil(price);
 				let low_price: u64 = price - div_price;
 				let high_price: u64 = price + div_price;
-				log::info!("price_range: {:?} --- {:?}", low_price, high_price);
+				log::info!(target: TARGET, "price_range: {:?} --- {:?}", low_price, high_price);
 				for x in accounts {
 					let estimates = x.estimates.unwrap();
 					if low_price <= estimates && estimates <= high_price {
@@ -862,11 +876,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let price: u64 = price.0;
 					// let rangeIndex = 2;
 					if range_index == 0 && price <= range[0] {
-						log::info!("price:{:?} <= range:{:?}", price, range[0]);
+						log::info!(target: TARGET, "price:{:?} <= range:{:?}", price, range[0]);
 						// price <= range[0]
 						push_winner(&mut winners, x);
 					} else if range_index == range.len() && price > range[range.len() - 1] {
-						log::info!("price:{:?} > range:{:?}", price, range[range.len() - 1]);
+						log::info!(target: TARGET, "price:{:?} > range:{:?}", price, range[range.len() - 1]);
 						// price > range[range.length-1]
 						push_winner(&mut winners, x);
 					} else if 0 < range_index
@@ -875,6 +889,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						&& price <= range[range_index + 1]
 					{
 						log::info!(
+							target: TARGET,
 							" range:{:?} < price:{:?} <= range:{:?}",
 							range[range_index - 1],
 							price,
@@ -902,7 +917,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let winners: Result<BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>, ()> =
 			winners.clone().try_into();
 		if winners.is_err() {
-			log::warn!("too Many winners");
+			log::warn!(target: TARGET, "too Many winners");
 			return;
 		}
 		let winners = winners.unwrap();
@@ -925,12 +940,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 			if let Some((who, result)) = a {
 				if result.is_err() {
-					log::warn!("send_unsigned_transaction error: {:?}", result.err());
+					log::warn!(target: TARGET, "send_unsigned_transaction error: {:?}", result.err());
 				}
 			}
 		// .ok_or("❗ No local accounts accounts available, `aura` StoreKey needs to be set.");
 		} else {
-			log::warn!("can not found any account")
+			log::warn!(target: TARGET, "can not found any account")
 		}
 
 		// result.map_err(|()| "⛔ Unable to submit transaction");
@@ -940,6 +955,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// let hash = Blake2_128Concat::hash(estimates_config.encode().as_slice());
 		let encode = estimates_config.encode();
 		log::info!(
+			target: TARGET,
 			"estimates_encode: {:?}",
 			HexDisplay::from(&encode) // encode
 		);
