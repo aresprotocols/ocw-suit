@@ -201,19 +201,43 @@ pub mod pallet {
 			// For debug on test-chain.
 			let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
 
+			log::debug!(
+				"**** offchain_worker A => block_number = {:?}",
+				&block_number,
+			);
 			if T::AresIStakingNpos::near_era_change(conf_session_multi) {
+				log::debug!(
+					"**** near_era_change => conf_session_multi = {:?}",
+					&conf_session_multi,
+				);
 				// Get all ares authoritys.
 				let authority_list = T::AuthorityAres::all();
-
+				log::debug!(
+					"**** near_era_change => authority_list = {:?}",
+					&authority_list,
+				);
 				// Check not be validator.
 				let current_validator: Vec<(_, T::AuthorityAres)> = Authorities::<T>::get();
+				log::debug!(
+					"**** near_era_change => current_validator = {:?}",
+					&current_validator,
+				);
 				let online_authroitys = current_validator
 					.into_iter()
 					.map(|(_, auth)| auth)
 					.collect::<Vec<T::AuthorityAres>>();
+				log::debug!(
+					"**** near_era_change => online_authroitys = {:?}",
+					&online_authroitys,
+				);
+
 				let in_list = authority_list
 					.iter()
 					.any(|local_authority| online_authroitys.contains(local_authority));
+				log::debug!(
+					"**** near_era_change => in_list = {:?}",
+					&in_list,
+				);
 
 				// submit offchain tx.
 				if !in_list {
@@ -329,6 +353,10 @@ pub mod pallet {
 				}
 			}
 
+			log::debug!(
+				"**** offchain_worker B => get_ares_authority_list = {:?}",
+				&Self::get_ares_authority_list(),
+			);
 			//
 			if let Some((stash, auth, task_at)) = Self::get_pre_task_by_authority_set(Self::get_ares_authority_list()) {
 				// Self::create_pre_check_task(stash_id.clone(), block_number);
@@ -446,7 +474,9 @@ pub mod pallet {
 					let refund_result = T::OracleFinanceHandler::unreserve_ask(x.clone());
 					if refund_result.is_ok() {
 						Self::purchased_storage_clean(x.clone());
-						Self::deposit_event(Event::InsufficientCountOfValidators);
+						Self::deposit_event(Event::InsufficientCountOfValidators {
+							purchase_id: x.clone()
+						});
 					} else {
 						log::error!(
 							target: "pallet::ocw::submit_forced_clear_purchased_price_payload_signed",
@@ -880,9 +910,10 @@ pub mod pallet {
 		PriceAllowableOffsetUpdate {
 			offset: u8,
 		},
-		InsufficientCountOfValidators,
+		InsufficientCountOfValidators {
+			purchase_id: PurchaseId,
+		} ,
 		ProblemWithRefund,
-		// -- TODO add New events to UML
 		NewPreCheckTask {
 			who: T::AccountId,
 			authority: T::AuthorityAres,

@@ -92,14 +92,6 @@ where
 		if period_multiple <= 1u32.into() {
 			check_session_length = Zero::zero();
 		}
-
-		// println!("###### current_bn {:?} + ( period_multiple {:?} * session_length {:?}) % round_num {:?}
-		// = check_session_length {:?}", 		 current_bn,
-		// 		 period_multiple,
-		// 		 session_length,
-		// 		 round_num,
-		// 		 check_session_length
-		// );
 		log::debug!("###### current_bn {:?} + ( period_multiple {:?} * session_length {:?}) % round_num {:?} = check_session_length {:?} ## current stakin period = {:?}",
 					current_bn,
 					period_multiple,

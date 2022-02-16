@@ -1043,6 +1043,10 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 	});
 
 	t.execute_with(|| {
+
+		// System::set_block_number(1);
+		// let request_acc = AccountId::from_raw([1; 32]);
+		// let test_purchased_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
 		System::set_block_number(4);
 
 		let expired_purchased_list = AresOcw::get_expired_purchased_transactions();
@@ -1079,7 +1083,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		}
 
 		// println!("|{:?}|", System::events());
-		System::assert_last_event(tests::Event::AresOcw(AresOcwEvent::InsufficientCountOfValidators));
+		System::assert_last_event(tests::Event::AresOcw(
+			AresOcwEvent::InsufficientCountOfValidators{purchase_id: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]}
+		));
 
 		let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
 		assert_eq!(price_pool.len(), 0);
@@ -1450,7 +1456,6 @@ fn test_submit_ask_price() {
 			AresOcw::fetch_purchased_request_keys(authority_1.clone());
 
 		let purchased_key = purchased_key_option.unwrap();
-		// println!("purchased_key.raw_source_keys = {:?}", &purchased_key);
 
 		assert_eq!(
 			purchased_key.raw_source_keys,
