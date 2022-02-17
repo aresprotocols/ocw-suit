@@ -39,7 +39,7 @@ use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
 use frame_support::weights::Weight;
 use frame_support::{BoundedVec, ConsensusEngineId};
 use hex;
-use oracle_finance::traits::{IForPrice, IForReporter};
+use oracle_finance::traits::{IForPrice, IForReporter, IForBase};
 use oracle_finance::types::{BalanceOf, PurchaseId};
 use sp_runtime::app_crypto::Public;
 use sp_runtime::traits::{Saturating, UniqueSaturatedInto};
@@ -105,7 +105,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 	use frame_system::{ensure_none, ensure_signed};
 	use oracle_finance::traits::*;
-	use oracle_finance::types::{BalanceOf, OcwPaymentResult, PurchaseId};
+	use oracle_finance::types::{BalanceOf, OcwPaymentResult, PurchaseId, EraIndex};
 	use sp_consensus_aura::ConsensusLog::AuthoritiesChange;
 	use sp_core::crypto::UncheckedFrom;
 	use staking_extend::IStakingNpos;
@@ -500,6 +500,7 @@ pub mod pallet {
 				Self::deposit_event(Event::PurchasedRequestWorkHasEnded {
 					purchase_id: price_payload.purchase_id.clone(),
 					who: Self::get_stash_id(&price_payload.auth.clone()).unwrap(),
+					finance_era: T::OracleFinanceHandler::current_era_num(),
 				});
 				return Ok(().into());
 			}
@@ -871,20 +872,25 @@ pub mod pallet {
 		PurchasedRequestWorkHasEnded {
 			purchase_id: PurchaseId,
 			who: T::AccountId,
+			finance_era: EraIndex,
 		},
 		NewPurchasedPrice {
 			created_at: T::BlockNumber,
 			price_list: PricePayloadSubPriceList,
 			who: T::AccountId,
+			finance_era: EraIndex,
+			purchase_id: PurchaseId,
 		},
 		NewPurchasedRequest {
 			purchase_id: PurchaseId,
 			request_data: PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 			value: BalanceOf<T>,
+			finance_era: EraIndex,
 		},
 		PurchasedAvgPrice {
 			purchase_id: PurchaseId,
 			event_results: Vec<Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)>>,
+			finance_era: EraIndex,
 		},
 		UpdatePurchasedDefaultSetting {
 			setting: PurchasedDefaultData,
@@ -2402,6 +2408,7 @@ impl<T: Config> Pallet<T> {
 			purchase_id: purchase_id.clone(),
 			request_data,
 			value: offer,
+			finance_era: T::OracleFinanceHandler::current_era_num(),
 		});
 		Ok(purchase_id)
 	}
@@ -2665,6 +2672,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::PurchasedAvgPrice {
 			purchase_id: purchase_id.clone(),
 			event_results: event_result_list,
+			finance_era: T::OracleFinanceHandler::current_era_num(),
 		});
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 		Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
@@ -2770,6 +2778,8 @@ impl<T: Config> Pallet<T> {
 			created_at: block_number.clone(),
 			price_list,
 			who: account_id,
+			finance_era: T::OracleFinanceHandler::current_era_num(),
+			purchase_id
 		});
 	}
 
