@@ -201,10 +201,6 @@ pub mod pallet {
 			// For debug on test-chain.
 			let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
 
-			log::debug!(
-				"**** offchain_worker A => block_number = {:?}",
-				&block_number,
-			);
 			if T::AresIStakingNpos::near_era_change(conf_session_multi) {
 				log::debug!(
 					"**** near_era_change => conf_session_multi = {:?}",
@@ -353,10 +349,6 @@ pub mod pallet {
 				}
 			}
 
-			log::debug!(
-				"**** offchain_worker B => get_ares_authority_list = {:?}",
-				&Self::get_ares_authority_list(),
-			);
 			//
 			if let Some((stash, auth, task_at)) = Self::get_pre_task_by_authority_set(Self::get_ares_authority_list()) {
 				// Self::create_pre_check_task(stash_id.clone(), block_number);
@@ -547,13 +539,14 @@ pub mod pallet {
 			);
 			// Nodes with the right to increase prices
 			let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
-			let mut event_result: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
+			// let mut event_result: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
 			let mut price_key_list = Vec::new();
+			let mut agg_result_list: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
 			for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value, timestamp) in
 				price_list.clone()
 			{
 				// Add the price to the on-chain list, but mark it as coming from an empty address.
-				Self::add_price(
+				if let Some(agg_result) = Self::add_price_and_try_to_agg(
 					Self::get_stash_id(&price_payload.auth).unwrap(),
 					price.clone(),
 					price_key.clone(),
@@ -561,19 +554,26 @@ pub mod pallet {
 					json_number_value,
 					Self::get_price_pool_depth(),
 					timestamp,
-				);
+				) {
+					agg_result_list.push(agg_result);
+				}
 				price_key_list.push(price_key.clone());
-				event_result.push((price_key, price, fraction_length));
+				// event_result.push((price_key, price, fraction_length));
+			}
+
+			// Update agg event.
+			if !agg_result_list.is_empty() {
+				Self::deposit_event(Event::AggPrice {
+					results: agg_result_list,
+				});
 			}
 
 			log::debug!("🚅 Submit price list on chain, count = {:?}", price_key_list.len());
 
 			// update last author
-			Self::update_last_price_list_for_author(
+			Self::update_last_price_list_for_author (
 				price_key_list,
-				// price_payload.public.clone().into_account(),
 				Self::get_stash_id(&price_payload.auth).unwrap(),
-				// price_payload.block_number,
 			);
 
 			// Set jump block
@@ -586,11 +586,12 @@ pub mod pallet {
 
 			log::debug!("🚅 Submit jump block list on chain, count = {:?}", jump_block.len());
 
-			Self::deposit_event(Event::NewPrice {
-				results: event_result,
-				jump_blocks: jump_block,
-				who: Self::get_stash_id(&price_payload.auth).unwrap(),
-			});
+			// Self::deposit_event(Event::NewPrice {
+			// 	results: event_result,
+			// 	jump_blocks: jump_block,
+			// 	who: Self::get_stash_id(&price_payload.auth).unwrap(),
+			// });
+
 			Ok(().into())
 		}
 
@@ -857,12 +858,14 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// (price_key, price_val, fraction len)
-		NewPrice {
+		AggPrice {
 			results: Vec<(PriceKey, u64, FractionLength)>,
-			jump_blocks: PricePayloadSubJumpBlockList,
-			who: T::AccountId,
 		},
-		// TODO:: Feature at 105.
+		// NewPrice {
+		// 	results: Vec<(PriceKey, u64, FractionLength)>,
+		// 	jump_blocks: PricePayloadSubJumpBlockList,
+		// 	who: T::AccountId,
+		// },
 		// AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
 		// The report request was closed when the price was submitted
 		PurchasedRequestWorkHasEnded {
@@ -2404,7 +2407,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// add price on chain
-	fn add_price(
+	fn add_price_and_try_to_agg(
 		who: T::AccountId,
 		price: u64,
 		price_key: PriceKey,
@@ -2412,8 +2415,7 @@ impl<T: Config> Pallet<T> {
 		json_number_value: JsonNumberValue,
 		max_len: u32,
 		timestamp: u64,
-	) {
-		// println!("add_price == {:?}", price);
+	) -> Option<(PriceKey, u64, FractionLength)> {
 		let key_str = price_key;
 		let current_block = <system::Pallet<T>>::block_number();
 		// 1. Check key exists
@@ -2472,7 +2474,8 @@ impl<T: Config> Pallet<T> {
 			});
 			<AresPrice<T>>::insert(key_str.clone(), new_price);
 		}
-		Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
+
+		let avg_check_result = Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
 		// Check if the price request exists, if not, clear storage data.
 		let price_request_list = <PricesRequests<T>>::get();
 		let has_key = price_request_list
@@ -2481,18 +2484,18 @@ impl<T: Config> Pallet<T> {
 		if !has_key {
 			Self::clear_price_storage_data(key_str);
 		}
+		avg_check_result
 	}
 
-	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) {
+	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength)> {
 		let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).len();
 		if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
-			// println!("update_avg_price_storage price count = {:?}", ares_price_list_len);
-			Self::update_avg_price_storage(key_str.clone(), max_len);
+			return Self::update_avg_price_storage(key_str.clone());
 		}
+		None
 	}
 
-	// TODO:: remove max_len ?
-	fn update_avg_price_storage(key_str: PriceKey, max_len: u32) {
+	fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength)> {
 		let prices_info = <AresPrice<T>>::get(key_str.clone());
 		let average_price_result = Self::average_price(prices_info, T::CalculationKind::get());
 		if let Some((average, fraction_length)) = average_price_result {
@@ -2536,15 +2539,18 @@ impl<T: Config> Pallet<T> {
 					// reset price pool
 					// TODO:: Refactoring recursion like handler_purchase_avg_price_storage
 					<AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
-					return Self::update_avg_price_storage(key_str.clone(), max_len.clone());
+					return Self::update_avg_price_storage(key_str.clone());
 				}
 
 				// Update avg price
 				<AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
 				// Clear price pool.
 				<AresPrice<T>>::remove(key_str.clone());
+				//
+				return Some((key_str.clone(), average, fraction_length));
 			}
 		}
+		None
 	}
 	// to determine whether the submit price period has expired but there is still no submit.
 	// This function returns a list of purchased_id.
