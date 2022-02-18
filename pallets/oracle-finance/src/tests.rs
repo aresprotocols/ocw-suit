@@ -251,7 +251,7 @@ fn test_check_and_slash_expired_rewards() {
 		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
 		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
 		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
-		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55")));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
 		// check pot
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
@@ -420,6 +420,7 @@ fn test_take_reward() {
 		// System::set_block_number(current_bn);
 		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
+
 		advance_session();
 		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 55 );
 		assert_eq!(Session::current_index(), 11 );
@@ -438,7 +439,7 @@ fn test_take_reward() {
 		// ask paid.
 		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
-		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55")));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
 
 		//
@@ -481,10 +482,6 @@ fn test_take_reward() {
 
 	//
 	t.execute_with(|| {
-		// let _purchased_submit_bn: u64 = 55;
-		// let current_bn: u64 = 65;
-		// System::set_block_number(current_bn);
-		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		advance_session();
 		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 65 );
@@ -507,10 +504,6 @@ fn test_take_reward() {
 
 	//
 	t.execute_with(|| {
-		// let _purchased_submit_bn: u64 = 55;
-		// let current_bn: u64 = 75;
-		// System::set_block_number(current_bn);
-		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
 
 		advance_session();
 		advance_session();
@@ -532,6 +525,179 @@ fn test_take_reward() {
 		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
 		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 4000000000100);
 	});
+}
+
+#[test]
+fn test_take_full_ear_reward() {
+	let mut t = new_test_ext();
+
+	t.execute_with(|| {
+
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+		advance_session();
+
+		advance_session();
+		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 55 );
+		assert_eq!(Session::current_index(), 11 );
+		assert_eq!(OracleFinance::current_era(), Some(5));
+		assert_eq!(OracleFinance::eras_start_session_index(5), Some(12));
+
+		const ACCOUNT_ID_1: u64 = 1;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 1000000000100);
+
+		const ACCOUNT_ID_2: u64 = 2;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_2), 2000000000100);
+
+		const ACCOUNT_ID_3: u64 = 3;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 3000000000100);
+
+
+
+		// ask paid.
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+
+		//
+		assert_eq!(
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
+			Err(Error::<Test>::RewardSlotNotExpired)
+		);
+	});
+
+	t.execute_with(|| {
+		// let purchased_submit_bn: u64 = 55;
+		// let current_bn: u64 = 57;
+		// System::set_block_number(current_bn);
+		// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
+
+		advance_session();
+		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 60 );
+		assert_eq!(Session::current_index(), 12 );
+		assert_eq!(OracleFinance::current_era(), Some(5));
+		assert_eq!(OracleFinance::eras_start_session_index(5), Some(12));
+
+		const ACCOUNT_ID_1: u64 = 1;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 1000000000100);
+
+		const ACCOUNT_ID_2: u64 = 2;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_2), 100);
+
+		const ACCOUNT_ID_3: u64 = 3;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 3000000000100);
+
+		const ACCOUNT_ID_4: u64 = 4;
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_4), 4000000000100);
+
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+
+		//
+		assert_eq!(
+			OracleFinance::take_reward(5, ACCOUNT_ID_1),
+			Err(Error::<Test>::RewardSlotNotExpired)
+		);
+
+		advance_session();
+		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 65 );
+		assert_eq!(Session::current_index(), 13 );
+		assert_eq!(OracleFinance::current_era(), Some(6));
+		assert_eq!(OracleFinance::eras_start_session_index(6), Some(14));
+
+		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_4, to_test_vec("Purchased_ID_BN_66"), 2);
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_66"), 2));
+		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 4000000000000));
+
+		advance_session();
+		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 70 );
+		assert_eq!(Session::current_index(), 14 );
+		assert_eq!(OracleFinance::current_era(), Some(6));
+		assert_eq!(OracleFinance::eras_start_session_index(6), Some(14));
+
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_66"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_66"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+
+
+		advance_session();
+		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 75 );
+		assert_eq!(Session::current_index(), 15 );
+		assert_eq!(OracleFinance::current_era(), Some(7));
+		assert_eq!(OracleFinance::eras_start_session_index(7), Some(16));
+
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_1);
+		assert_eq!(reward_list.len(), 2);
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_3);
+		assert_eq!(reward_list.len(), 2);
+		println!("reward_list == {:?}", reward_list);
+
+		assert_ok!(
+			OracleFinance::take_all_purchase_reward(Origin::signed(ACCOUNT_ID_1)),
+		);
+
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_1);
+		assert_eq!(reward_list.len(), 0);
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_3);
+		assert_eq!(reward_list.len(), 2);
+		println!("reward_list == {:?}", reward_list);
+	});
+
+	// //
+	// t.execute_with(|| {
+	// 	// let _purchased_submit_bn: u64 = 55;
+	// 	// let current_bn: u64 = 65;
+	// 	// System::set_block_number(current_bn);
+	// 	// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
+	//
+	// 	const ACCOUNT_ID_1: u64 = 1;
+	//
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+	// 	// assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_1), Ok(2000000000000/2));
+	// 	//
+	// 	assert_eq!(
+	// 		OracleFinance::take_reward(5, ACCOUNT_ID_1),
+	// 		Err(Error::<Test>::RewardHasBeenClaimed)
+	// 	);
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+	// 	assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 2000000000100);
+	// });
+	//
+	// //
+	// t.execute_with(|| {
+	// 	// let _purchased_submit_bn: u64 = 55;
+	// 	// let current_bn: u64 = 75;
+	// 	// System::set_block_number(current_bn);
+	// 	// <OracleFinance as OnInitialize<u64>>::on_initialize(current_bn);
+	//
+	// 	advance_session();
+	// 	advance_session();
+	// 	assert_eq!(<frame_system::Pallet<Test>>::block_number(), 75 );
+	// 	assert_eq!(Session::current_index(), 15 );
+	// 	assert_eq!(OracleFinance::current_era(), Some(7));
+	// 	assert_eq!(OracleFinance::eras_start_session_index(7), Some(16));
+	//
+	// 	const ACCOUNT_ID_3: u64 = 3;
+	//
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+	// 	assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_3), Ok(1000000000000));
+	//
+	// 	//
+	// 	assert_eq!(
+	// 		OracleFinance::take_reward(5, ACCOUNT_ID_3),
+	// 		Err(Error::<Test>::RewardHasBeenClaimed)
+	// 	);
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+	// 	assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 4000000000100);
+	// });
 }
 
 #[test]
@@ -696,22 +862,13 @@ fn test_rpc_request() {
 fn test_end_session_event() {
 	new_test_ext().execute_with(|| {
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 		advance_session();
-		println!("-----------");
 	});
 }

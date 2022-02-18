@@ -193,12 +193,12 @@ pub mod pallet {
 			era: EraIndex,
 			slash: BalanceOf<T>,
 		},
-		CreatePurchaseOrder {
-			era: EraIndex,
-			pid: PurchaseId,
-			reserve_balance: BalanceOf<T>,
-			who: T::AccountId,
-		},
+		// CreatePurchaseOrder {
+		// 	era: EraIndex,
+		// 	pid: PurchaseId,
+		// 	reserve_balance: BalanceOf<T>,
+		// 	who: T::AccountId,
+		// },
 		EndOfAskEra {
 			era: EraIndex,
 			era_income: BalanceOf<T>,
@@ -263,6 +263,39 @@ pub mod pallet {
 				reward: take_balance,
 			});
 			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
+		#[pallet::weight(1000)]
+		pub fn take_all_purchase_reward(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			let reward_era_list:BoundedVec<(EraIndex, AskPointNum, PurchaseId), MaximumRewardEras>
+				= RewardEra::<T>::get(who.clone());
+
+			ensure!(!reward_era_list.is_empty(), Error::<T>::NoRewardPoints);
+
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let mut era_list = Vec::new();
+			for (ask_era, _ask_point_num, pid) in reward_era_list {
+				if !era_list.iter().any(|exists_era|{
+					&ask_era == exists_era
+				}) {
+					era_list.push(ask_era);
+				}
+			}
+
+			for ask_era in era_list {
+				let take_balance: BalanceOf<T> = Self::take_reward(ask_era, who.clone())?;
+				// Emit an event.
+				Self::deposit_event(Event::PurchaseRewardToken {
+					created_at: current_block_number,
+					era: ask_era,
+					who: who.clone(),
+					reward: take_balance,
+				});
+			}
+
 			Ok(())
 		}
 	}
@@ -343,7 +376,7 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 		Err(Error::RefundFailed)
 	}
 
-	fn pay_to_ask(p_id: PurchaseId) -> Result<(), Error<T>> {
+	fn pay_to_ask(p_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>> {
 		let payment_list = <PaymentTrace<T>>::iter_prefix(p_id.clone());
 
 		let mut opt_paid_value: Option<(T::AccountId, PaidValue<T::BlockNumber, BalanceOf<T>, EraIndex>)> = None;
@@ -365,10 +398,14 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 			return Err(Error::<T>::UnReserveBalanceError);
 		}
 
+		// Calculate the actual cost.
+		let actual_amount = Self::calculate_fee_of_ask_quantity(agg_count as u32);
+		assert!(actual_amount <= paid_value.amount);
+
 		let res = T::Currency::transfer(
 			&who,
 			&Self::account_id(),
-			paid_value.amount,
+			actual_amount,
 			ExistenceRequirement::KeepAlive,
 		);
 
@@ -390,7 +427,7 @@ impl<T: Config> IForReporter<T> for Pallet<T> {
 	fn record_submit_point(
 		who: T::AccountId,
 		p_id: PurchaseId,
-		bn: T::BlockNumber,
+		_bn: T::BlockNumber,
 		ask_point: AskPointNum,
 	) -> Result<(), Error<T>> {
 		// (era, who, (purchase_id, price_count) )
@@ -511,17 +548,6 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 		let current_block_number = <frame_system::Pallet<T>>::block_number();
 		<RewardTrace<T>>::insert(ask_era.clone(), who.clone(), (current_block_number, reward_balance));
 
-		// EraIndex, AskPointNum, PurchaseId
-		// let mut reward_era_vec = <RewardEra<T>>::get(who.clone());
-		// reward_era_vec.retain(|(era_num, _, _)| {
-		// 	if era_num == &ask_era {
-		// 		return false;
-		// 	}
-		// 	true
-		// });
-		// <RewardEra<T>>::insert(who, reward_era_vec);
-
-		// TODO new method should be test
 		RewardEra::<T>::mutate(who.clone(),|reward_era_vec|{
 			reward_era_vec.retain(|(era_num, _, _)| {
 				if era_num == &ask_era {
@@ -529,9 +555,7 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 				}
 				true
 			});
-			//<RewardEra<T>>::insert(who, reward_era_vec);
 		});
-		// let mut reward_era_vec = <RewardEra<T>>::get(who.clone());
 
 		Ok(reward_balance)
 	}

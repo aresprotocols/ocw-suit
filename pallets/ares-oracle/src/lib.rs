@@ -425,6 +425,7 @@ pub mod pallet {
 			}
 			let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
 			let purchase_id: PurchaseId = purchase_id.clone().try_into().expect("id is too long");
+
 			let payment_result: OcwPaymentResult<BalanceOf<T>> = T::OracleFinanceHandler::reserve_for_ask_quantity(
 				who.clone(),
 				purchase_id.clone(),
@@ -455,11 +456,10 @@ pub mod pallet {
 			purchase_id_list.iter().any(|x| {
 				// check that the validator threshold is up to standard.
 				if Self::is_validator_purchased_threshold_up_on(x.clone()) {
+					// Calculate the average price
+					let agg_count = Self::update_purchase_avg_price_storage(x.clone(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
 					// update report work point
-					if Self::update_reporter_point(x.clone()).is_ok() {
-						// Calculate the average price
-						Self::update_purchase_avg_price_storage(x.clone(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
-					}
+					Self::update_reporter_point(x.clone(), agg_count);
 					Self::purchased_storage_clean(x.clone());
 				} else {
 					// Get `ask owner`
@@ -513,14 +513,13 @@ pub mod pallet {
 			);
 			// check
 			if Self::is_all_validator_submitted_price(price_payload.purchase_id.clone()) {
+				// Calculate the average price
+				let agg_count = Self::update_purchase_avg_price_storage(
+					price_payload.purchase_id.clone(),
+					PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP,
+				);
 				// update report work point
-				if Self::update_reporter_point(price_payload.purchase_id.clone()).is_ok() {
-					// Calculate the average price
-					Self::update_purchase_avg_price_storage(
-						price_payload.purchase_id.clone(),
-						PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP,
-					);
-				}
+				Self::update_reporter_point(price_payload.purchase_id.clone(), agg_count);
 				// clean order pool
 				Self::purchased_storage_clean(price_payload.purchase_id.clone());
 			}
@@ -2656,7 +2655,8 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) {
+	// Return aggregation count
+	fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) -> usize {
 		// Get purchase price pool
 		let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
 		//
@@ -2669,6 +2669,8 @@ impl<T: Config> Pallet<T> {
 			event_result_list.push(result);
 			false
 		});
+
+		let result_count =event_result_list.len();
 		Self::deposit_event(Event::PurchasedAvgPrice {
 			purchase_id: purchase_id.clone(),
 			event_results: event_result_list,
@@ -2676,6 +2678,8 @@ impl<T: Config> Pallet<T> {
 		});
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 		Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
+
+		result_count
 	}
 
 	fn check_and_clear_expired_purchased_average_price_storage(
@@ -2905,9 +2909,9 @@ impl<T: Config> Pallet<T> {
 			.build()
 	}
 
-	fn update_reporter_point(purchase_id: PurchaseId) -> Result<(), Error<T>> {
+	fn update_reporter_point(purchase_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>> {
 		// transfer balance to pallet account.
-		if T::OracleFinanceHandler::pay_to_ask(purchase_id.clone()).is_err() {
+		if T::OracleFinanceHandler::pay_to_ask(purchase_id.clone(), agg_count).is_err() {
 			return Err(Error::<T>::PayToPurchaseFeeFailed);
 		}
 
@@ -2921,7 +2925,7 @@ impl<T: Config> Pallet<T> {
 					acc,
 					purchase_id.clone(),
 					request_mission.create_bn,
-					request_mission.request_keys.len() as u32,
+					agg_count as u32,
 				);
 				false
 			});

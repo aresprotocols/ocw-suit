@@ -18,7 +18,7 @@ pub trait IForPrice<T: Config>: IForBase<T> {
 	// Refund fee of purchased price reqest.
 	fn unreserve_ask (p_id: PurchaseId) -> Result<(), Error<T>>;
 
-	fn pay_to_ask(p_id: PurchaseId) -> Result<(), Error<T>>;
+	fn pay_to_ask(p_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>>;
 }
 
 pub trait IForReporter<T: Config>: IForBase<T> {
