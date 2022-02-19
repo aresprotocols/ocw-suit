@@ -563,7 +563,7 @@ pub mod pallet {
 
 			// Update agg event.
 			if !agg_result_list.is_empty() {
-				Self::deposit_event(Event::AggPrice {
+				Self::deposit_event(Event::AggregatedPrice {
 					results: agg_result_list,
 				});
 			}
@@ -858,7 +858,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// (price_key, price_val, fraction len)
-		AggPrice {
+		AggregatedPrice {
 			results: Vec<(PriceKey, u64, FractionLength)>,
 		},
 		// NewPrice {
