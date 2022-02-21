@@ -539,9 +539,8 @@ pub mod pallet {
 			);
 			// Nodes with the right to increase prices
 			let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
-			// let mut event_result: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
 			let mut price_key_list = Vec::new();
-			let mut agg_result_list: Vec<(PriceKey, u64, FractionLength)> = Vec::new();
+			let mut agg_result_list: Vec<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> = Vec::new();
 			for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value, timestamp) in
 				price_list.clone()
 			{
@@ -859,7 +858,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// (price_key, price_val, fraction len)
 		AggregatedPrice {
-			results: Vec<(PriceKey, u64, FractionLength)>,
+			results: Vec<(PriceKey, u64, FractionLength, Vec<T::AccountId>)>,
 		},
 		// NewPrice {
 		// 	results: Vec<(PriceKey, u64, FractionLength)>,
@@ -2421,7 +2420,7 @@ impl<T: Config> Pallet<T> {
 		json_number_value: JsonNumberValue,
 		max_len: u32,
 		timestamp: u64,
-	) -> Option<(PriceKey, u64, FractionLength)> {
+	) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
 		let key_str = price_key;
 		let current_block = <system::Pallet<T>>::block_number();
 		// 1. Check key exists
@@ -2430,11 +2429,8 @@ impl<T: Config> Pallet<T> {
 			let old_price = <AresPrice<T>>::get(key_str.clone());
 			let mut is_fraction_changed = false;
 			// check fraction length inconsistent.
-			// for (index, (_, _, _, check_fraction, old_json_number_val)) in
 			for (_index, price_data) in old_price.clone().iter().enumerate() {
 				if &price_data.fraction_len != &fraction_length {
-					// TODO:: Instead new funciton. !
-					// old_price.clear();
 					is_fraction_changed = true;
 					break;
 				}
@@ -2493,7 +2489,7 @@ impl<T: Config> Pallet<T> {
 		avg_check_result
 	}
 
-	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength)> {
+	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
 		let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).len();
 		if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
 			return Self::update_avg_price_storage(key_str.clone());
@@ -2501,10 +2497,10 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength)> {
+	fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
 		let prices_info = <AresPrice<T>>::get(key_str.clone());
 		let average_price_result = Self::average_price(prices_info, T::CalculationKind::get());
-		if let Some((average, fraction_length)) = average_price_result {
+		if let Some((average, fraction_length, account_list)) = average_price_result {
 			let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone());
 			// Abnormal price index list
 			let mut abnormal_price_index_list = Vec::new();
@@ -2543,7 +2539,6 @@ impl<T: Config> Pallet<T> {
 						false
 					});
 					// reset price pool
-					// TODO:: Refactoring recursion like handler_purchase_avg_price_storage
 					<AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
 					return Self::update_avg_price_storage(key_str.clone());
 				}
@@ -2553,7 +2548,7 @@ impl<T: Config> Pallet<T> {
 				// Clear price pool.
 				<AresPrice<T>>::remove(key_str.clone());
 				//
-				return Some((key_str.clone(), average, fraction_length));
+				return Some((key_str.clone(), average, fraction_length, account_list));
 			}
 		}
 		None
@@ -2581,10 +2576,9 @@ impl<T: Config> Pallet<T> {
 		mut prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
 		reached_type: u8,
 	) -> Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)> {
-		let (average, fraction_length) =
+		let (average, fraction_length, account_list) =
 			Self::average_price(prices_info.clone(), T::CalculationKind::get()).expect("The average is not empty.");
 
-		// TODO:: Combine duplicate codes
 		// Abnormal price index list
 		let mut abnormal_price_index_list = Vec::new();
 		// Pick abnormal price.
@@ -2711,7 +2705,7 @@ impl<T: Config> Pallet<T> {
 	fn average_price(
 		prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
 		kind: u8,
-	) -> Option<(u64, FractionLength)> {
+	) -> Option<(u64, FractionLength, Vec<T::AccountId>)> {
 		let mut fraction_length_of_pool: FractionLength = 0;
 		// Check and get fraction_length.
 		prices_info.clone().into_iter().any(|tmp_price_data| {
@@ -2724,7 +2718,13 @@ impl<T: Config> Pallet<T> {
 			false
 		});
 
-		let prices: Vec<u64> = prices_info.into_iter().map(|price_data| price_data.price).collect();
+		let mut prices: Vec<u64> = Vec::new(); // prices_info.clone().into_iter().map(|price_data| price_data.price).collect();
+		let mut account_list: Vec<T::AccountId> = Vec::new(); // prices_info.into_iter().map(|price_data| price_data.account_id).collect();
+
+		for price_info in prices_info {
+			prices.push(price_info.price);
+			account_list.push(price_info.account_id);
+		}
 
 		if prices.is_empty() {
 			return None;
@@ -2732,7 +2732,7 @@ impl<T: Config> Pallet<T> {
 
 		match Self::calculation_average_price(prices, kind) {
 			Some(price_value) => {
-				return Some((price_value, fraction_length_of_pool));
+				return Some((price_value, fraction_length_of_pool, account_list));
 			}
 			_ => {}
 		}
