@@ -1,4 +1,3 @@
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Edit this file to define custom logic or remove it if it is not needed.
@@ -10,12 +9,12 @@ use frame_support::pallet_prelude::PhantomData;
 // use frame_support::traits::FindAuthor;
 
 /// Config necessary for the historical module.
-pub trait Config: pallet_aura::Config { }
+pub trait Config: pallet_aura::Config {}
 
 pub struct Pallet<T>(PhantomData<T>);
 
-impl <T:Config> ValidatorCount for Pallet<T> {
-    fn get_validators_count() -> u64 {
-        <pallet_aura::Pallet<T>>::authorities().len() as u64
-    }
+impl<T: Config> ValidatorCount for Pallet<T> {
+	fn get_validators_count() -> u64 {
+		<pallet_aura::Pallet<T>>::authorities().len() as u64
+	}
 }

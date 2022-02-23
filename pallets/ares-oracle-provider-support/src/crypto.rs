@@ -3,8 +3,8 @@ pub const ARES_ORACLE: KeyTypeId = KeyTypeId(*b"ares");
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, sr25519};
 		use crate::crypto::ARES_ORACLE;
+		use sp_application_crypto::{app_crypto, sr25519};
 		app_crypto!(sr25519, ARES_ORACLE);
 	}
 
