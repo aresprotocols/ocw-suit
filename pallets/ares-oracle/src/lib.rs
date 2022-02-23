@@ -118,6 +118,7 @@ pub mod pallet {
 		UnknownAresPriceVersionNum,
 		InsufficientBalance,
 		InsufficientMaxFee,
+		NoPricePairsAvailable,
 		PayToPurchaseFeeFailed,
 		PerCheckTaskAlreadyExists,
 		PreCheckTokenListNotEmpty,
@@ -429,6 +430,8 @@ pub mod pallet {
 			let request_keys = raw_source_keys.into_iter().map(|(price_key, _, _, _)|{
 				price_key
 			}).collect::<RequestKeys>();
+
+			ensure!(!request_keys.is_empty(), Error::<T>::NoPricePairsAvailable);
 
 			let offer = T::OracleFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
 			if offer > max_fee {

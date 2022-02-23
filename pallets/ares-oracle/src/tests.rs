@@ -4060,6 +4060,11 @@ fn test_submit_ask_price_filter_request_keys() {
 		   Error::<Test>::InsufficientMaxFee
 		);
 		assert_ok!(AresOcw::submit_ask_price(Origin::signed(request_acc), 1_000000000000, "btc_price,error_price".as_bytes().to_vec() ));
+		assert_noop!(
+		   AresOcw::submit_ask_price(Origin::signed(request_acc), 1_000000000000, "error_price".as_bytes().to_vec() ),
+		   Error::<Test>::NoPricePairsAvailable
+		);
+
 	});
 }
 
