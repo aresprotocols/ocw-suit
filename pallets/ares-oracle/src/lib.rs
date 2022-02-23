@@ -419,12 +419,21 @@ pub mod pallet {
 			let submit_threshold = purchased_default.submit_threshold;
 			let max_duration = purchased_default.max_duration;
 			let request_keys = Self::extract_purchased_request(request_keys);
+
+			let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
+			let purchase_id: PurchaseId = purchase_id.clone().try_into().expect("id is too long");
+
+			let raw_source_keys = Self::filter_raw_price_source_list(request_keys.clone());
+
+			// Filter out unsupported request pairs.
+			let request_keys = raw_source_keys.into_iter().map(|(price_key, _, _, _)|{
+				price_key
+			}).collect::<RequestKeys>();
+
 			let offer = T::OracleFinanceHandler::calculate_fee_of_ask_quantity(request_keys.len() as u32);
 			if offer > max_fee {
 				return Err(Error::<T>::InsufficientMaxFee.into());
 			}
-			let purchase_id = Self::make_purchase_price_id(who.clone(), 0);
-			let purchase_id: PurchaseId = purchase_id.clone().try_into().expect("id is too long");
 
 			let payment_result: OcwPaymentResult<BalanceOf<T>> = T::OracleFinanceHandler::reserve_for_ask_quantity(
 				who.clone(),
@@ -626,7 +635,7 @@ pub mod pallet {
 				preresult_payload.pre_check_list.len() > 0,
 				Error::<T>::PreCheckTokenListNotEmpty
 			);
-			Self::save_pre_check_result(
+			let check_result = Self::save_pre_check_result(
 				preresult_payload.pre_check_stash.clone(),
 				preresult_payload.block_number,
 				preresult_payload.pre_check_list.clone(),
@@ -636,6 +645,7 @@ pub mod pallet {
 				created_at: preresult_payload.block_number,
 				pre_check_list: preresult_payload.pre_check_list,
 				task_at: preresult_payload.task_at,
+				check_result
 			});
 			Ok(().into())
 		}
@@ -931,6 +941,7 @@ pub mod pallet {
 			created_at: T::BlockNumber,
 			pre_check_list: PreCheckList,
 			task_at: T::BlockNumber,
+			check_result: PreCheckStatus
 		},
 	}
 
@@ -3152,7 +3163,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 	}
 
 	// Record the per check results and add them to the storage structure.
-	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: PreCheckList) {
+	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus {
 		assert!(pre_check_list.len() > 0, "⛔️ Do not receive empty result check.");
 		// get avg price.
 		// let mut chain_avg_price_list = BoundedBTreeMap::<PriceKey, (u64, FractionLength),
@@ -3195,10 +3206,12 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 			validator_up_price_list,
 			raw_precheck_list: pre_check_list.clone(),
 		};
-		<FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus, Some(pre_check_log))));
+		<FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus.clone(), Some(pre_check_log))));
 		let mut task_list = <PreCheckTaskList<T>>::get();
 		task_list.retain(|(old_acc, _, _)| &stash != old_acc);
 		<PreCheckTaskList<T>>::put(task_list);
+
+		per_checkstatus.clone()
 	}
 
 	//

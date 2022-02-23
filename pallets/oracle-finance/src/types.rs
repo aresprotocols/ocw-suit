@@ -10,9 +10,8 @@ pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system:
 pub type NegativeImbalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-// TODO
 pub type MaximumIdLength = ConstU32<100>;
-pub type MaximumRewardEras = ConstU32<100>;
+pub type MaximumRewardEras = ConstU32<1000>;
 
 // pub type PurchaseId = BoundedVec<u8, MaximumIdLength>;
 pub type PurchaseId = Vec<u8>;

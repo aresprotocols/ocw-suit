@@ -182,6 +182,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		PayForPurchase {
+			agg_count: u32,
+			dest: T::AccountId,
+			fee: BalanceOf<T>,
+			purchase_id: PurchaseId,
+			unreserve_balance: BalanceOf<T>,
+			who: T::AccountId,
+		},
 		PurchaseRewardToken {
 			created_at: T::BlockNumber,
 			era: EraIndex,
@@ -312,22 +320,11 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 		price_count: u32,
 	) -> OcwPaymentResult<BalanceOf<T>> {
 		let reserve_balance = Self::calculate_fee_of_ask_quantity(price_count);
-		// T::Currency::reserve(&account_id, reserve_balance.clone());
-		// let res = T::Currency::transfer(
-		// 	&who,
-		// 	&Self::account_id(),
-		// 	reserve_balance,
-		// 	ExistenceRequirement::KeepAlive,
-		// );
-
 		let res = T::Currency::reserve(&who, reserve_balance);
-
 		if res.is_err() {
 			return OcwPaymentResult::InsufficientBalance(p_id.clone(), reserve_balance.clone());
 		}
-
 		let current_block_number = <frame_system::Pallet<T>>::block_number();
-
 		<PaymentTrace<T>>::insert(
 			p_id.clone(),
 			who.clone(),
@@ -338,9 +335,6 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 				is_income: true,
 			},
 		);
-		// let ask_era = Self::current_era_num(current_block_number);
-		// <AskEraPayment<T>>::insert(ask_era, (who.clone(), p_id.clone()), reserve_balance);
-
 		OcwPaymentResult::Success(p_id, reserve_balance)
 	}
 
@@ -415,8 +409,15 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 
 		let ask_era = Self::current_era_num();
 		<AskEraPayment<T>>::insert(ask_era, (who.clone(), p_id.clone()), paid_value.amount);
-		// TODO:: Create event.
-		// Self::deposit_event(Event::OracleFinanceDepositCreating());
+		// Emit an event.
+		Self::deposit_event(Event::PayForPurchase {
+			agg_count: agg_count as u32,
+			dest: Self::account_id(),
+			fee: actual_amount,
+			purchase_id: p_id,
+			unreserve_balance: paid_value.amount,
+			who: who.clone(),
+		});
 
 		Ok(())
 	}
@@ -472,16 +473,6 @@ impl<T: Config> IForBase<T> for Pallet<T> {
 
 	//
 	fn get_earliest_reward_era() -> Option<EraIndex> {
-		// calculate current era number
-		//TODO:: Check and update.
-		// let param_era = Self::current_era_num();
-		// param_era
-		// 	.saturating_sub(T::RewardEraCycle::get())
-		// 	.saturating_sub(T::RewardSlot::get())
-
-		// HistoryDepth = 2
-		// CurrentEra = 6
-		// 6 - 2 = 4
 		Self::current_era_num().checked_sub(T::HistoryDepth::get())
 	}
 }

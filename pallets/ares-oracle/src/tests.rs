@@ -40,6 +40,8 @@ use sp_core::{
 };
 use std::sync::Arc;
 
+use frame_support::assert_noop;
+
 use frame_system::InitKind;
 use sp_keystore::{
 	testing::KeyStore,
@@ -4041,6 +4043,27 @@ fn test_rpc_request() {
 }
 
 #[test]
+fn test_submit_ask_price_filter_request_keys() {
+	let mut t = new_test_ext();
+	t.execute_with(|| {
+
+		let request_acc = AccountId::from_raw([1; 32]);
+		// let request_keys = vec![to_test_vec("btc_price")];
+		Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
+		assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
+		let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
+
+		assert_ok!(AresOcw::submit_ask_price(Origin::signed(request_acc), 2_000000000000, "btc_price".as_bytes().to_vec() ));
+		assert_ok!(AresOcw::submit_ask_price(Origin::signed(request_acc), 2_000000000000, "btc_price,eth_price".as_bytes().to_vec() ));
+		assert_noop!(
+		   AresOcw::submit_ask_price(Origin::signed(request_acc), 1_000000000000, "btc_price,eth_price".as_bytes().to_vec() ),
+		   Error::<Test>::InsufficientMaxFee
+		);
+		assert_ok!(AresOcw::submit_ask_price(Origin::signed(request_acc), 1_000000000000, "btc_price,error_price".as_bytes().to_vec() ));
+	});
+}
+
+#[test]
 fn test_is_aura() {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
@@ -4174,9 +4197,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (AccountId::from_raw([3;32]), get_account_id_from_seed::<AuraId>("hunter3").into()),
             (AccountId::from_raw([4;32]), get_account_id_from_seed::<AuraId>("hunter4").into()),
         ]
-        // pre_check_session_multi: 2u32.into(),
-        // pre_check_token_list: vec![to_test_vec("btc_price"), to_test_vec("eth_price")],
-        // pre_check_allowable_offset: Percent::from_percent(10),
     }
 	.assimilate_storage(&mut t)
 	.unwrap();

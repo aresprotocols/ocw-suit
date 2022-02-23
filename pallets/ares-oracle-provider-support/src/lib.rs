@@ -125,7 +125,7 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList;
 
 	// Record the per check results and add them to the storage structure.
-	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList);
+	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus;
 
 	//
 	fn get_pre_check_status(stash: AccountId) -> Option<(BlockNumber, PreCheckStatus)>;
@@ -154,7 +154,7 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 		Vec::default()
 	}
 
-	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) {}
+	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) -> PreCheckStatus { PreCheckStatus::Review }
 
 	fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
 		None
