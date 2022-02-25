@@ -444,6 +444,41 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 	});
 }
 
+
+#[test]
+fn test_check_and_clean_hostkey_list() {
+	let mut t = new_test_ext();
+	let (offchain, _state) = testing::TestOffchainExt::new();
+	t.register_extension(OffchainWorkerExt::new(offchain));
+	t.execute_with(|| {
+		System::set_block_number(5);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		System::set_block_number(10);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		System::set_block_number(15);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		//
+		LocalXRay::<Test>::insert(555, (15, "house1".as_bytes().to_vec(), Vec::<AuraId>::new()));
+		LocalXRay::<Test>::insert(666, (16, "house2".as_bytes().to_vec(), Vec::<AuraId>::new()));
+		LocalXRay::<Test>::insert(777, (17, "house3".as_bytes().to_vec(), Vec::<AuraId>::new()));
+		LocalXRay::<Test>::insert(888, (18, "house4".as_bytes().to_vec(), Vec::<AuraId>::new()));
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		assert_eq!(LocalXRay::<Test>::iter().count(), 4);
+
+		System::set_block_number(20);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		assert_eq!(LocalXRay::<Test>::iter().count(), 4);
+
+		System::set_block_number(21);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 2);
+		assert_eq!(LocalXRay::<Test>::iter().count(), 3);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
+		System::set_block_number(25);
+		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 4);
+		assert_eq!(LocalXRay::<Test>::iter().count(), 0);
+	});
+}
+
 #[test]
 fn test_get_local_host_key() {
 	let mut t = new_test_ext();

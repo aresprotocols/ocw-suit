@@ -183,6 +183,8 @@ pub mod pallet {
 	{
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			Self::check_and_clean_obsolete_task(14400u32.into())
+				+
+			Self::check_and_clean_hostkey_list(14400u32.into())
 		}
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -1465,6 +1467,20 @@ impl<T: Config> Pallet<T> {
 		// let new: BoundedVec<(T::AccountId, T::AuthorityAres), MaximumAuthorities> =
 		// 	new.try_into().expect("authorities is too long");
 		<Authorities<T>>::put(&new);
+	}
+
+	//
+	fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
+		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
+		let mut weight :Weight = 1;
+		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _))|{
+			if current_block_num.saturating_sub(create_bn) > maximum_due {
+				<LocalXRay<T>>::remove(host_key);
+				weight +=1;
+			}
+			false
+		});
+		weight
 	}
 
 	fn initialize_authorities(authorities: Vec<(T::AccountId, T::AuthorityAres)>) {
