@@ -101,7 +101,7 @@ pub mod pallet {
 		type AuthorityId: Member
 			+ Parameter
 			+ RuntimeAppPublic
-			+ Default
+			// + Default
 			+ MaybeSerializeDeserialize
 			+ UncheckedFrom<[u8; 32]>;
 
