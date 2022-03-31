@@ -1107,9 +1107,30 @@ where
 	}
 }
 
+// pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
+// impl<O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>, AccountId: Default, I> EnsureOrigin<O>
+// 	for EnsureMember<AccountId, I>
+// {
+// 	type Success = AccountId;
+// 	fn try_origin(o: O) -> Result<Self::Success, O> {
+// 		o.into().and_then(|o| match o {
+// 			RawOrigin::Member(id) => Ok(id),
+// 			r => Err(O::from(r)),
+// 		})
+// 	}
+//
+// 	#[cfg(feature = "runtime-benchmarks")]
+// 	fn successful_origin() -> O {
+// 		O::from(RawOrigin::Member(Default::default()))
+// 	}
+// }
+
 pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
-impl<O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>, AccountId: Default, I> EnsureOrigin<O>
-	for EnsureMember<AccountId, I>
+impl<
+	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
+	I,
+	AccountId: Decode,
+> EnsureOrigin<O> for EnsureMember<AccountId, I>
 {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -1121,7 +1142,10 @@ impl<O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Member(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Member(zero_account_id))
 	}
 }
 
