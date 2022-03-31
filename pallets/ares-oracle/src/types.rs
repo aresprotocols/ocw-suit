@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use super::*;
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
@@ -7,6 +6,7 @@ use frame_support::BoundedVec;
 use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
+use sp_std::fmt::Debug;
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
