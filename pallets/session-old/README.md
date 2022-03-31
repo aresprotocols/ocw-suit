@@ -1,11 +1,11 @@
-# Session Pallet
+# Session Module
 
 The Session module allows validators to manage their session keys, provides a function for changing
 the session length, and handles session rotation.
 
 - [`session::Trait`](https://docs.rs/pallet-session/latest/pallet_session/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-session/latest/pallet_session/enum.Call.html)
-- [`Pallet`](https://docs.rs/pallet-session/latest/pallet_session/struct.Pallet.html)
+- [`Module`](https://docs.rs/pallet-session/latest/pallet_session/struct.Module.html)
 
 ## Overview
 
@@ -61,6 +61,7 @@ The Session pallet is designed to make the following possible:
 for next session rotation.
 - `disable_index` - Disable a validator by index.
 - `disable` - Disable a validator by Validator ID
+- `load_keys` - Read the stored session of a validator, Ares Oracle needs to be public. 
 
 ## Usage
 
@@ -72,11 +73,11 @@ The [Staking pallet](https://docs.rs/pallet-staking/latest/pallet_staking/) uses
 use pallet_session as session;
 
 fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-	<pallet_session::Pallet<T>>::validators()
+	<pallet_session::Module<T>>::validators()
 }
 ```
 
-## Related Pallets
+## Related Modules
 
 - [Staking](https://docs.rs/pallet-staking/latest/pallet_staking/)
 

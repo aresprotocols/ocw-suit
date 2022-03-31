@@ -7,19 +7,20 @@ use frame_support::pallet_prelude::PhantomData;
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 pub trait Config: frame_system::Config {
-	type ElectionProvider: ElectionProvider<Self::AccountId, Self::BlockNumber>;
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type ElectionProvider: ElectionProvider;
+	// type DataProvider: ElectionDataProvider<AccountId=Self::AccountId, BlockNumber=Self::BlockNumber>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
-	// type Error = T::DebugError;
-	type Error = <T::ElectionProvider as ElectionProvider<
-		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
-	>>::Error;
-	type DataProvider = T::DataProvider;
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = <T::ElectionProvider as ElectionProvider>::AccountId;
+	type BlockNumber = <T::ElectionProvider as ElectionProvider>::BlockNumber ;
+	type Error = <T::ElectionProvider as ElectionProvider>::Error ;
+	type DataProvider = <T::ElectionProvider as ElectionProvider>::DataProvider; // T::DataProvider ;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		T::ElectionProvider::elect()
 	}
+	// fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	// 	T::ElectionProvider::elect()
+	// }
 }

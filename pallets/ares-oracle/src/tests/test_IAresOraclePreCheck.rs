@@ -20,7 +20,7 @@ fn test_create_pre_check_task() {
 			current_bn
 		));
 		assert_eq!(
-			<PreCheckTaskList<Test>>::get()[0],
+			<PreCheckTaskList<Test>>::get().unwrap_or(Vec::new())[0],
 			(stash_1.clone(), auth_1.clone(), current_bn)
 		);
 		// println!("1111{:?}", <FinalPerCheckResult<Test>>::get(stash_1.clone()));

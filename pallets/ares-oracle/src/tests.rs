@@ -42,7 +42,7 @@ use std::sync::Arc;
 
 use frame_support::assert_noop;
 
-use frame_system::InitKind;
+// use frame_system::InitKind;
 use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
@@ -57,7 +57,7 @@ use sp_runtime::{
 
 use sp_core::sr25519::Public;
 // use pallet_session::historical as pallet_session_historical;
-use frame_support::traits::{Everything, ExtrinsicCall, FindAuthor, OnInitialize};
+use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
 // use pallet_authorship::SealVerify;
 use sp_runtime::traits::AppVerify;
 use sp_staking::SessionIndex;
@@ -228,10 +228,17 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 type Extrinsic = TestXt<Call, ()>;
 type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
+// impl Default for AccountId {
+// 	fn default() -> Self {
+// 		AccountId::from_raw([0; 32])
+// 	}
+// }
 
 impl frame_system::offchain::SigningTypes for Test {
 	type Public = <Signature as Verify>::Signer;
@@ -417,11 +424,11 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 			price_data: (10000, 4),
 		};
 
-		PurchasedAvgPrice::<Test>::insert(to_test_vec("p_id"), to_test_vec("btc_price"), avg_price);
-		PurchasedAvgTrace::<Test>::insert(to_test_vec("p_id"), 1);
+		PurchasedAvgPrice::<Test>::insert(to_test_bounded_vec("p_id"), to_test_vec("btc_price"), avg_price);
+		PurchasedAvgTrace::<Test>::insert(to_test_bounded_vec("p_id"), 1);
 
 		assert_eq!(
-			AresOcw::check_and_clear_expired_purchased_average_price_storage(to_test_vec("p_id"), 100),
+			AresOcw::check_and_clear_expired_purchased_average_price_storage(to_test_bounded_vec("p_id"), 100),
 			false
 		);
 
@@ -432,7 +439,7 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 		assert_eq!(avg_trace.len(), 1);
 
 		assert_eq!(
-			AresOcw::check_and_clear_expired_purchased_average_price_storage(to_test_vec("p_id"), 14402),
+			AresOcw::check_and_clear_expired_purchased_average_price_storage(to_test_bounded_vec("p_id"), 14402),
 			true
 		);
 
@@ -490,8 +497,8 @@ fn test_get_local_host_key() {
 
 	t.execute_with(|| {
 		System::set_block_number(100);
-		let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (_, authority_2) = <Authorities<Test>>::get()[1].clone();
+		let (_, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (_, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
 
 		let local_host_key = AresOcw::get_local_host_key();
 		println!("HOST KEY = {:?}", local_host_key);
@@ -532,14 +539,14 @@ fn test_fixbug_01161954() {
 	let (offchain, _state) = testing::TestOffchainExt::new();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.execute_with(|| {
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
-		let (stash_3, authority_3) = <Authorities<Test>>::get()[2].clone();
-		let (stash_4, authority_4) = <Authorities<Test>>::get()[3].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
+		let (stash_3, authority_3) = <Authorities<Test>>::get().unwrap()[2].clone();
+		let (stash_4, authority_4) = <Authorities<Test>>::get().unwrap()[3].clone();
 
 		AresOcw::create_pre_check_task(stash_1, authority_1.clone(), 1);
 		AresOcw::create_pre_check_task(stash_2, authority_2.clone(), 2);
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap_or(Vec::new());
 		assert_eq!(pre_check_list.len(), 2);
 		assert_eq!(
 			pre_check_list,
@@ -547,7 +554,7 @@ fn test_fixbug_01161954() {
 		);
 
 		AresOcw::create_pre_check_task(stash_2, authority_3.clone(), 6);
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap();
 		assert_eq!(
 			pre_check_list,
 			vec![(stash_1, authority_1.clone(), 1), (stash_2, authority_3.clone(), 6)]
@@ -558,7 +565,7 @@ fn test_fixbug_01161954() {
 		AresOcw::create_pre_check_task(stash_3, authority_3.clone(), 9);
 		AresOcw::create_pre_check_task(stash_4, authority_4.clone(), 10);
 
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap();
 		assert_eq!(
 			pre_check_list,
 			vec![
@@ -572,7 +579,7 @@ fn test_fixbug_01161954() {
 		System::set_block_number(10);
 		// test clean
 		AresOcw::check_and_clean_obsolete_task(10);
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap();
 		assert_eq!(
 			pre_check_list,
 			vec![
@@ -586,7 +593,7 @@ fn test_fixbug_01161954() {
 		System::set_block_number(12);
 		// test clean
 		AresOcw::check_and_clean_obsolete_task(10);
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap();
 		assert_eq!(
 			pre_check_list,
 			vec![
@@ -599,7 +606,7 @@ fn test_fixbug_01161954() {
 		System::set_block_number(20);
 		// test clean
 		AresOcw::check_and_clean_obsolete_task(10);
-		let pre_check_list = PreCheckTaskList::<Test>::get();
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap();
 		assert_eq!(pre_check_list, vec![(stash_4, authority_4.clone(), 10),]);
 	});
 }
@@ -650,7 +657,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 	offchain_state.write().expect_request(padding_request);
 
-	let mut pub_purchase_id = Vec::new();
+	let mut pub_purchase_id = PurchaseId::default();
 	t.execute_with(|| {
 		System::set_block_number(1);
 
@@ -1121,7 +1128,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 
 		// println!("|{:?}|", System::events());
 		System::assert_last_event(tests::Event::AresOcw(
-			AresOcwEvent::InsufficientCountOfValidators{purchase_id: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]}
+			AresOcwEvent::InsufficientCountOfValidators{purchase_id: PurchaseId::try_from(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()}
 		));
 
 		let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
@@ -1244,7 +1251,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
 		}
 
-		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price"));
+		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price")).unwrap();
 		assert_eq!(price_pool.len(), 1);
 
 		let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
@@ -1306,7 +1313,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
 		}
 
-		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price"));
+		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price")).unwrap();
 		assert_eq!(price_pool.len(), 2);
 
 		let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
@@ -1368,7 +1375,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
 		}
 
-		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price"));
+		let price_pool = <PurchasedPricePool<Test>>::get(purchased_key.purchase_id.clone(), to_test_vec("btc_price")).unwrap();
 		assert_eq!(price_pool.len(), 3);
 
 		let request_pool = <PurchasedRequestPool<Test>>::iter().collect::<Vec<_>>();
@@ -1501,7 +1508,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 
 	offchain_state.write().expect_request(padding_request);
 
-	let mut pub_purchase_id = Vec::new();
+	let mut pub_purchase_id = PurchaseId::default();
 	t.execute_with(|| {
 		System::set_block_number(1);
 
@@ -1818,7 +1825,7 @@ fn test_submit_ask_price() {
 		// Get an authority id
 		// let authority_list = <Authorities<Test>>::get();
 		// let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+		let (_, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
 
 		let purchased_key_option: Option<PurchasedSourceRawKeys> =
 			AresOcw::fetch_purchased_request_keys(authority_1.clone());
@@ -1849,7 +1856,7 @@ fn test_submit_ask_price() {
 		assert_eq!(avg_trace.len(), 0);
 
 		let request_data: PurchasedRequestData<AccountId, Balance, BlockNumber> =
-			<PurchasedRequestPool<Test>>::get(purchased_key.purchase_id.clone());
+			<PurchasedRequestPool<Test>>::get(purchased_key.purchase_id.clone()).unwrap();
 		assert_eq!(request_data.account_id.clone(), AccountId::from_raw([1; 32]));
 		assert_eq!(
 			request_data.request_keys.clone(),
@@ -1879,16 +1886,16 @@ fn update_purchase_avg_price_storage() {
 	t.execute_with(|| {
 		System::set_block_number(2);
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
-		let (stash_3, authority_3) = <Authorities<Test>>::get()[2].clone();
-		let (stash_4, authority_4) = <Authorities<Test>>::get()[3].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
+		let (stash_3, authority_3) = <Authorities<Test>>::get().unwrap()[2].clone();
+		let (stash_4, authority_4) = <Authorities<Test>>::get().unwrap()[3].clone();
 
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			PurchasedRequestData {
-				account_id: Default::default(),
+				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
 				submit_threshold: 60,
 				create_bn: Default::default(),
@@ -1898,9 +1905,9 @@ fn update_purchase_avg_price_storage() {
 		);
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			"bcd".encode(),
+			to_test_bounded_vec("bcd"),
 			PurchasedRequestData {
-				account_id: Default::default(),
+				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
 				submit_threshold: 60,
 				create_bn: Default::default(),
@@ -1911,7 +1918,7 @@ fn update_purchase_avg_price_storage() {
 
 		// add price on purchased_id = abc
 		PurchasedPricePool::<Test>::insert(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			"btc_price".encode(),
 			vec![
 				AresPriceData {
@@ -1943,7 +1950,7 @@ fn update_purchase_avg_price_storage() {
 
 		// add price on purchased_id = bcd
 		PurchasedPricePool::<Test>::insert(
-			"bcd".encode(),
+			to_test_bounded_vec("bcd"),
 			"btc_price".encode(),
 			vec![
 				AresPriceData {
@@ -1974,13 +1981,13 @@ fn update_purchase_avg_price_storage() {
 		);
 
 		// check store status
-		let price_pool = <PurchasedPricePool<Test>>::get("abc".encode(), "btc_price".encode());
+		let price_pool = <PurchasedPricePool<Test>>::get(to_test_bounded_vec("abc"), "btc_price".encode()).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage("abc".encode(), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
-		AresOcw::purchased_storage_clean("abc".encode());
+		AresOcw::update_purchase_avg_price_storage(to_test_bounded_vec("abc"), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+		AresOcw::purchased_storage_clean(to_test_bounded_vec("abc"));
 		// Get avg
-		let avg_price = <PurchasedAvgPrice<Test>>::get("abc".encode(), "btc_price".encode());
+		let avg_price = <PurchasedAvgPrice<Test>>::get(to_test_bounded_vec("abc"), "btc_price".encode());
 		assert_eq!(
 			avg_price,
 			PurchasedAvgPriceData {
@@ -1989,18 +1996,18 @@ fn update_purchase_avg_price_storage() {
 				price_data: (101, 2)
 			}
 		);
-		let price_pool = <PurchasedPricePool<Test>>::get("abc".encode(), "btc_price".encode());
+		let price_pool = <PurchasedPricePool<Test>>::get(to_test_bounded_vec("abc"), "btc_price".encode()).unwrap_or(Vec::new());
 		assert_eq!(price_pool.len(), 0);
 
 		// -----------------
 
-		let price_pool = <PurchasedPricePool<Test>>::get("bcd".encode(), "btc_price".encode());
+		let price_pool = <PurchasedPricePool<Test>>::get(to_test_bounded_vec("bcd"), "btc_price".encode()).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage("bcd".encode(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
-		AresOcw::purchased_storage_clean("bcd".encode());
+		AresOcw::update_purchase_avg_price_storage(to_test_bounded_vec("bcd"), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+		AresOcw::purchased_storage_clean(to_test_bounded_vec("bcd"));
 		// Get avg
-		let avg_price = <PurchasedAvgPrice<Test>>::get("bcd".encode(), "btc_price".encode());
+		let avg_price = <PurchasedAvgPrice<Test>>::get(to_test_bounded_vec("bcd"), "btc_price".encode());
 		assert_eq!(
 			avg_price,
 			PurchasedAvgPriceData {
@@ -2009,7 +2016,7 @@ fn update_purchase_avg_price_storage() {
 				price_data: (201, 2)
 			}
 		);
-		let price_pool = <PurchasedPricePool<Test>>::get("bcd".encode(), "btc_price".encode());
+		let price_pool = <PurchasedPricePool<Test>>::get(to_test_bounded_vec("bcd"), "btc_price".encode()).unwrap_or(Vec::new());
 		assert_eq!(price_pool.len(), 0);
 
 		// -----------------
@@ -2022,12 +2029,12 @@ fn test_is_validator_purchased_threshold_up_on() {
 	let (offchain, _state) = testing::TestOffchainExt::new();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.execute_with(|| {
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			PurchasedRequestData {
-				account_id: Default::default(),
+				account_id: AccountId::from_raw([0;32]),
 				offer: 0,
 				submit_threshold: 60,
 				create_bn: 1,
@@ -2036,17 +2043,17 @@ fn test_is_validator_purchased_threshold_up_on() {
 			},
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
 
 		// Get authority ids.
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
-		let (stash_3, authority_3) = <Authorities<Test>>::get()[2].clone();
-		let (stash_4, authority_4) = <Authorities<Test>>::get()[3].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
+		let (stash_3, authority_3) = <Authorities<Test>>::get().unwrap()[2].clone();
+		let (stash_4, authority_4) = <Authorities<Test>>::get().unwrap()[3].clone();
 
 		AresOcw::add_purchased_price(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			stash_1.clone(),
 			1,
 			vec![PricePayloadSubPrice(
@@ -2058,10 +2065,10 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)],
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
 
 		AresOcw::add_purchased_price(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			stash_2.clone(),
 			1,
 			vec![PricePayloadSubPrice(
@@ -2073,10 +2080,10 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)],
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
 
 		AresOcw::add_purchased_price(
-			"abc".encode(),
+			to_test_bounded_vec("abc"),
 			stash_3.clone(),
 			1,
 			vec![PricePayloadSubPrice(
@@ -2088,7 +2095,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)],
 		);
 		// check
-		assert_eq!(true, AresOcw::is_validator_purchased_threshold_up_on("abc".encode()));
+		assert_eq!(true, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec(("abc"))));
 	});
 }
 
@@ -2124,7 +2131,7 @@ fn test_ask_price() {
 			"0101010101010101010101010101010101010101010101010101010101010101010000000000000000"
 		);
 		assert_eq!(
-			AresOcw::purchased_request_pool(purchase_id),
+			AresOcw::purchased_request_pool(purchase_id).unwrap(),
 			PurchasedRequestData {
 				account_id: account_id1.clone(),
 				offer,
@@ -2152,7 +2159,7 @@ fn test_ask_price() {
 			"0101010101010101010101010101010101010101010101010101010101010101010000000000000001"
 		);
 		assert_eq!(
-			AresOcw::purchased_request_pool(purchase_id),
+			AresOcw::purchased_request_pool(purchase_id).unwrap(),
 			PurchasedRequestData {
 				account_id: account_id1.clone(),
 				offer,
@@ -2173,7 +2180,7 @@ fn test_fetch_purchased_request_keys() {
 	t.execute_with(|| {
 		System::set_block_number(1);
 
-		let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
+		let (_, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
 
 		// Initial status request_keys is empty.
 		let request_keys = AresOcw::fetch_purchased_request_keys(authority_1.clone());
@@ -2322,10 +2329,10 @@ fn addprice_of_ares() {
 		System::set_block_number(1);
 		// when
 		let price_key = "btc_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsBTC ;
-		AresOcw::add_price_and_try_to_agg(Default::default(), 8888, price_key.clone(), 4, Default::default(), 2, 0);
-		AresOcw::add_price_and_try_to_agg(Default::default(), 9999, price_key.clone(), 4, Default::default(), 2, 0);
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 8888, price_key.clone(), 4, Default::default(), 2, 0);
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 9999, price_key.clone(), 4, Default::default(), 2, 0);
 
-		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 		assert_eq!(
 			0,
 			btc_price_list.len(),
@@ -2336,8 +2343,8 @@ fn addprice_of_ares() {
 		assert_eq!(bet_avg_price, ((8888 + 9999) / 2, 4), "Only test ares_avg_prices ");
 
 		// Add a new value beyond the array boundary.
-		AresOcw::add_price_and_try_to_agg(Default::default(), 3333, price_key.clone(), 4, Default::default(), 2, 0);
-		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 3333, price_key.clone(), 4, Default::default(), 2, 0);
+		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 
 		// (price_val, accountid, block_num, fraction_num)
 		assert_eq!(
@@ -2345,7 +2352,7 @@ fn addprice_of_ares() {
 				// (3333, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 3333,
-					account_id: Default::default(),
+					account_id: AccountId::from_raw([0;32]),
 					create_bn: 1,
 					fraction_len: 4,
 					raw_number: Default::default(),
@@ -2360,15 +2367,15 @@ fn addprice_of_ares() {
 
 		// when
 		let price_key = "eth_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsETH ;
-		AresOcw::add_price_and_try_to_agg(Default::default(), 7777, price_key.clone(), 4, Default::default(), 2, 0);
-		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone());
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 7777, price_key.clone(), 4, Default::default(), 2, 0);
+		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 		// (price_val, accountid, block_num, fraction_num)
 		assert_eq!(
 			vec![
 				// (7777, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 7777,
-					account_id: Default::default(),
+					account_id: AccountId::from_raw([0;32]),
 					create_bn: 1,
 					fraction_len: 4,
 					raw_number: Default::default(),
@@ -2381,22 +2388,22 @@ fn addprice_of_ares() {
 		let bet_avg_price = AresOcw::ares_avg_prices("eth_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, (0, 0), "Price pool is not full.");
 
-		AresOcw::add_price_and_try_to_agg(Default::default(), 6666, price_key.clone(), 4, Default::default(), 2, 0);
-		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone());
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 6666, price_key.clone(), 4, Default::default(), 2, 0);
+		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 		assert_eq!(0, btc_price_list.len());
 
 		let bet_avg_price = AresOcw::ares_avg_prices("eth_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, ((7777 + 6666) / 2, 4));
 
 		//
-		AresOcw::add_price_and_try_to_agg(Default::default(), 1111, price_key.clone(), 4, Default::default(), 2, 0);
-		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone());
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 1111, price_key.clone(), 4, Default::default(), 2, 0);
+		let btc_price_list = AresOcw::ares_prices("eth_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 		assert_eq!(
 			vec![
 				// (1111, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 1111,
-					account_id: Default::default(),
+					account_id: AccountId::from_raw([0;32]),
 					create_bn: 1,
 					fraction_len: 4,
 					raw_number: Default::default(),
@@ -2429,7 +2436,7 @@ fn test_abnormal_price_despose() {
 
 		// Test normal price list, Round 1
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1000,
 			price_key.clone(),
 			4,
@@ -2438,7 +2445,7 @@ fn test_abnormal_price_despose() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1010,
 			price_key.clone(),
 			4,
@@ -2446,9 +2453,9 @@ fn test_abnormal_price_despose() {
 			AresOcw::get_price_pool_depth(),
 			0,
 		);
-		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).len());
+		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1020,
 			price_key.clone(),
 			4,
@@ -2458,7 +2465,7 @@ fn test_abnormal_price_despose() {
 		);
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices(price_key.clone()).len(),
+			AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len(),
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
@@ -2466,7 +2473,7 @@ fn test_abnormal_price_despose() {
 
 		// Test normal price list, Round 2
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1030,
 			price_key.clone(),
 			4,
@@ -2474,9 +2481,9 @@ fn test_abnormal_price_despose() {
 			AresOcw::get_price_pool_depth(),
 			0,
 		);
-		assert_eq!(1 as usize, AresOcw::ares_prices(price_key.clone()).len());
+		assert_eq!(1 as usize, AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1040,
 			price_key.clone(),
 			4,
@@ -2484,7 +2491,7 @@ fn test_abnormal_price_despose() {
 			AresOcw::get_price_pool_depth(),
 			0,
 		);
-		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).len());
+		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		assert_eq!(
 			bet_avg_price,
@@ -2493,7 +2500,7 @@ fn test_abnormal_price_despose() {
 		);
 		// Add a new one price pool is full, the average price will be update.
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1010,
 			price_key.clone(),
 			4,
@@ -2504,7 +2511,7 @@ fn test_abnormal_price_despose() {
 		// Check price pool.
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices(price_key.clone()).len(),
+			AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len(),
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
@@ -2512,7 +2519,7 @@ fn test_abnormal_price_despose() {
 
 		// Test abnormal price list, Round 3
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1020,
 			price_key.clone(),
 			4,
@@ -2520,9 +2527,9 @@ fn test_abnormal_price_despose() {
 			AresOcw::get_price_pool_depth(),
 			0,
 		);
-		assert_eq!(1 as usize, AresOcw::ares_prices(price_key.clone()).len());
+		assert_eq!(1 as usize, AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			1030,
 			price_key.clone(),
 			4,
@@ -2530,7 +2537,7 @@ fn test_abnormal_price_despose() {
 			AresOcw::get_price_pool_depth(),
 			0,
 		);
-		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).len());
+		assert_eq!(2 as usize, AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		assert_eq!(
 			bet_avg_price,
@@ -2539,7 +2546,7 @@ fn test_abnormal_price_despose() {
 		);
 		// Add a new one price pool is full, the average price will be update.
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			2000,
 			price_key.clone(),
 			4,
@@ -2550,14 +2557,14 @@ fn test_abnormal_price_despose() {
 		// Check price pool.
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices(price_key.clone()).len(),
+			AresOcw::ares_prices(price_key.clone()).unwrap_or(Vec::new()).len(),
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		assert_eq!(bet_avg_price, ((1030 + 1020) / 2, 4));
 
 		// Check abnormal price list.
-		assert_eq!(1 as usize, AresOcw::ares_abnormal_prices(price_key.clone()).len());
+		assert_eq!(1 as usize, AresOcw::ares_abnormal_prices(price_key.clone()).unwrap_or(Vec::new()).len());
 		// price, account, bolcknumber, FractionLength, JsonNumberValue
 		// (types::AresPriceData<sp_application_crypto::sr25519::Public, u64>, types::AvgPriceData)>
 		// (types::AresPriceData<ares_oracle_provider_support::crypto::sr25519::app_sr25519::Public, u64>,
@@ -2567,13 +2574,13 @@ fn test_abnormal_price_despose() {
 		// types::AvgPriceData)>`
 		assert_eq!(
 			vec![(
-				ares_price_data_from_tuple((2000, Default::default(), BN, 4, Default::default(), 0)),
+				ares_price_data_from_tuple((2000, AccountId::from_raw([0;32]), BN, 4, Default::default(), 0)),
 				AvgPriceData {
 					integer: 1030,
 					fraction_len: 4
 				}
 			)],
-			AresOcw::ares_abnormal_prices(price_key.clone())
+			AresOcw::ares_abnormal_prices(price_key.clone()).unwrap()
 		);
 	});
 }
@@ -2595,7 +2602,7 @@ fn test_get_price_pool_depth() {
 		// Test input some price
 		let price_key = "btc_price".as_bytes().to_vec();
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			6660,
 			price_key.clone(),
 			4,
@@ -2604,7 +2611,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			8880,
 			price_key.clone(),
 			4,
@@ -2615,7 +2622,7 @@ fn test_get_price_pool_depth() {
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, (0, 0));
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			7770,
 			price_key.clone(),
 			4,
@@ -2625,7 +2632,7 @@ fn test_get_price_pool_depth() {
 		);
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len()
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		// Why price is 7770 , Because average value is 7770 :
@@ -2635,7 +2642,7 @@ fn test_get_price_pool_depth() {
 		assert_eq!(bet_avg_price, (7770, 4));
 		assert_eq!(
 			2 as usize,
-			AresOcw::ares_abnormal_prices("btc_price".as_bytes().to_vec()).len()
+			AresOcw::ares_abnormal_prices("btc_price".as_bytes().to_vec()).unwrap_or(Vec::new()).len()
 		);
 
 		// Update depth to 5
@@ -2646,7 +2653,7 @@ fn test_get_price_pool_depth() {
 		assert_eq!(bet_avg_price, (7770, 4), " Pool expansion, but average has not effect.");
 
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			5550,
 			price_key.clone(),
 			4,
@@ -2655,7 +2662,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			6660,
 			price_key.clone(),
 			4,
@@ -2665,14 +2672,14 @@ fn test_get_price_pool_depth() {
 		);
 		assert_eq!(
 			2 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len()
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, (7770, 4), "Old value yet.");
 
 		// fill price list.
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			5350,
 			price_key.clone(),
 			4,
@@ -2681,7 +2688,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			5500,
 			price_key.clone(),
 			4,
@@ -2690,7 +2697,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			5400,
 			price_key.clone(),
 			4,
@@ -2700,7 +2707,7 @@ fn test_get_price_pool_depth() {
 		);
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len()
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, ((5550 + 5350 + 5500 + 5400) / 4, 4), "Average update.");
@@ -2708,7 +2715,7 @@ fn test_get_price_pool_depth() {
 		// Fall back depth to 3
 		assert_ok!(AresOcw::update_pool_depth_propose(Origin::root(), 3));
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4440,
 			price_key.clone(),
 			4,
@@ -2719,10 +2726,10 @@ fn test_get_price_pool_depth() {
 		assert_eq!(3, AresOcw::get_price_pool_depth());
 		assert_eq!(
 			1 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len()
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len()
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4430,
 			price_key.clone(),
 			4,
@@ -2731,7 +2738,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4420,
 			price_key.clone(),
 			4,
@@ -2741,13 +2748,13 @@ fn test_get_price_pool_depth() {
 		);
 		assert_eq!(
 			0 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len()
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		assert_eq!(bet_avg_price, (4430, 4));
 		//
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4440,
 			price_key.clone(),
 			4,
@@ -2756,7 +2763,7 @@ fn test_get_price_pool_depth() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4440,
 			price_key.clone(),
 			4,
@@ -2766,11 +2773,11 @@ fn test_get_price_pool_depth() {
 		);
 		assert_eq!(
 			2 as usize,
-			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).len(),
+			AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new()).len(),
 			"Should 4440"
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			4340,
 			price_key.clone(),
 			4,
@@ -2849,7 +2856,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		// when
 		let price_key = "btc_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsBTC ;
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			number1.to_price(4),
 			price_key.clone(),
 			4,
@@ -2857,11 +2864,11 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 			4,
 			0,
 		);
-		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![ares_price_data_from_tuple((
 				number1.to_price(4),
-				Default::default(),
+				AccountId::from_raw([0;32]),
 				BN,
 				4,
 				number1.clone(),
@@ -2873,7 +2880,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		assert_eq!(bet_avg_price, (0, 0));
 
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			number2.to_price(4),
 			price_key.clone(),
 			4,
@@ -2881,18 +2888,18 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 			4,
 			0,
 		);
-		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((number1.to_price(4), Default::default(), BN, 4, number1.clone(), 0)),
-				ares_price_data_from_tuple((number2.to_price(4), Default::default(), BN, 4, number2.clone(), 0))
+				ares_price_data_from_tuple((number1.to_price(4), AccountId::from_raw([0;32]), BN, 4, number1.clone(), 0)),
+				ares_price_data_from_tuple((number2.to_price(4), AccountId::from_raw([0;32]), BN, 4, number2.clone(), 0))
 			],
 			btc_price_list
 		);
 
 		// When fraction length change, list will be update new fraction.
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			number3.to_price(3),
 			price_key.clone(),
 			3,
@@ -2900,18 +2907,18 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 			4,
 			0,
 		);
-		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("btc_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((number1.to_price(3), Default::default(), BN, 3, number1.clone(), 0)),
-				ares_price_data_from_tuple((number2.to_price(3), Default::default(), BN, 3, number2.clone(), 0)),
-				ares_price_data_from_tuple((number3.to_price(3), Default::default(), BN, 3, number3.clone(), 0)),
+				ares_price_data_from_tuple((number1.to_price(3), AccountId::from_raw([0;32]), BN, 3, number1.clone(), 0)),
+				ares_price_data_from_tuple((number2.to_price(3), AccountId::from_raw([0;32]), BN, 3, number2.clone(), 0)),
+				ares_price_data_from_tuple((number3.to_price(3), AccountId::from_raw([0;32]), BN, 3, number3.clone(), 0)),
 			],
 			btc_price_list
 		);
 
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0;32]),
 			number1.to_price(5),
 			price_key.clone(),
 			5,
@@ -2919,7 +2926,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 			4,
 			0,
 		);
-		let abnormal_vec = AresOcw::ares_abnormal_prices("btc_price".as_bytes().to_vec());
+		let abnormal_vec = AresOcw::ares_abnormal_prices("btc_price".as_bytes().to_vec()).unwrap_or(Vec::new());
 		assert_eq!(0, abnormal_vec.len());
 
 		let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
@@ -3153,73 +3160,6 @@ fn test_get_raw_price_source_list() {
 	});
 }
 
-// #[test]
-// fn should_make_http_call_and_parse_ares_result() {
-//
-//     // let mut t = sp_io::TestExternalities::default();
-//     let mut t = new_test_ext();
-//
-//     let (offchain, state) = testing::TestOffchainExt::new();
-//     t.register_extension(OffchainWorkerExt::new(offchain));
-//
-//     let json_response = get_are_json_of_btc().as_bytes().to_vec();
-//
-//     state.write().expect_request(testing::PendingRequest {
-//         method: "GET".into(),
-//         uri: "http://127.0.0.1:5566/api/getPartyPrice/btcusdt".into(),
-//         response: Some(json_response),
-//         sent: true,
-//         ..Default::default()
-//     });
-//
-//     t.execute_with(|| {
-//         let price = AresOcw::fetch_price_body_with_http(Vec::new(), "http://127.0.0.1:5566/api/getPartyPrice/btcusdt", 1u32, 2).unwrap();
-//         assert_eq!(price, 5026137);
-//     });
-// }
-
-// #[test]
-// fn test_format_request_data() {
-//     let mut t = new_test_ext();
-//
-//     let request_list = vec![
-//         (to_test_vec("btc_price"), to_test_vec("/api/getPartyPrice/btcusdt"), 1u32, 4u32),
-//         (to_test_vec("eth_price"), to_test_vec("/api/getPartyPrice/ethusdt"), 1u32, 4u32),
-//         (to_test_vec("dot_price"), to_test_vec("/api/getPartyPrice/dotusdt"), 1u32, 4u32),
-//         (to_test_vec("xrp_price"), to_test_vec("/api/getPartyPrice/xrpusdt"), 1u32, 4u32),
-//     ];
-//
-//     let result_request_list = vec![
-//         (vec![to_test_vec("btc_price")], to_test_vec("/api/getPartyPrice/btcusdt"), 1u32, 4u32),
-//         (vec![to_test_vec("eth_price")], to_test_vec("/api/getPartyPrice/ethusdt"), 1u32, 4u32),
-//         (vec![to_test_vec("dot_price")], to_test_vec("/api/getPartyPrice/dotusdt"), 1u32, 4u32),
-//         (vec![to_test_vec("xrp_price")], to_test_vec("/api/getPartyPrice/xrpusdt"), 1u32, 4u32),
-//     ];
-//
-//     t.execute_with(|| {
-//         let formated_request_list = AresOcw::format_request_data(request_list).unwrap();
-//         assert_eq!(formated_request_list, result_request_list);
-//     });
-//
-//     let request_list = vec![
-//         (to_test_vec("btc_price"), to_test_vec("/api/getPartyPrice/btcusdt"), 1u32, 4u32),
-//         (to_test_vec("eth_price"), to_test_vec("/api/getPartyPrice/ethusdt"), 1u32, 4u32),
-//         (to_test_vec("dot_price"), to_test_vec("/api/getBulkPrices"), 2u32, 5u32),
-//         (to_test_vec("xrp_price"), to_test_vec("/api/getBulkPrices"), 2u32, 3u32),
-//     ];
-//
-//     let result_request_list = vec![
-//         (to_test_vec("btc_price"), to_test_vec("/api/getPartyPrice/btcusdt"), 1u32, 4u32),
-//         (to_test_vec("eth_price"), to_test_vec("/api/getPartyPrice/ethusdt"), 1u32, 4u32),
-//         (to_test_vec("dot_price"), to_test_vec("/api/getBulkPrices"), 2u32, 5u32),
-//         (to_test_vec("xrp_price"), to_test_vec("/api/getBulkPrices"), 2u32, 3u32),
-//     ];
-//
-//     t.execute_with(|| {
-//         let formated_request_list = AresOcw::format_request_data(request_list).unwrap();
-//         assert_eq!(formated_request_list, request_list);
-//     });
-// }
 
 #[test]
 fn test_make_bulk_price_format_data() {
@@ -3493,8 +3433,8 @@ fn test_update_last_price_list_for_author() {
 	t.execute_with(|| {
 		init_aura_enging_digest();
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
 
 		assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("btc_price")));
 		assert_eq!(None, AresOcw::get_last_price_author(to_test_vec("eth_price")));
@@ -3625,8 +3565,8 @@ fn test_jump_block_submit() {
 	t.execute_with(|| {
 		init_aura_enging_digest();
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
 
 		// assert_eq!(&authority_1.clone().encode(), &public_key_1.into_account().encode());
 		// assert_eq!(&authority_2.clone().encode(), &public_key_2.into_account().encode());
@@ -3665,7 +3605,7 @@ fn test_jump_block_submit() {
 	t.execute_with(|| {
 		init_aura_enging_digest();
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
 
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("eth_price")), 0);
@@ -3694,8 +3634,8 @@ fn test_jump_block_submit() {
 	t.execute_with(|| {
 		init_aura_enging_digest();
 
-		let (stash_1, authority_1) = <Authorities<Test>>::get()[0].clone();
-		let (stash_2, authority_2) = <Authorities<Test>>::get()[1].clone();
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
 
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("btc_price")), 0);
 		assert_eq!(AresOcw::get_jump_block_number(to_test_vec("eth_price")), 1);
@@ -3763,19 +3703,6 @@ fn test_update_allowable_offset_propose() {
 	});
 }
 
-// mod app {
-//     use sp_application_crypto::{
-//         key_types::AUTHORITY_DISCOVERY,
-//         app_crypto,
-//         sr25519,
-//     };
-//     app_crypto!(sr25519, AUTHORITY_DISCOVERY);
-// }
-// sp_application_crypto::with_pair! {
-// 	/// An authority discovery authority keypair.
-// 	pub type AuthorityPair = app::Pair + sp_application_crypto::Pair;
-// }
-//
 #[test]
 fn test_self() {
 	use sp_application_crypto::sr25519;
@@ -3930,7 +3857,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 		// Add some price
 		let price_key = "xxx_price".as_bytes().to_vec(); //
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0; 32]),
 			8888,
 			price_key.clone(),
 			4,
@@ -3939,7 +3866,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			0,
 		);
 		AresOcw::add_price_and_try_to_agg(
-			Default::default(),
+			AccountId::from_raw([0; 32]),
 			7777,
 			price_key.clone(),
 			4,
@@ -3948,11 +3875,11 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			0,
 		);
 		// Get save price
-		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((8888, Default::default(), 3, 4, Default::default(), 0)),
-				ares_price_data_from_tuple((7777, Default::default(), 3, 4, Default::default(), 0))
+				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0)),
+				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0))
 			],
 			btc_price_list
 		);
@@ -3973,11 +3900,11 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			(to_test_vec("xxx_price"), to_test_vec("http://xxx.com"), 8, 4, 1)
 		);
 		// Get old price list, Unaffected
-		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((8888, Default::default(), 3, 4, Default::default(), 0)),
-				ares_price_data_from_tuple((7777, Default::default(), 3, 4, Default::default(), 0))
+				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0)),
+				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0))
 			],
 			btc_price_list
 		);
@@ -3998,11 +3925,11 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			(to_test_vec("zzz_price"), to_test_vec("http://zzz.com"), 8, 4, 1)
 		);
 		// Get old price list, Unaffected
-		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((8888, Default::default(), 3, 4, Default::default(), 0)),
-				ares_price_data_from_tuple((7777, Default::default(), 3, 4, Default::default(), 0))
+				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0)),
+				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0))
 			],
 			btc_price_list
 		);
@@ -4023,11 +3950,11 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			(to_test_vec("zzz_price"), to_test_vec("http://zzz.com"), 8, 5, 1)
 		);
 		// Get old price list, Unaffected
-		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone()).unwrap();
 		assert_eq!(
 			vec![
-				ares_price_data_from_tuple((8888, Default::default(), 3, 4, Default::default(), 0)),
-				ares_price_data_from_tuple((7777, Default::default(), 3, 4, Default::default(), 0))
+				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0)),
+				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 3, 4, Default::default(), 0))
 			],
 			btc_price_list
 		);
@@ -4048,7 +3975,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 			(to_test_vec("xxx_price"), to_test_vec("http://xxx.com"), 2, 5, 1)
 		);
 		// Get old price list, Unaffected
-		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone());
+		let btc_price_list = AresOcw::ares_prices("xxx_price".as_bytes().to_vec().clone()).unwrap_or(Vec::new());
 		// price will be empty.
 		assert_eq!(0, btc_price_list.len());
 	});
@@ -4112,97 +4039,37 @@ fn test_is_aura() {
 	});
 }
 
-// #[test]
-// fn test_local_host_key() {
-// 	let mut t = new_test_ext();
-// 	//     let (offchain, _state) = TestOffchainExt::new();
-// //     let (pool, state) = TestTransactionPoolExt::new();
-// //     t.register_extension(OffchainDbExt::new(offchain.clone()));
-// //     t.register_extension(OffchainWorkerExt::new(offchain));
-// //     t.register_extension(TransactionPoolExt::new(pool));
-// 	t.execute_with(|| {
-// 		let local_host_key = AresOcw::get_local_host_key();
-// 		println!("local_host_key = {:?}", local_host_key);
-// 	});
-// }
+#[test]
+fn test_boundvec_q1 () {
+	type DebugLength = ConstU32<3>;
+	type DebugBoundVec = BoundedVec<u8, DebugLength>;
+	let mut a = DebugBoundVec::default();
+
+	assert_eq!(a.len(), 0);
+	a.try_push(b'a');
+	a.try_push(b'b');
+	a.try_push(b'c');
+	assert_eq!(a.len(), 3);
+}
 
 
-// test construct LocalPriceRequestStorage
-// TODO::Test is out of date, but it's best not to delete it.
-// #[test]
-// fn test_rebuild_LocalPriceRequestStorage() {
-//
-//     // let target_json = "{\"price_key\":\"btc_price\",\"request_url\":\"http://127.0.0.1:5566/api/getPartyPrice/btcusdt\",\"parse_version\":1}";
-//     // let target_json =
-// "{\"price_key\":\"btc_price\",\"request_url\":\"\",\"parse_version\":1}";     //
-//     // // let target_json = "{\"price_key\":\"eth_price\",\"request_url\":\"http://127.0.0.1:5566/api/getPartyPrice/ethusdt\",\"parse_version\":1}";
-//     // let target_json =
-// "{\"price_key\":\"eth_price\",\"request_url\":\"\",\"parse_version\":1}";     //
-//     // let target_json = "{\"price_key\":\"dot_price\",\"request_url\":\"http://127.0.0.1:5566/api/getPartyPrice/dotusdt\",\"parse_version\":1}";
-//     // let target_json =
-// "{\"price_key\":\"dot_price\",\"request_url\":\"\",\"parse_version\":1}";     //
-//     // let target_json = "{\"price_key\":\"xrp_price\",\"request_url\":\"http://127.0.0.1:5566/api/getPartyPrice/xrpusdt\",\"parse_version\":1}";
-//     // let target_json =
-// "{\"price_key\":\"xrp_price\",\"request_url\":\"\",\"parse_version\":1}";
-//
-//     let target_json_v8 =target_json.encode();
-//     // println!("Try : Vec<u8> encode {:?} ", HexDisplay::from(&target_json_v8));
-//
-//     // let (offchain, state) = testing::TestOffchainExt::new();
-//     // let mut t = sp_io::TestExternalities::default();
-//
-//     let mut t = new_test_ext();
-//
-//
-//     let (offchain, _state) = TestOffchainExt::new();
-//     let (pool, state) = TestTransactionPoolExt::new();
-//     t.register_extension(OffchainDbExt::new(offchain.clone()));
-//     t.register_extension(OffchainWorkerExt::new(offchain));
-//     t.register_extension(TransactionPoolExt::new(pool));
-//
-//
-//     t.execute_with(|| {
-//
-//         assert_eq!(AresOcw::get_price_source_list(true).len(), 4, "There are 4 group data on the
-// chain.");         assert_eq!(AresOcw::get_price_source_list(false).len(), 0, "There are 0 group
-// data on the local store.");
-//
-//         // Test insert new one.
-//         let target_json =
-// "{\"price_key\":\"btc_price\",\"request_url\":\"/api/getPartyPrice/btcusdt\",\"parse_version\":
-// 1}";         let info: Result<Vec<LocalPriceRequestStorage>, ()>  =
-// AresOcw::update_local_price_storage(&target_json);         assert_eq!(info.unwrap().len(), 1);
-//
-//         assert_eq!(AresOcw::get_price_source_list(false).len(), 1);
-//
-//         // Test insert another.
-//         let target_json =
-// "{\"price_key\":\"eth_price\",\"request_url\":\"/api/getPartyPrice/ethusdt\",\"parse_version\":
-// 1}";         let info: Result<Vec<LocalPriceRequestStorage>, ()>  =
-// AresOcw::update_local_price_storage(&target_json);         assert_eq!(info.unwrap().len(), 2);
-//
-//         assert_eq!(AresOcw::get_price_source_list(false).len(), 2);
-//
-//         // Test change exists value
-//         let target_json =
-// "{\"price_key\":\"btc_price\",\"request_url\":\"/api/getPartyPrice/btcusdt\",\"parse_version\":
-// 2}";         let info: Result<Vec<LocalPriceRequestStorage>, ()>  =
-// AresOcw::update_local_price_storage(&target_json);         assert_eq!(info.clone().unwrap().
-// len(), 2);         assert_eq!(info.unwrap()[1].parse_version, 2);
-//
-//         assert_eq!(AresOcw::get_price_source_list(false).len(), 2);
-//
-//         // Remove eth_price key
-//         let target_json =
-// "{\"price_key\":\"eth_price\",\"request_url\":\"\",\"parse_version\":1}";         let info:
-// Result<Vec<LocalPriceRequestStorage>, ()>  = AresOcw::update_local_price_storage(&target_json);
-//         assert_eq!(info.clone().unwrap().len(), 1);
-//         assert_eq!(info.unwrap()[0].price_key, "btc_price".as_bytes().to_vec(), "only btc_price
-// in vec!");
-//
-//         assert_eq!(AresOcw::get_price_source_list(false).len(), 1);
-//     });
-// }
+
+#[test]
+fn test_ToBoundVec () {
+
+	type TipLength = ConstU32<3>;
+	type TestBoundVec = BoundedVec<u8, TipLength> ;
+
+	let origin_v = vec![b'A', b'B'];
+	let mut origin_b = TestBoundVec::create_on_vec(origin_v);
+	assert_eq!(origin_b.len(), 2);
+	origin_b.check_push(b'C');
+	assert_eq!(origin_b.len(), 3);
+	// println!("--- {:?}", origin_b);
+	assert_eq!(origin_b[0], b'A');
+	assert_eq!(origin_b[1], b'B');
+	assert_eq!(origin_b[2], b'C');
+}
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	// let mut t = sp_io::TestExternalities::default();
@@ -4280,11 +4147,15 @@ fn init_aura_enging_digest() {
 	let pre_digest = Digest {
 		logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())],
 	};
-	System::initialize(&42, &System::parent_hash(), &pre_digest, InitKind::Full);
+	System::initialize(&42, &System::parent_hash(), &pre_digest);
 }
 
 fn to_test_vec(input: &str) -> Vec<u8> {
 	input.as_bytes().to_vec()
+}
+
+pub fn to_test_bounded_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {
+	to_str.as_bytes().to_vec().try_into().unwrap()
 }
 
 fn get_are_json_of_btc() -> &'static str {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,13 +22,13 @@
 
 mod mock;
 
-use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};
+use sp_runtime::traits::{One, StaticLookup};
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	traits::{Get, KeyOwnerProofSystem, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
@@ -53,16 +53,15 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 
 benchmarks! {
 	set_keys {
-		let n = <T as pallet_staking::Config>::MaxNominations::get();
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MaxNominations::get(),
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
-
-		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
+		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		// Whitelist controller account from further DB operations.
 		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
@@ -70,15 +69,15 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = <T as pallet_staking::Config>::MaxNominations::get();
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			<T as pallet_staking::Config>::MaxNominations::get(),
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
-		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
+		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
 		// Whitelist controller account from further DB operations.

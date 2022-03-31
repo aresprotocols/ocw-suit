@@ -11,6 +11,7 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/price-estimates/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/session/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/ares-oracle-provider-support/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/session-old/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
