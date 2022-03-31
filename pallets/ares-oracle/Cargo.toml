@@ -42,7 +42,7 @@ pallet-session = { path = "../session", default-features = false, features = ["h
 
 
 [dev-dependencies]
-static_assertions = "1.1.0"
+#static_assertions = "1.1.0"
 sp-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }

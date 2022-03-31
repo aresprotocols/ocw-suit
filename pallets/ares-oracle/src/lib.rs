@@ -46,8 +46,8 @@ use sp_runtime::traits::{Saturating, UniqueSaturatedInto};
 use sp_std::collections::btree_map::BTreeMap;
 use types::*;
 
-#[macro_use]
-extern crate static_assertions;
+// #[macro_use]
+// extern crate static_assertions;
 
 pub mod crypto2;
 pub mod traits;
