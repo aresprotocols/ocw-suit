@@ -23,7 +23,7 @@ pub mod pallet {
 		type MemberAuthority: Member
 			+ Parameter
 			+ RuntimeAppPublic
-			+ Default
+			// + Default
 			+ Ord
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
