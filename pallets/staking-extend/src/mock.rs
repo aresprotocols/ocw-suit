@@ -284,11 +284,6 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-impl onchain::Config for Test {
-	type Accuracy = Perbill;
-	type DataProvider = Staking;
-}
-
 sp_npos_elections::generate_solution_type!(
 	#[compact]
 	pub struct NposSolution16::<
@@ -302,11 +297,25 @@ parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
 }
 
+
+impl crate::data::Config for Test {
+	type DataProvider = Staking;
+	type ValidatorId = AccountId ;
+	type ValidatorSet = Historical;
+	type AuthorityId = UintAuthorityId ;
+	type AresOraclePreCheck = ();
+}
+
 impl crate::elect::Config for Test {
 	// type ElectionProvider = TestElectionProvider<TestStakingDataProvider>;
-	type ElectionProvider = TestElectionProvider<Staking>;
-	// type DataProvider = Staking;
+	type ElectionProvider = TestElectionProvider<crate::data::DataProvider<Test>>;
+	type DataProvider = Staking;
 }
+
+// impl onchain::Config for Test {
+// 	type Accuracy = Perbill;
+// 	type DataProvider = Staking;
+// }
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = MaxNominations;

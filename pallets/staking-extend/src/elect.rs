@@ -8,19 +8,24 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 pub trait Config: frame_system::Config {
 	type ElectionProvider: ElectionProvider;
-	// type DataProvider: ElectionDataProvider<AccountId=Self::AccountId, BlockNumber=Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = <Self::ElectionProvider as ElectionProvider>::AccountId,
+		BlockNumber = <Self::ElectionProvider as ElectionProvider>::BlockNumber,
+	>;
 }
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	type AccountId = <T::ElectionProvider as ElectionProvider>::AccountId;
 	type BlockNumber = <T::ElectionProvider as ElectionProvider>::BlockNumber ;
+	// type Error = <T::ElectionProvider as ElectionProvider>::Error ;
+	// type DataProvider = <T::ElectionProvider as ElectionProvider>::DataProvider;
+
+	// type AccountId = T::AccountId;
+	// type BlockNumber = T::BlockNumber ;
 	type Error = <T::ElectionProvider as ElectionProvider>::Error ;
-	type DataProvider = <T::ElectionProvider as ElectionProvider>::DataProvider; // T::DataProvider ;
+	type DataProvider = T::DataProvider ;
 
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		T::ElectionProvider::elect()
 	}
-	// fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-	// 	T::ElectionProvider::elect()
-	// }
 }
