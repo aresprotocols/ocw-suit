@@ -22,12 +22,10 @@ pub trait Config: frame_system::Config {
 	type ValidatorSet: ValidatorSet<Self::ValidatorId>;
 
 	// for aura authorityid.
-	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Ord + MaybeSerializeDeserialize;
 
 	type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
 
-	// Maximum number of nominations per nominator.
-	// type MaxNominations: Get<u32>;
 }
 
 pub struct DataProvider<T: Config>(PhantomData<T>);
