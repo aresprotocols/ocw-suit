@@ -42,7 +42,7 @@ pub struct StakingNPOS<T: Config>(PhantomData<T>);
 
 pub trait Config: frame_system::Config {
 	// for aura authorityid.
-	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord + MaybeSerializeDeserialize;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Ord + MaybeSerializeDeserialize;
 }
 
 pub trait IStakingNpos<AuthorityId, BlockNumber> // : frame_system::Config (remove later.)
