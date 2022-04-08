@@ -11,21 +11,28 @@ use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 pub mod crypto;
 
+
+
+pub type MaximumPriceKey = ConstU32<15>;
+pub type MaximumPriceToken = ConstU32<15>;
+pub type MaximumPreCheckListSize = ConstU32<500>;
+pub type MaximumTokeListSize = ConstU32<1000>;
+pub type MaximumRequestBaseUrlSize =  ConstU32<500>;
+pub type MaximumAresOracleAuthoritieSize =  ConstU32<500>;
+pub type MaximumPoolSize = ConstU32<1000>;
+
+pub type PriceKey = BoundedVec<u8, MaximumPriceKey>; // Vec<u8>;
+pub type PriceToken = BoundedVec<u8, MaximumPriceToken>; // Vec<u8>;
 pub type FractionLength = u32;
 
-// TODO extract this config to one package
-pub type MaximumSymbolList = ConstU32<500>;
-pub type MaximumPreCheckList = ConstU32<500>;
-pub type SymbolKeyLimit = ConstU32<50>;
+pub type RawSourceKeys = BoundedVec<(PriceKey, PriceToken, FractionLength), MaximumPoolSize>;
+pub type RequestKeys = BoundedVec<PriceKey, MaximumPoolSize>;
 
-// pub type PreCheckList = BoundedVec<PreCheckStruct, MaximumPreCheckList>;
-// pub type TokenList = BoundedVec<BoundedVec<u8, SymbolKeyLimit>, MaximumSymbolList>;
-
-pub type PreCheckList = Vec<PreCheckStruct>;
-pub type TokenList = Vec<Vec<u8>>;
+pub type PreCheckList = BoundedVec<PreCheckStruct, MaximumPoolSize>;
+pub type TokenList = BoundedVec<PriceToken, MaximumPoolSize>;
 
 // warp NumberValue
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct JsonNumberValue {
 	pub integer: u64,
 	pub fraction: u64,
@@ -69,9 +76,9 @@ impl Default for JsonNumberValue {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug,  TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PreCheckStruct {
-	pub price_key: Vec<u8>,
+	pub price_key: PriceKey,
 	pub number_val: JsonNumberValue,
 	pub max_offset: Percent,
 	pub timestamp: u64,
@@ -79,7 +86,7 @@ pub struct PreCheckStruct {
 
 // The following code for `per check` functionable
 //
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PreCheckStatus {
 	Review,
 	Prohibit,
@@ -103,7 +110,7 @@ pub struct PreCheckTaskConfig {
 impl Default for PreCheckTaskConfig {
 	fn default() -> Self {
 		Self {
-			check_token_list: Vec::default(),
+			check_token_list: Default::default(),
 			allowable_offset: Percent::from_percent(0),
 			/* max_repeat_times: 5,
 			 * pass_percent: Percent::from_percent(100), */
@@ -151,7 +158,7 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	}
 
 	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> PreCheckList {
-		Vec::default()
+		Default::default()
 	}
 
 	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) -> PreCheckStatus { PreCheckStatus::Review }

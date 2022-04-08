@@ -20,7 +20,7 @@ fn test_create_pre_check_task() {
 			current_bn
 		));
 		assert_eq!(
-			<PreCheckTaskList<Test>>::get().unwrap_or(Vec::new())[0],
+			<PreCheckTaskList<Test>>::get().unwrap_or(Default::default())[0],
 			(stash_1.clone(), auth_1.clone(), current_bn)
 		);
 		// println!("1111{:?}", <FinalPerCheckResult<Test>>::get(stash_1.clone()));
@@ -129,7 +129,7 @@ fn test_take_price_for_pre_check() {
 
 		// create check config
 		let check_config = PreCheckTaskConfig {
-			check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
+			check_token_list: TokenList::create_on_vec(vec![PriceToken::create_on_vec( to_test_vec("eth_price")), PriceToken::create_on_vec(to_test_vec("btc_price"))]),
 			allowable_offset: Percent::from_percent(10),
 		};
 
@@ -141,7 +141,7 @@ fn test_take_price_for_pre_check() {
 		assert_eq!(
 			take_price_list[0],
 			PreCheckStruct {
-				price_key: to_test_vec("btc_price"),
+				price_key: PriceKey::create_on_vec(to_test_vec("btc_price")),
 				number_val: JsonNumberValue {
 					integer: 50261,
 					fraction: 372,
@@ -156,7 +156,7 @@ fn test_take_price_for_pre_check() {
 		assert_eq!(
 			take_price_list[1],
 			PreCheckStruct {
-				price_key: to_test_vec("eth_price"),
+				price_key: PriceKey::create_on_vec(to_test_vec("eth_price")),
 				number_val: JsonNumberValue {
 					integer: 3107,
 					fraction: 71,
@@ -208,7 +208,7 @@ fn save_pre_check_result_for_success() {
 		// get check result
 		// create check config
 		let check_config = PreCheckTaskConfig {
-			check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
+			check_token_list: TokenList::create_on_vec(vec![ PriceToken::create_on_vec(to_test_vec("eth_price")), PriceToken::create_on_vec(to_test_vec("btc_price"))]),
 			allowable_offset: Percent::from_percent(10),
 		};
 
@@ -218,11 +218,11 @@ fn save_pre_check_result_for_success() {
 		// Create avg price
 		// let btc_avg_price =
 		<AresAvgPrice<Test>>::insert(
-			to_test_vec("btc_price"),
+			PriceKey::create_on_vec(to_test_vec("btc_price")),
 			(502613720 - Percent::from_percent(9) * 502613720, 4),
 		);
 		<AresAvgPrice<Test>>::insert(
-			to_test_vec("eth_price"),
+			PriceKey::create_on_vec(to_test_vec("eth_price")),
 			(31077100 + Percent::from_percent(9) * 31077100, 4),
 		);
 
@@ -284,7 +284,12 @@ fn save_pre_check_result_for_prohibit() {
 		// get check result
 		// create check config
 		let check_config = PreCheckTaskConfig {
-			check_token_list: vec![to_test_vec("eth_price"), to_test_vec("btc_price")],
+			check_token_list: TokenList::create_on_vec(
+				vec![
+					PriceToken::create_on_vec(to_test_vec("eth_price")),
+					PriceToken::create_on_vec(to_test_vec("btc_price")),
+				]
+			),
 			allowable_offset: Percent::from_percent(10),
 		};
 
@@ -293,11 +298,11 @@ fn save_pre_check_result_for_prohibit() {
 
 		// Create avg price
 		<AresAvgPrice<Test>>::insert(
-			to_test_vec("btc_price"),
+			PriceKey::create_on_vec( to_test_vec("btc_price")),
 			(502613720 - Percent::from_percent(11) * 502613720, 4),
 		);
 		<AresAvgPrice<Test>>::insert(
-			to_test_vec("eth_price"),
+			PriceKey::create_on_vec(to_test_vec("eth_price")),
 			(31077100 + Percent::from_percent(11) * 31077100, 4),
 		);
 
