@@ -1,43 +1,27 @@
 use super::*;
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
-use frame_support::traits::ConstU32;
+use frame_support::traits::{ConstU32, IsType};
 use frame_support::BoundedVec;
 use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
-
-//TODO
-pub type MaximumPurchaseLength = ConstU32<200>;
-pub type MaximumURLLength = ConstU32<200>;
-pub type MaximumMapCapacity = ConstU32<200>;
-pub type MaximumPriceKeyList = ConstU32<500>;
-pub type MaximumErrorTip = ConstU32<100>;
-pub type MaximumJumpBlockList = ConstU32<500>;
-pub type MaximumSubPriceList = ConstU32<500>;
-pub type MaximumAuthorities = ConstU32<500>;
-pub type MaximumPricesRequestList = ConstU32<500>;
+use sp_std::fmt::Debug;
+use ares_oracle_provider_support::{MaximumPoolSize, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
 pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
 
-// pub type PriceKey = BoundedVec<u8, ares_oracle_provider_support::SymbolKeyLimit>;
-// pub type PriceToken = BoundedVec<u8, ares_oracle_provider_support::SymbolKeyLimit>;
-// pub type RawSourceKeys = BoundedVec<(PriceKey, PriceToken, FractionLength), MaximumPriceKeyList>;
-// pub type RequestKeys = BoundedVec<PriceKey, MaximumPriceKeyList>;
-// pub type PricePayloadSubPriceList = BoundedVec<PricePayloadSubPrice, MaximumSubPriceList>;
-// pub type PricePayloadSubJumpBlockList = BoundedVec<PricePayloadSubJumpBlock, MaximumSubPriceList>;
-
-pub type PriceKey = Vec<u8>;
-pub type PriceToken = Vec<u8>;
-pub type RawSourceKeys = Vec<(PriceKey, PriceToken, FractionLength)>;
-pub type RequestKeys = Vec<PriceKey>;
-pub type PricePayloadSubPriceList = Vec<PricePayloadSubPrice>;
-pub type PricePayloadSubJumpBlockList = Vec<PricePayloadSubJumpBlock>;
+// pub type PriceKey = Vec<u8>;
+// pub type PriceToken = Vec<u8>;
+// pub type RawSourceKeys = Vec<(PriceKey, PriceToken, FractionLength)>;
+// pub type RequestKeys = Vec<PriceKey>;
+pub type PricePayloadSubPriceList = BoundedVec<PricePayloadSubPrice, MaximumPoolSize>;
+pub type PricePayloadSubJumpBlockList = BoundedVec<PricePayloadSubJumpBlock, MaximumPoolSize>;
 
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct OcwControlData {
 	pub need_verifier_check: bool,
 	pub open_free_price_reporter: bool,
@@ -55,13 +39,11 @@ impl Default for OcwControlData {
 }
 
 // Migration
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PurchasedDefaultData {
 	pub submit_threshold: u8,
 	pub max_duration: u64,
 	pub avg_keep_duration: u64,
-	/* TODO:: Will be delete.
-	 * pub unit_price: u64, */
 }
 
 impl PurchasedDefaultData {
@@ -101,8 +83,8 @@ pub struct PurchasedSourceRawKeys {
 impl Default for PurchasedSourceRawKeys {
 	fn default() -> Self {
 		Self {
-			purchase_id: Vec::default(),
-			raw_source_keys: Vec::default(),
+			purchase_id: BoundedVec::default(),
+			raw_source_keys: Default::default(),
 		}
 	}
 }
@@ -132,7 +114,7 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 }
 
 //TODO debug fmt requestKeys
-#[derive(Default, Encode, Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct PurchasedRequestData<AccountId, Balance, BlockNumber> {
 	pub account_id: AccountId,
 	pub offer: Balance,
@@ -167,7 +149,7 @@ pub struct PurchasedRequestData<AccountId, Balance, BlockNumber> {
 // 	}
 // }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PurchasedAvgPriceData {
 	pub create_bn: u64,
 	pub reached_type: u8,
@@ -184,7 +166,7 @@ impl Default for PurchasedAvgPriceData {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AresPriceData<AccountId, BlockNumber> {
 	pub price: u64,
 	pub account_id: AccountId,
@@ -195,33 +177,39 @@ pub struct AresPriceData<AccountId, BlockNumber> {
 }
 
 // migrated
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AvgPriceData {
 	pub integer: u64,
 	pub fraction_len: FractionLength,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub type MaximumLogSize = ConstU32<5000>;
+pub type CompareLogBTreeMap = BoundedBTreeMap<PriceKey, (u64, FractionLength), MaximumLogSize>;
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PreCheckCompareLog {
-	// pub chain_avg_price_list: BoundedBTreeMap<PriceKey, (u64, FractionLength), MaximumMapCapacity>,
-	// pub validator_up_price_list: BoundedBTreeMap<PriceKey, (u64, FractionLength), MaximumMapCapacity>,
-	// pub raw_precheck_list: PreCheckList,
-	pub chain_avg_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
-	pub validator_up_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
+	pub chain_avg_price_list: CompareLogBTreeMap,
+	pub validator_up_price_list: CompareLogBTreeMap,
 	pub raw_precheck_list: PreCheckList,
+	// pub chain_avg_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
+	// pub validator_up_price_list: BTreeMap<PriceKey, (u64, FractionLength)>,
+	// pub raw_precheck_list: PreCheckList,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub type MaximumTraceDataTipLength = ConstU32<200>;
+pub type DataTipVec = BoundedVec<u8, MaximumTraceDataTipLength> ;
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct HttpErrTraceData<BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
 	// pub request_list: Vec<(Vec<u8>, Vec<u8>, u32)>,
 	pub err_auth: AuthorityId,
 	pub err_status: HttpError,
-	pub tip: Vec<u8>,
+	pub tip: DataTipVec,
 }
 
 /// data required to submit a transaction.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PricePayload<Public, BlockNumber, AuthorityId> {
 	pub block_number: BlockNumber,
 	// price_key,price_val, fraction len
@@ -269,7 +257,7 @@ impl<T: SigningTypes + Config> SignedPayload<T> for PurchasedPricePayload<T::Pub
 }
 
 /// stash: T::AccountId, auth: T::AuthorityAres, bn: T::BlockNumber
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PreCheckPayload<Public, BlockNumber, AccountId, AuthorityId> {
 	pub block_number: BlockNumber,
 	pub pre_check_stash: AccountId,
@@ -286,7 +274,7 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PreCheckResultPayload<Public, BlockNumber, AccountId, AuthorityId> {
 	pub block_number: BlockNumber,
 	pub pre_check_list: PreCheckList,
@@ -304,7 +292,7 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct HttpErrTracePayload<Public, BlockNumber, AuthorityId, AccountId> {
 	pub trace_data: HttpErrTraceData<BlockNumber, AccountId>,
 	pub auth: AuthorityId,
@@ -319,10 +307,10 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PricePayloadSubPrice(pub PriceKey, pub u64, pub FractionLength, pub JsonNumberValue, pub u64);
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct PricePayloadSubJumpBlock(pub PriceKey, pub RequestInterval); // price_key ,request_interval
 
 // Impl debug.
@@ -339,15 +327,15 @@ impl fmt::Debug for PricePayloadSubJumpBlock {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum HttpError {
-	IoErr(Vec<u8>),
-	TimeOut(Vec<u8>),
-	StatusErr(Vec<u8>, u16),
-	ParseErr(Vec<u8>),
+	IoErr(DataTipVec),
+	TimeOut(DataTipVec),
+	StatusErr(DataTipVec, u16),
+	ParseErr(DataTipVec),
 }
 
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub(crate) enum Releases {
 	V1_0_0_Ancestral,
 	V1_0_1_HttpErrUpgrade,
@@ -358,5 +346,46 @@ pub(crate) enum Releases {
 impl Default for Releases {
 	fn default() -> Self {
 		Releases::V1_0_0_Ancestral
+	}
+}
+
+
+// pub trait ToBoundVec<B, S, T> {
+// 	fn to_bound_vec(self) -> BoundedVec<T, S>;
+// }
+//
+// impl <B, S, T> ToBoundVec<B, S, T> for Vec<T>
+// 	where B: IsType<BoundedVec<T, S>> + TryFrom<Vec<T>> + Default,
+// {
+//
+// 	fn to_bound_vec(self) -> BoundedVec<T, S> {
+// 		B::try_from(self).unwrap_or(B::default()).into()
+// 	}
+// }
+
+
+pub trait BoundVecHelper<T, S> {
+	type Error;
+	fn create_on_vec(v: Vec<T>) -> Self;
+	fn check_push(&mut self, v: T) ;
+	fn try_create_on_vec(v: Vec<T>) -> Result<Self, Self::Error> where Self: Sized;
+}
+
+impl <T, S> BoundVecHelper<T, S> for BoundedVec<T, S>
+	where
+		  S: Get<u32>,
+		  BoundedVec<T, S>: Debug,
+		  BoundedVec<T, S>: TryFrom<Vec<T>> + Default,
+		  <BoundedVec<T, S> as TryFrom<Vec<T>>>::Error: Debug,
+{
+	type Error = <Self as TryFrom<Vec<T>>>::Error;
+	fn create_on_vec(v: Vec<T>) -> Self {
+		Self::try_from(v).expect("`BoundedVec` MaxEncodedLen Err")
+	}
+	fn try_create_on_vec(v: Vec<T>) -> Result<Self, Self::Error> where Self: Sized {
+		Self::try_from(v)
+	}
+	fn check_push(&mut self, v: T) {
+		self.try_push(v).expect("`BoundedVec` try push err.");
 	}
 }

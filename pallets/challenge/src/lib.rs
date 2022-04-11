@@ -66,7 +66,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
+	// #[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -101,7 +101,7 @@ pub mod pallet {
 		type AuthorityId: Member
 			+ Parameter
 			+ RuntimeAppPublic
-			+ Default
+			// + Default
 			+ MaybeSerializeDeserialize
 			+ UncheckedFrom<[u8; 32]>;
 

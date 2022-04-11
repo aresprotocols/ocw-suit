@@ -318,7 +318,7 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		p_id: PurchaseId,
 		price_count: u32,
-	) -> OcwPaymentResult<BalanceOf<T>> {
+	) -> OcwPaymentResult<BalanceOf<T>, PurchaseId> {
 		let reserve_balance = Self::calculate_fee_of_ask_quantity(price_count);
 		let res = T::Currency::reserve(&who, reserve_balance);
 		if res.is_err() {

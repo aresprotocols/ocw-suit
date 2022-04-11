@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,10 +29,7 @@ use codec::Decode;
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
 
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{ConstU64, OnInitialize},
-};
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
@@ -294,7 +291,12 @@ fn session_changed_flag_works() {
 
 #[test]
 fn periodic_session_works() {
-	type P = PeriodicSessions<ConstU64<10>, ConstU64<3>>;
+	frame_support::parameter_types! {
+		const Period: u64 = 10;
+		const Offset: u64 = 3;
+	}
+
+	type P = PeriodicSessions<Period, Offset>;
 
 	// make sure that offset phase behaves correctly
 	for i in 0u64..3 {

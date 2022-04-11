@@ -20,16 +20,18 @@ use frame_system as system;
 // use pallet_balances::{BalanceLock, Error as BalancesError};
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
-use frame_election_provider_support::{data_provider, onchain, ElectionProvider, Support, Supports, VoteWeight};
+use frame_election_provider_support::{data_provider, onchain, ElectionProvider, Support, Supports, VoteWeight, VoterOf, ElectionDataProvider};
 use frame_support::pallet_prelude::PhantomData;
 use frame_support::sp_runtime::Perbill;
 use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
-use pallet_staking::{EraIndex, StakerStatus};
 use std::borrow::BorrowMut;
 use std::{cell::RefCell, collections::HashSet};
 // use sp_core::{crypto::key_types::DUMMY, H256};
 use frame_system::limits::BlockWeights;
+use pallet_staking::StakerStatus;
 use sp_core::H256;
+use sp_staking::EraIndex;
+use frame_support::{bounded_vec, traits::ConstU32};
 // use crate::OnChainConfig;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -152,7 +154,7 @@ impl system::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
@@ -169,6 +171,7 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -273,26 +276,49 @@ where
 
 parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 10; // constants::time::EPOCH_DURATION_IN_BLOCKS (one session 10 min)
-	pub const BondingDuration: pallet_staking::EraIndex = 8;
-	pub const SlashDeferDuration: pallet_staking::EraIndex = 4; // 1/2 the bonding duration.
+	pub const BondingDuration: EraIndex = 8;
+	pub const SlashDeferDuration: EraIndex = 4; // 1/2 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-impl onchain::Config for Test {
-	type Accuracy = Perbill;
+sp_npos_elections::generate_solution_type!(
+	#[compact]
+	pub struct NposSolution16::<
+		VoterIndex = u32,
+		TargetIndex = u16,
+		Accuracy = sp_runtime::PerU16,
+	>(16)
+);
+
+parameter_types! {
+	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
+}
+
+
+impl crate::data::Config for Test {
 	type DataProvider = Staking;
+	type ValidatorId = AccountId ;
+	type ValidatorSet = Historical;
+	type AuthorityId = UintAuthorityId ;
+	type AresOraclePreCheck = ();
 }
 
 impl crate::elect::Config for Test {
-	type ElectionProvider = TestElectionProvider<TestStakingDataProvider>;
+	// type ElectionProvider = TestElectionProvider<TestStakingDataProvider>;
+	type ElectionProvider = TestElectionProvider<crate::data::DataProvider<Test>>;
 	type DataProvider = Staking;
 }
 
+// impl onchain::Config for Test {
+// 	type Accuracy = Perbill;
+// 	type DataProvider = Staking;
+// }
+
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 256;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -342,6 +368,9 @@ impl Convert<AccountId, Option<AccountId>> for TestStashOf<AccountId> {
 		Some(controller)
 	}
 }
+
+
+
 pub struct TestValidatorSet;
 impl ValidatorSet<AccountId> for TestValidatorSet {
 	type ValidatorId = AccountId;
@@ -361,56 +390,62 @@ impl ValidatorSet<AccountId> for TestValidatorSet {
 	}
 }
 
-pub struct TestStakingDataProvider ;
-impl frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber> for
-TestStakingDataProvider { 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-		// submit 3 times. 3% , 2/3 10 block submit.
-		Ok(vec![
-			CONST_VALIDATOR_ID_1,
-			CONST_VALIDATOR_ID_2,
-			CONST_VALIDATOR_ID_3,
-			CONST_VALIDATOR_ID_4,
-			CONST_FEATURE_VALIDATOR_ID_5,
-		])
-	}
-
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-		Ok(vec![
-			(CONST_VOTER_ID_1, 100, vec![CONST_VALIDATOR_ID_4, CONST_FEATURE_VALIDATOR_ID_5]),
-			(CONST_VOTER_ID_2, 100, vec![CONST_FEATURE_VALIDATOR_ID_5])
-		])
-	}
-
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(4)
-	}
-
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		400
-	}
-}
+// pub struct TestStakingDataProvider ;
+// impl frame_election_provider_support::ElectionDataProvider for TestStakingDataProvider {
+//
+// 	// const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
+// 	type AccountId = AccountId;
+// 	type BlockNumber = BlockNumber;
+// 	type MaxVotesPerVoter = ConstU32<2>;
+//
+// 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+// 		// submit 3 times. 3% , 2/3 10 block submit.
+// 		Ok(vec![
+// 			CONST_VALIDATOR_ID_1,
+// 			CONST_VALIDATOR_ID_2,
+// 			CONST_VALIDATOR_ID_3,
+// 			CONST_VALIDATOR_ID_4,
+// 			CONST_FEATURE_VALIDATOR_ID_5,
+// 		])
+// 	}
+// 	fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+// 		Ok(vec![
+// 			(CONST_VOTER_ID_1, 10, bounded_vec![10, 20]),
+// 			(CONST_VOTER_ID_2, 20, bounded_vec![30, 20]),
+// 		])
+// 	}
+//
+// 	fn desired_targets() -> data_provider::Result<u32> {
+// 		Ok(4)
+// 	}
+//
+// 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
+// 		400
+// 	}
+// }
 
 pub struct TestElectionProvider<TestDataProvider>(PhantomData<TestDataProvider>);
-impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>>
-	frame_election_provider_support::ElectionProvider<AccountId, BlockNumber> for TestElectionProvider<TestDataProvider>
+impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider>
+	frame_election_provider_support::ElectionProvider for TestElectionProvider<TestDataProvider>
+	where <TestDataProvider as ElectionDataProvider>::AccountId: From<AccountId>
 {
-	// type Error = T::DebugError;
-	type Error = (); // <Self as ElectionProvider<AccountId, BlockNumber>>::Error;
+	type AccountId = TestDataProvider::AccountId;
+	type BlockNumber = TestDataProvider::BlockNumber;
+	type Error = ();
 	type DataProvider = TestDataProvider;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		let mut supports = Supports::<AccountId>::new();
+	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>
+	{
+		let mut supports = Supports::<Self::AccountId>::new();
 		supports.push((
-			CONST_VALIDATOR_ID_1,
+			CONST_VALIDATOR_ID_1.into(),
 			Support {
 				total: 0,
 				voters: vec![],
 			},
 		));
 		supports.push((
-			CONST_VALIDATOR_ID_2,
+			CONST_VALIDATOR_ID_2.into(),
 			Support {
 				total: 0,
 				voters: vec![],
@@ -419,18 +454,6 @@ impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<Acc
 		Ok(supports)
 	}
 }
-
-/// Wrapper type that implements the configurations needed for the on-chain backup.
-// pub struct OnChainConfig<TestDataProvider>(PhantomData<TestDataProvider>);
-// impl<TestDataProvider: frame_election_provider_support::ElectionDataProvider<AccountId, BlockNumber>> onchain::Config
-// 	for OnChainConfig<TestDataProvider>
-// {
-// 	type Accuracy = Perbill;
-// 	type DataProvider = TestDataProvider;
-// }
-
-
-// pallet_election_provider_multi_phase
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();

@@ -1,11 +1,8 @@
 use crate as oracle_finance;
 // use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
 // use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
-use frame_support::{
-	 parameter_types,
-	traits::{Get, Contains, GenesisBuild, Hooks},
-	PalletId,
-};
+use frame_support::{parameter_types, traits::{Get, Contains, GenesisBuild, Hooks}, PalletId, BoundedVec};
+use frame_support::sp_std::convert::TryInto;
 // use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
 
 
@@ -18,7 +15,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 use sp_runtime::testing::UintAuthorityId;
-use crate::types::EraIndex;
+use crate::types::{EraIndex, MaximumPIDLength};
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
 
@@ -84,6 +81,7 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -176,8 +174,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn to_test_vec(to_str: &str) -> Vec<u8> {
-	to_str.as_bytes().to_vec()
+pub fn to_test_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {
+	to_str.as_bytes().to_vec().try_into().unwrap()
 }
 
 // -------------- Session Management.
