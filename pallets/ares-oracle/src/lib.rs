@@ -44,9 +44,6 @@ use sp_runtime::traits::{Saturating, UniqueSaturatedInto};
 use sp_std::collections::btree_map::BTreeMap;
 use types::*;
 
-// #[macro_use]
-// extern crate static_assertions;
-
 pub mod crypto2;
 pub mod traits;
 pub mod types;
@@ -179,8 +176,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	// #[pallet::generate_storage_info]
-	// #[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -623,12 +618,6 @@ pub mod pallet {
 			}
 
 			log::debug!("🚅 Submit jump block list on chain, count = {:?}", jump_block.len());
-
-			// Self::deposit_event(Event::NewPrice {
-			// 	results: event_result,
-			// 	jump_blocks: jump_block,
-			// 	who: Self::get_stash_id(&price_payload.auth).unwrap(),
-			// });
 
 			Ok(().into())
 		}
