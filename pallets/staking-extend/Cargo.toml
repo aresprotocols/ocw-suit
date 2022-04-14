@@ -41,7 +41,6 @@ pallet-balances = { git = "https://github.com/paritytech/substrate", default-fea
 pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 
 ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
-pallet-session = { features = ["historical"], default-features = false, path = "../session" }
 #sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate", tag = "monthly-2021-09+1" }
 #[dev-dependencies]
 
@@ -66,7 +65,6 @@ std = [
     "log/std",
     "pallet-balances/std",
     "pallet-authorship/std",
-    "pallet-session/std",
     "pallet-staking/std",
     "sp-staking/std",
     "ares-oracle-provider-support/std",
