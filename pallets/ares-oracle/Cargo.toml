@@ -34,12 +34,11 @@ pallet-aura = { git = "https://github.com/paritytech/substrate", default-feature
 pallet-babe = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+pallet-session = { git = "https://github.com/paritytech/substrate", default-features = false, features = ["historical"], branch = "polkadot-v0.9.17" }
 
 oracle-finance = { default-features = false, path = "../oracle-finance" }
 staking-extend = { default-features = false, path = "../staking-extend" }
 ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
-pallet-session = { path = "../session", default-features = false, features = ["historical"] }
-
 
 [dev-dependencies]
 #static_assertions = "1.1.0"

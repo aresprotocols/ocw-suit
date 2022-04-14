@@ -26,7 +26,8 @@ sp-core = { git = "https://github.com/paritytech/substrate", default-features = 
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-pallet-session = { path = "../session", default-features = false, features = ["historical"] }
+pallet-session = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+#pallet-session = { path = "../session", default-features = false, features = ["historical"] }
 
 [dev-dependencies]
 serde = { version = '1.0.130', default-features = false, features = ['derive'] }
