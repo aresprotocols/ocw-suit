@@ -2,7 +2,6 @@
 resolver = "2"
 
 members = [
-#    "common",
     "pallets/ares-oracle",
     "pallets/oracle-finance",
     "pallets/staking-extend",
@@ -10,8 +9,6 @@ members = [
     "pallets/challenge",
     "pallets/collective",
     "pallets/price-estimates",
-    "pallets/session",
-    "pallets/session/benchmarking",
 ]
 
 #[patch."https://github.com/paritytech/substrate"]
