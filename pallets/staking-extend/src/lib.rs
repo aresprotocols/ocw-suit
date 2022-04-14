@@ -20,6 +20,7 @@ mod mock;
 
 pub mod data;
 pub mod elect;
+pub mod session;
 #[cfg(test)]
 mod tests;
 
@@ -62,8 +63,10 @@ pub trait IStakingNpos<AuthorityId, BlockNumber> // : frame_system::Config (remo
 
 impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for StakingNPOS<T>
 where
-	T: pallet_staking::Config + pallet_session::Config + crate::Config,
-	<T as pallet_session::Config>::ValidatorId: From<<T as frame_system::Config>::AccountId>,
+	T: pallet_staking::Config,
+	T: session::Config,
+	T: crate::Config,
+	<T as session::Config>::ValidatorId: From<<T as frame_system::Config>::AccountId>,
 {
 	type StashId = <T as frame_system::Config>::AccountId;
 	fn current_staking_era() -> u32 {
@@ -73,7 +76,7 @@ where
 	fn near_era_change(period_multiple: T::BlockNumber) -> bool {
 		let current_blocknum = <frame_system::Pallet<T>>::block_number();
 		let per_era: T::BlockNumber = T::SessionsPerEra::get().into();
-		let session_length = T::NextSessionRotation::average_session_length();
+		let session_length = T::average_session_length();
 
 		Self::calculate_near_era_change(period_multiple, current_blocknum, session_length, per_era)
 	}
@@ -122,7 +125,8 @@ where
 		target_npos_list
 			.into_iter()
 			.map(|stash_acc| {
-				let session_keys = <pallet_session::Pallet<T>>::load_keys(&stash_acc.clone().into());
+				// let session_keys = <pallet_session::Pallet<T>>::load_keys(&stash_acc.clone().into());
+				let session_keys = <T as session::Config>::load_keys(stash_acc.clone().into());
 				if session_keys.is_none() {
 					return (stash_acc, None);
 				}

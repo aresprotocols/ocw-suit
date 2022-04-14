@@ -8,10 +8,9 @@ use frame_support::sp_std::fmt::Debug;
 use frame_support::traits::{Get, IsType, ValidatorSet};
 use frame_support::Parameter;
 use sp_application_crypto::RuntimeAppPublic;
+use sp_core::sp_std::vec::Vec;
 use sp_npos_elections::{PerThing128, VoteWeight};
 use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
-use sp_core::sp_std::vec::Vec;
-
 
 pub trait Config: frame_system::Config {
 	/// Something that provides the data for election.
@@ -25,24 +24,20 @@ pub trait Config: frame_system::Config {
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Ord + MaybeSerializeDeserialize;
 
 	type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
-
 }
 
 pub struct DataProvider<T: Config>(PhantomData<T>);
 impl<T: Config> ElectionDataProvider for DataProvider<T>
-// where
-	// <<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId:
-	// 	PartialEq<<T as frame_system::Config>::AccountId>,
 where
 	<<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId:
 		PartialEq<<<T as Config>::DataProvider as ElectionDataProvider>::AccountId>,
 	<<T as Config>::DataProvider as ElectionDataProvider>::AccountId: Clone,
-	<T as frame_system::Config>::AccountId: From<<<T as Config>::DataProvider as ElectionDataProvider>::AccountId>
+	<T as frame_system::Config>::AccountId: From<<<T as Config>::DataProvider as ElectionDataProvider>::AccountId>,
 {
 	type AccountId = <<T as Config>::DataProvider as ElectionDataProvider>::AccountId; // T::AccountId;
-	type BlockNumber = <<T as Config>::DataProvider as ElectionDataProvider>::BlockNumber ;// T::BlockNumber;
-	type MaxVotesPerVoter = <<T as Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter;  // T::MaxNominations;
-	// const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
+	type BlockNumber = <<T as Config>::DataProvider as ElectionDataProvider>::BlockNumber; // T::BlockNumber;
+	type MaxVotesPerVoter = <<T as Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter; // T::MaxNominations;
+																								 // const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>> {
 		//
