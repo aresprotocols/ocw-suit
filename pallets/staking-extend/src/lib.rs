@@ -1,26 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_election_provider_support::onchain;
-use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, PerThing128, Supports, VoteWeight,
-};
 use frame_support::pallet_prelude::*;
-use frame_support::sp_runtime::traits::IsMember;
 use frame_support::sp_runtime::traits::{OpaqueKeys, Zero};
 use frame_support::sp_runtime::RuntimeAppPublic;
-use frame_support::sp_std::fmt::Debug;
-use frame_support::traits::ValidatorSet;
-use frame_support::traits::{EstimateNextSessionRotation, Get};
+use frame_support::traits::EstimateNextNewSession;
+use frame_support::traits::Get;
 use sp_core::sp_std::vec::Vec;
-
-use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 
 #[cfg(test)]
 mod mock;
 
 pub mod data;
 pub mod elect;
-pub mod session;
+// pub mod session;
 #[cfg(test)]
 mod tests;
 
@@ -64,9 +56,9 @@ pub trait IStakingNpos<AuthorityId, BlockNumber> // : frame_system::Config (remo
 impl<T: Config> IStakingNpos<T::AuthorityId, T::BlockNumber> for StakingNPOS<T>
 where
 	T: pallet_staking::Config,
-	T: session::Config,
+	T: pallet_session::Config,
 	T: crate::Config,
-	<T as session::Config>::ValidatorId: From<<T as frame_system::Config>::AccountId>,
+	<T as pallet_session::Config>::ValidatorId: From<<T as frame_system::Config>::AccountId>,
 {
 	type StashId = <T as frame_system::Config>::AccountId;
 	fn current_staking_era() -> u32 {
@@ -76,7 +68,7 @@ where
 	fn near_era_change(period_multiple: T::BlockNumber) -> bool {
 		let current_blocknum = <frame_system::Pallet<T>>::block_number();
 		let per_era: T::BlockNumber = T::SessionsPerEra::get().into();
-		let session_length = T::average_session_length();
+		let session_length = <pallet_session::Pallet<T>>::average_session_length();
 
 		Self::calculate_near_era_change(period_multiple, current_blocknum, session_length, per_era)
 	}
@@ -125,8 +117,8 @@ where
 		target_npos_list
 			.into_iter()
 			.map(|stash_acc| {
-				// let session_keys = <pallet_session::Pallet<T>>::load_keys(&stash_acc.clone().into());
-				let session_keys = <T as session::Config>::load_keys(stash_acc.clone().into());
+				let validator_id: T::ValidatorId = stash_acc.clone().into();
+				let session_keys = <pallet_session::NextKeys<T>>::get(&validator_id);
 				if session_keys.is_none() {
 					return (stash_acc, None);
 				}

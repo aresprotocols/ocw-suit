@@ -5,11 +5,10 @@ use codec::Encode;
 use frame_election_provider_support::{data_provider, ElectionDataProvider, VoterOf};
 use frame_support::pallet_prelude::PhantomData;
 use frame_support::sp_std::fmt::Debug;
-use frame_support::traits::{Get, IsType, ValidatorSet};
+use frame_support::traits::{IsType, ValidatorSet};
 use frame_support::Parameter;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::sp_std::vec::Vec;
-use sp_npos_elections::{PerThing128, VoteWeight};
 use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
 
 pub trait Config: frame_system::Config {

@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // use ares_common::limit::{MaximumSymbolList, StringLimit};
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::Percent;
 use frame_support::traits::ConstU32;
 use frame_support::weights::Weight;
