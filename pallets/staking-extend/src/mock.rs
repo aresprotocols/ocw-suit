@@ -308,14 +308,15 @@ impl crate::data::Config for Test {
 
 impl crate::elect::Config for Test {
 	// type ElectionProvider = TestElectionProvider<TestStakingDataProvider>;
+	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Test>;
 	type ElectionProvider = TestElectionProvider<crate::data::DataProvider<Test>>;
 	type DataProvider = Staking;
 }
 
-// impl onchain::Config for Test {
-// 	type Accuracy = Perbill;
-// 	type DataProvider = Staking;
-// }
+impl onchain::Config for Test {
+	type Accuracy = Perbill;
+	type DataProvider = crate::data::DataProvider<Test>;
+}
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = MaxNominations;
@@ -341,7 +342,7 @@ impl pallet_staking::Config for Test {
 	// type ElectionProvider = StakingExtend;
 	// type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type ElectionProvider = crate::elect::OnChainSequentialPhragmen<Self>;
-	type GenesisElectionProvider = crate::elect::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = crate::elect::OnChainSequentialPhragmenGenesis<Self>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Test>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
