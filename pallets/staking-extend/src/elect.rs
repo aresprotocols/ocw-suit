@@ -32,7 +32,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		let current = <frame_system::Pallet<T>>::block_number();
 		if current == T::BlockNumber::default() {
-			T::GenesisElectionProvider::elect()
+			return T::GenesisElectionProvider::elect();
 		}
 		T::ElectionProvider::elect()
 	}
