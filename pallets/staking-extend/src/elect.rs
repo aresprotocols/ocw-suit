@@ -10,7 +10,11 @@ pub trait Config: frame_system::Config {
 	type ElectionProvider: ElectionProvider;
 
 	/// Something that provides the election functionality at genesis.
-	type GenesisElectionProvider: ElectionProvider;
+	type GenesisElectionProvider: ElectionProvider<
+		AccountId = <Self::ElectionProvider as ElectionProvider>::AccountId,
+		BlockNumber = <Self::ElectionProvider as ElectionProvider>::BlockNumber,
+		Error = <Self::ElectionProvider as ElectionProvider>::Error,
+	>;
 
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::ElectionProvider as ElectionProvider>::AccountId,
