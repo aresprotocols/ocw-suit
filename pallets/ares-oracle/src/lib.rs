@@ -256,10 +256,12 @@ pub mod pallet {
 					let authority_list_res = AuthorityAresVec::<T>::try_create_on_vec(authority_list);
 					if let Ok(authority_list) = authority_list_res {
 						// LocalXRay::<T>::put(host_key, (request_domain, authority_list));
+						let network_is_validator = sp_io::offchain::is_validator();
 						let call = Call::submit_local_xray {
 							host_key,
 							request_domain,
 							authority_list,
+							network_is_validator,
 						};
 						SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 					}else{
@@ -410,12 +412,13 @@ pub mod pallet {
 			host_key: u32,
 			request_domain: RequestBaseVecU8,
 			authority_list: AuthorityAresVec<T>,
+			network_is_validator: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			LocalXRay::<T>::insert(
 				host_key,
-				(<system::Pallet<T>>::block_number(), request_domain, authority_list),
+				(<system::Pallet<T>>::block_number(), request_domain, authority_list, network_is_validator),
 			);
 			Ok(().into())
 		}
@@ -1201,6 +1204,7 @@ pub mod pallet {
 				ref host_key,
 				ref request_domain,
 				ref authority_list,
+				ref network_is_validator,
 			} = call
 			{
 				log::debug!("*** XRay ValidTransaction: {:?} ", <system::Pallet<T>>::block_number());
@@ -1464,6 +1468,8 @@ pub mod pallet {
 				RequestBaseVecU8,
 				// Vec<T::AuthorityAres>,
 				AuthorityAresVec<T>,
+				// network_is_validator
+				bool,
 			)
 		>;
 
@@ -1577,7 +1583,7 @@ impl<T: Config> Pallet<T> {
 	fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
 		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
 		let mut weight :Weight = 1;
-		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _))|{
+		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _, _))|{
 			if current_block_num.saturating_sub(create_bn) > maximum_due {
 				<LocalXRay<T>>::remove(host_key);
 				weight +=1;

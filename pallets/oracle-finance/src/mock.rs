@@ -15,6 +15,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 use sp_runtime::testing::UintAuthorityId;
+use sp_runtime::traits::Convert;
 use crate::types::{EraIndex, MaximumPIDLength};
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
@@ -108,12 +109,10 @@ impl oracle_finance::Config for Test {
 	type Currency = pallet_balances::Pallet<Self>;
 	type BasicDollars = BasicDollars;
 	type ValidatorId = AccountId;
-	// type AskPeriod = AskPeriod;
+	type ValidatorIdOf = StashOf;
 	type AskPerEra = AskPerEra;
 	type HistoryDepth = HistoryDepth;
 	type SessionManager = ();
-	// type RewardEraCycle = RewardEraCycle;
-	// type RewardSlot = RewardSlot;
 	type OnSlash = ();
 }
 
@@ -223,4 +222,12 @@ pub(crate) fn advance_session() {
 /// Progress until the given era.
 pub(crate) fn start_active_era(era_index: EraIndex) {
 	start_session((era_index * <AskPerEra as Get<u32>>::get()).into());
+}
+
+
+pub struct StashOf;
+impl Convert<AccountId, Option<AccountId>> for StashOf {
+	fn convert(controller: AccountId) -> Option<AccountId> {
+		Some(controller)
+	}
 }
