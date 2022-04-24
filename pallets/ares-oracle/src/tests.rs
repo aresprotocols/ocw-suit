@@ -59,7 +59,7 @@ use sp_core::sr25519::Public;
 // use pallet_session::historical as pallet_session_historical;
 use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
 // use pallet_authorship::SealVerify;
-use sp_runtime::traits::AppVerify;
+use sp_runtime::traits::{AppVerify, Convert};
 use sp_staking::SessionIndex;
 
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -124,6 +124,14 @@ impl oracle_finance::Config for Test {
 	type SessionManager = ();
 	type AskPerEra = AskPerEra;
 	type HistoryDepth = HistoryDepth;
+	type ValidatorIdOf = StashOf;
+}
+
+pub struct StashOf;
+impl Convert<AccountId, Option<AccountId>> for StashOf {
+	fn convert(controller: AccountId) -> Option<AccountId> {
+		Some(controller)
+	}
 }
 
 parameter_types! {
@@ -466,10 +474,10 @@ fn test_check_and_clean_hostkey_list() {
 		System::set_block_number(15);
 		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
 		//
-		LocalXRay::<Test>::insert(555, (15, RequestBaseVecU8::create_on_vec("house1".as_bytes().to_vec()), AuthorityAresVec::<Test>::default()));
-		LocalXRay::<Test>::insert(666, (16, RequestBaseVecU8::create_on_vec("house2".as_bytes().to_vec()), AuthorityAresVec::<Test>::default()));
-		LocalXRay::<Test>::insert(777, (17, RequestBaseVecU8::create_on_vec("house3".as_bytes().to_vec()), AuthorityAresVec::<Test>::default()));
-		LocalXRay::<Test>::insert(888, (18, RequestBaseVecU8::create_on_vec("house4".as_bytes().to_vec()), AuthorityAresVec::<Test>::default()));
+		LocalXRay::<Test>::insert(555, (15, RequestBaseVecU8::create_on_vec("house1".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
+		LocalXRay::<Test>::insert(666, (16, RequestBaseVecU8::create_on_vec("house2".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
+		LocalXRay::<Test>::insert(777, (17, RequestBaseVecU8::create_on_vec("house3".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
+		LocalXRay::<Test>::insert(888, (18, RequestBaseVecU8::create_on_vec("house4".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
 		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
 		assert_eq!(LocalXRay::<Test>::iter().count(), 4);
 
@@ -518,16 +526,16 @@ fn test_get_local_host_key() {
 		number[..].copy_from_slice(hex::decode("513f053a").unwrap().as_slice());
 		println!("{:?} result = {:?}", number, u32::from_be_bytes(number));
 
-		LocalXRay::<Test>::insert(1, (100, RequestBaseVecU8::create_on_vec("a".encode()),  AuthorityAresVec::<Test>::create_on_vec( vec![authority_1.clone()])));
+		LocalXRay::<Test>::insert(1, (100, RequestBaseVecU8::create_on_vec("a".encode()),  AuthorityAresVec::<Test>::create_on_vec( vec![authority_1.clone()]), true));
 		assert_eq!(
 			LocalXRay::<Test>::get(1),
-			Some((100, RequestBaseVecU8::create_on_vec("a".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_1.clone()])))
+			Some((100, RequestBaseVecU8::create_on_vec("a".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_1.clone()]), true))
 		);
 
-		LocalXRay::<Test>::insert(1, (200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()])));
+		LocalXRay::<Test>::insert(1, (200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()]), true));
 		assert_eq!(
 			LocalXRay::<Test>::get(1),
-			Some((200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()])))
+			Some((200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()]), true))
 		);
 
 	});

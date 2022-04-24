@@ -30,7 +30,15 @@ use sp_std::vec::Vec;
 use sp_std::{prelude::*, str};
 
 use crate::traits::*;
-use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
+
+use ares_oracle_provider_support::{
+	IAresOraclePreCheck,
+	JsonNumberValue,
+	LOCAL_HOST_KEY,
+	LOCAL_STORAGE_PRICE_REQUEST_DOMAIN,
+	LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL,
+	LOCAL_STORAGE_PRICE_REQUEST_LIST,
+	PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 use frame_support::pallet_prelude::{PhantomData, StorageMap};
 use frame_support::sp_runtime::{MultiSignature, MultiSigner, Percent};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
@@ -52,10 +60,7 @@ pub mod aura_handler;
 pub mod babe_handler;
 // pub mod migrations;
 
-pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
-pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
-pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
-pub const LOCAL_HOST_KEY: &[u8] = b"are-ocw::local_host_key";
+
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
