@@ -13,6 +13,7 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/ares-oracle-provider-support/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/session-old/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/session/benchmarking/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rpc/ares-rpc/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

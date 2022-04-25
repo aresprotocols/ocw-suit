@@ -437,7 +437,7 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 		PurchasedAvgTrace::<Test>::insert(PurchaseId::create_on_vec(to_test_vec("p_id")), 1);
 
 		assert_eq!(
-			AresOcw::check_and_clear_expired_purchased_average_price_storage(PurchaseId::create_on_vec(to_test_vec("p_id")), 100),
+			AresOcw::check_and_clear_expired_purchased_average_price_storage(100),
 			false
 		);
 
@@ -448,7 +448,7 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 		assert_eq!(avg_trace.len(), 1);
 
 		assert_eq!(
-			AresOcw::check_and_clear_expired_purchased_average_price_storage(PurchaseId::create_on_vec(to_test_vec("p_id")), 14402),
+			AresOcw::check_and_clear_expired_purchased_average_price_storage(14402),
 			true
 		);
 

@@ -50,7 +50,9 @@ impl AresOracleCheckResult {
     }
 
     pub fn check_scheme(&self) -> Result<()> {
-        if "http".to_string() == self.get_request_scheme() {
+        if "http".to_string() == self.get_request_scheme()
+            || "https".to_string() == self.get_request_scheme()
+        {
             return Ok(())
         }
         Err(Error::SchemeNotHttp)

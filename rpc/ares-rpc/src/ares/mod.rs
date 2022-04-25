@@ -18,6 +18,8 @@ use sp_core::{
     Bytes,
 };
 use std::sync::Arc;
+use codec::{Decode, Encode};
+use frame_support::sp_std;
 use sp_runtime::offchain::Timestamp;
 
 // pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = ;
@@ -217,19 +219,26 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
 
     fn get_warehouse(&self) -> Result<Option<String>> {
         self.deny_unsafe.check_if_safe()?;
-
         let result = self.get_local_storage(StorageKind::PERSISTENT, Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec()));
         if let Ok(x) = result {
-            if let Some(b) = x {
-                let result_str = String::from_utf8(b.to_vec());
-                return Ok(result_str.ok());
+            if let Some(mut b) = x {
+
+                let mut encode_u8 = b.to_vec();
+                let decode_vec_u8 = Vec::<u8>::decode(&mut &encode_u8[..]);
+                if let Ok(decode_vec) = decode_vec_u8 {
+                    let result_str = String::from_utf8(decode_vec);
+                    return Ok(result_str.ok());
+                }
             }
         }
         Ok(None)
     }
 
     fn set_warehouse(&self, value: String) -> Result<()> {
-        self.set_local_storage(StorageKind::PERSISTENT, Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec()), Bytes(value.as_bytes().to_vec()))
+        // let x = value.as_str().encode().as_slice();
+        // self.set_local_storage(StorageKind::PERSISTENT, Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec()), Bytes(value.as_bytes().to_vec()))
+        self.set_local_storage(StorageKind::PERSISTENT, Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec()), Bytes(value.as_str().encode()))
+
     }
 
     fn get_xray(&self) -> Result<Option<Bytes>> {

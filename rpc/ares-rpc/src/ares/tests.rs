@@ -1,6 +1,10 @@
+use std::ops::Range;
 use super::*;
 use super::*;
 use assert_matches::assert_matches;
+use frame_support::BoundedVec;
+use frame_support::sp_std::convert::TryFrom;
+use frame_support::traits::ConstU32;
 // use sc_rpc::offchain::Offchain;
 use sp_core::{offchain::storage::InMemOffchainStorage, Bytes};
 
@@ -46,17 +50,20 @@ fn test_get_warehouse() {
     let offchain = AresToolsStruct::new(storage, DenyUnsafe::No, Role::Authority);
 
     let request_key = Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec());
-    let request_domain = Bytes(b"http://aresprotocol.io/a".to_vec());
+    let request_domain = Bytes(b"http://aresprotocol.io/a".to_vec().encode());
 
     assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, request_key, request_domain.clone()),
 		Ok(())
 	);
 
-    assert_matches!(
-		offchain.get_warehouse(),
-		Ok(Some(ref v)) if *v == String::from_utf8(request_domain.to_vec()).unwrap()
-	);
+    let ware_house = offchain.get_warehouse();
+    assert!(ware_house.is_ok());
+    let ware_house = ware_house.unwrap();
+    assert!(ware_house.is_some());
+    let ware_house = ware_house.unwrap();
+    assert_eq!(ware_house, "http://aresprotocol.io/a".to_string());
+
 }
 
 #[test]
@@ -205,3 +212,58 @@ fn test_json() {
     assert!(json_obj["data"].as_object().unwrap().get("btcusdt").is_some());
     assert!(json_obj["data"].as_object().unwrap().get("ethusdt").is_some());
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
+struct MyStr {
+    ref_u8: Vec<u8>,
+}
+
+impl MyStr {
+    pub fn new(ref_u8: Vec<u8>) -> Self {
+        Self{
+            ref_u8
+        }
+    }
+}
+
+// #[test]
+// fn test_domain_encode() {
+//
+//     let request_base_str = "http://www.google.com";
+//
+//     let my_str = MyStr::new(request_base_str.as_bytes().to_vec());
+//     let mut encode_str = my_str.encode();
+//     println!("my_str A = {:?}", encode_str);
+//
+//     pub type MaximumPoolSize = ConstU32<1000>;
+//     pub type RequestBaseVecU8 = BoundedVec<u8, MaximumPoolSize>;
+//     let mut bound_vec = RequestBaseVecU8::try_from(encode_str).unwrap();
+//
+//     // let second_str = RequestBaseVecU8::decode(&mut encode_str);
+//
+//     let second_str = MyStr::decode(&mut &bound_vec[..]);
+//     println!("second_str = {:?}", second_str);
+//
+//
+//     let encode_u8 = request_base_str.encode(); // --
+//     let encode_u8 = encode_u8.as_slice(); // --
+//     println!("encode_u8 ENCODE:: = {:?}", encode_u8); // --
+//
+//     let decode_u8 = Vec::<u8>::decode(&mut &encode_u8[..]);
+//     println!("decode_u8 DECODE:: = {:?}", decode_u8);
+//
+//     let mut bytes_u8 = request_base_str.encode(); // --
+//     // let decode_u8 = String::decode(&mut bytes_u8);
+//
+//     let range = Range { start: 1, end: 100 };
+//     let range_bytes = (1, 100).encode();
+//     assert_eq!(range.encode(), range_bytes);
+//     assert_eq!(Range::decode(&mut &range_bytes[..]), Ok(range));
+//
+//     println!("bytes_u8 = {:?}", bytes_u8); // --
+//     // println!("dcode_u8 = {:?}", decode_u8); // --
+//
+//     // let result_str = String::from_utf8();
+//     // println!("result_str = {:?}", result_str);
+//
+// }

@@ -21,6 +21,7 @@ jsonrpc-pubsub = "18.0.0"
 jsonrpc-derive = "18.0.0"
 parking_lot = "0.11.2"
 reqwest = { version = "0.11", features = ["blocking"] }
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sc-keystore = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sc-service = { git = "https://github.com/paritytech/substrate", features = ['wasmtime'], branch = "polkadot-v0.9.17" }
 sc-rpc = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
