@@ -7,8 +7,8 @@ members = [
     "pallets/staking-extend",
     "pallets/member-extend",
     "pallets/challenge",
-    "pallets/collective",
     "pallets/price-estimates",
+    "pallets/ares-oracle-provider-support",
     "rpc/ares-rpc",
 ]
 
