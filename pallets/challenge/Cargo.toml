@@ -22,7 +22,6 @@ sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkad
 sp-inherents = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
 pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
-pallet-collective = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
 pallet-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.17" }
 
 [dependencies]
@@ -41,6 +40,7 @@ sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-f
 sp-consensus-babe = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-consensus-slots = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 pallet-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+pallet-collective = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 # -- snip --
 
 [features]
@@ -57,5 +57,6 @@ std = [
     "sp-consensus-slots/std",
     "sp-consensus-babe/std",
     "pallet-aura/std",
+    "pallet-collective/std",
 ]
 try-runtime = ['frame-support/try-runtime']
