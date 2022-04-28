@@ -150,7 +150,7 @@ pub mod pallet {
 					.for_each(|(hash, info)| {
 						let proposal_hash = info.proposal;
 						if !<pallet_collective::ProposalOf<T, I>>::contains_key(&proposal_hash) {
-							println!("Proposal not found.. clear.. slash proposer");
+							log::warn!("Proposal not found.. clear.. slash proposer");
 							let r = Self::slash_proposer(hash);
 							if r.is_err() {
 								log::error!("slash proposer error: {:?}", r);
