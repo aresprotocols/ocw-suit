@@ -9,6 +9,7 @@ members = [
     "pallets/challenge",
     "pallets/collective",
     "pallets/price-estimates",
+    "rpc/ares-rpc",
 ]
 
 #[patch."https://github.com/paritytech/substrate"]

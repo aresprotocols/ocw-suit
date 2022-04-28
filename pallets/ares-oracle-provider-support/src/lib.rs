@@ -9,9 +9,13 @@ use frame_support::{BoundedVec, RuntimeDebug};
 use lite_json::NumberValue;
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+
+pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
+pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
+pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
+pub const LOCAL_HOST_KEY: &[u8] = b"are-ocw::local_host_key";
+
 pub mod crypto;
-
-
 
 pub type MaximumPriceKey = ConstU32<15>;
 pub type MaximumPriceToken = ConstU32<15>;

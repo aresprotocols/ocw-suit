@@ -30,7 +30,15 @@ use sp_std::vec::Vec;
 use sp_std::{prelude::*, str};
 
 use crate::traits::*;
-use ares_oracle_provider_support::{IAresOraclePreCheck, JsonNumberValue, PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
+
+use ares_oracle_provider_support::{
+	IAresOraclePreCheck,
+	JsonNumberValue,
+	LOCAL_HOST_KEY,
+	LOCAL_STORAGE_PRICE_REQUEST_DOMAIN,
+	LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL,
+	LOCAL_STORAGE_PRICE_REQUEST_LIST,
+	PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 use frame_support::pallet_prelude::{PhantomData, StorageMap};
 use frame_support::sp_runtime::{MultiSignature, MultiSigner, Percent};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
@@ -52,10 +60,7 @@ pub mod aura_handler;
 pub mod babe_handler;
 // pub mod migrations;
 
-pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
-pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
-pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
-pub const LOCAL_HOST_KEY: &[u8] = b"are-ocw::local_host_key";
+
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
 
@@ -256,10 +261,12 @@ pub mod pallet {
 					let authority_list_res = AuthorityAresVec::<T>::try_create_on_vec(authority_list);
 					if let Ok(authority_list) = authority_list_res {
 						// LocalXRay::<T>::put(host_key, (request_domain, authority_list));
+						let network_is_validator = sp_io::offchain::is_validator();
 						let call = Call::submit_local_xray {
 							host_key,
 							request_domain,
 							authority_list,
+							network_is_validator,
 						};
 						SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
 					}else{
@@ -410,12 +417,13 @@ pub mod pallet {
 			host_key: u32,
 			request_domain: RequestBaseVecU8,
 			authority_list: AuthorityAresVec<T>,
+			network_is_validator: bool,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			LocalXRay::<T>::insert(
 				host_key,
-				(<system::Pallet<T>>::block_number(), request_domain, authority_list),
+				(<system::Pallet<T>>::block_number(), request_domain, authority_list, network_is_validator),
 			);
 			Ok(().into())
 		}
@@ -634,12 +642,15 @@ pub mod pallet {
 				precheck_payload.pre_check_auth.clone(),
 				precheck_payload.block_number,
 			);
-			ensure!(result, Error::<T>::PerCheckTaskAlreadyExists);
-			Self::deposit_event(Event::NewPreCheckTask {
-				who: precheck_payload.pre_check_stash,
-				authority: precheck_payload.pre_check_auth,
-				block: precheck_payload.block_number,
-			});
+			// ensure!(result, Error::<T>::PerCheckTaskAlreadyExists);
+			if result {
+				Self::deposit_event(Event::NewPreCheckTask {
+					who: precheck_payload.pre_check_stash,
+					authority: precheck_payload.pre_check_auth,
+					block: precheck_payload.block_number,
+				});
+			}
+
 			Ok(().into())
 		}
 
@@ -1194,6 +1205,7 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("ares-oracle::submit_offchain_pre_check_result")
 					.priority(T::UnsignedPriority::get())
 					.and_provides(&payload.block_number) // next_unsigned_at
+					// .and_provides(payload.public.clone()) // next_unsigned_at
 					.longevity(5)
 					.propagate(true)
 					.build()
@@ -1201,6 +1213,7 @@ pub mod pallet {
 				ref host_key,
 				ref request_domain,
 				ref authority_list,
+				ref network_is_validator,
 			} = call
 			{
 				log::debug!("*** XRay ValidTransaction: {:?} ", <system::Pallet<T>>::block_number());
@@ -1365,7 +1378,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	pub type MaximumRequestBaseSize = ConstU32<300>;
+	pub type MaximumRequestBaseSize = ConstU32<500>;
 	pub type RequestBaseVecU8 = BoundedVec<u8, MaximumRequestBaseSize>;
 
 	#[pallet::storage]
@@ -1464,6 +1477,8 @@ pub mod pallet {
 				RequestBaseVecU8,
 				// Vec<T::AuthorityAres>,
 				AuthorityAresVec<T>,
+				// network_is_validator
+				bool,
 			)
 		>;
 
@@ -1577,7 +1592,7 @@ impl<T: Config> Pallet<T> {
 	fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
 		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
 		let mut weight :Weight = 1;
-		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _))|{
+		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _, _))|{
 			if current_block_num.saturating_sub(create_bn) > maximum_due {
 				<LocalXRay<T>>::remove(host_key);
 				weight +=1;
@@ -1742,8 +1757,9 @@ impl<T: Config> Pallet<T> {
 		let storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
 
 		if let Some(request_base) = storage_request_base.get::<Vec<u8>>().unwrap_or(Some(Vec::new())) {
+
 			if let Ok(result_base_str) = sp_std::str::from_utf8(&request_base) {
-				log::info!("🚅 Ares local request base: {:?} .", &result_base_str);
+				log::info!("🚅 Ares local request base: {:?} # {:?} .", &result_base_str,  &request_base);
 			}
 			let request_base_vec_res = RequestBaseVecU8::try_create_on_vec(request_base) ;
 			if let Ok(request_base_vec) = request_base_vec_res {
@@ -2263,13 +2279,21 @@ impl<T: Config> Pallet<T> {
 
 		let response = response.unwrap();
 
-		if response.is_err() {
+		if let Err(e) = response {
 			log::warn!(
 				target: "pallet::ocw::fetch_bulk_price_with_http",
-				"❗ Https is not currently supported.",
+				"❗ Https is not currently supported. msg = {:#?}", e
 			);
 			return Err(HttpError::IoErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));
 		}
+
+		// if response.is_err() {
+		// 	log::warn!(
+		// 		target: "pallet::ocw::fetch_bulk_price_with_http",
+		// 		"❗ Https is not currently supported.",
+		// 	);
+		// 	return Err(HttpError::IoErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));
+		// }
 
 		let response = response.unwrap();
 
@@ -2292,6 +2316,9 @@ impl<T: Config> Pallet<T> {
 			// http::Error::IoError
 			HttpError::ParseErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default()))
 		})?;
+
+		log::debug!("Batch price request body length: {:?}", body_str);
+
 		Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
 	}
 
@@ -2834,28 +2861,40 @@ impl<T: Config> Pallet<T> {
 			finance_era: T::OracleFinanceHandler::current_era_num(),
 		});
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
-		Self::check_and_clear_expired_purchased_average_price_storage(purchase_id, current_block);
+
+		Self::check_and_clear_expired_purchased_average_price_storage(current_block);
 
 		result_count
 	}
 
 	fn check_and_clear_expired_purchased_average_price_storage(
-		purchase_id: PurchaseId,
+		// purchase_id: PurchaseId,
 		current_block_num: u64,
 	) -> bool {
-		if !<PurchasedAvgTrace<T>>::contains_key(&purchase_id) {
-			return false;
-		}
-		let avg_trace = <PurchasedAvgTrace<T>>::get(purchase_id.clone());
-		let avg_trace_num: u64 = avg_trace.unique_saturated_into();
+
 		let purchase_setting = <PurchasedDefaultSetting<T>>::get();
-		let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
-		if current_block_num > comp_blocknum {
-			<PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
-			<PurchasedAvgTrace<T>>::remove(purchase_id.clone());
-			return true;
-		}
-		false
+		let mut has_remove = false;
+		PurchasedAvgTrace::<T>::iter().for_each(|(pid, bn)|{
+			let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(bn.unique_saturated_into());
+			if current_block_num > comp_blocknum {
+				<PurchasedAvgPrice<T>>::remove_prefix(pid.clone(), None);
+				<PurchasedAvgTrace<T>>::remove(pid.clone());
+				has_remove = true;
+			}
+		});
+
+		return has_remove;
+
+		// let avg_trace = <PurchasedAvgTrace<T>>::get(purchase_id.clone());
+		// let avg_trace_num: u64 = avg_trace.unique_saturated_into();
+		// let purchase_setting = <PurchasedDefaultSetting<T>>::get();
+		// let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
+		// if current_block_num > comp_blocknum {
+		// 	<PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
+		// 	<PurchasedAvgTrace<T>>::remove(purchase_id.clone());
+		// 	return true;
+		// }
+		// false
 	}
 
 	//
@@ -3309,38 +3348,84 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 	// Obtain a set of price data according to the task configuration structure.
 	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList {
 		let mut raw_price_source_list = Self::get_raw_price_source_list();
+
+		log::debug!(
+			"Pre-check check_token_list = {:?}",
+			&check_config.check_token_list,
+		);
+
 		raw_price_source_list.retain(|x| {
 			check_config.check_token_list.clone().iter().any(|check_price_key| {
-				// println!("check_price_key == &x.0, {:?} == {:?}", sp_std::str::from_utf8(check_price_key),
-				// sp_std::str::from_utf8(&x.0)) ;
 				check_price_key == &x.0
 			})
 		});
 
-		let format_data: Vec<(PriceKey, PriceToken, FractionLength)> = raw_price_source_list
+		if raw_price_source_list.len() == 0 as usize {
+			log::warn!(
+					target: "pallet::ocw::take_price_for_pre_check",
+					"❗ PricesRequests can not be empty.",
+			);
+			return PreCheckList::default();
+		}
+
+		let format_data_source_list: Vec<(PriceKey, PriceToken, FractionLength)> = raw_price_source_list
 			.into_iter()
 			.map(|(price_key, parse_key, _version, fraction_len, _request_interval)| {
 				(price_key, parse_key, fraction_len)
 			})
 			.collect();
-		let format_data: RawSourceKeys = format_data.clone().try_into().expect("format_data is too long");
-		// // check_config
-		let response_result = Self::fetch_bulk_price_with_http(format_data);
-		let response_result = response_result.unwrap_or(Vec::new());
-		let response_result: Vec<PreCheckStruct> = response_result
-			.into_iter()
-			.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
-				let number_val = JsonNumberValue::new(number_val);
-				PreCheckStruct {
-					price_key,
-					number_val,
-					max_offset: check_config.allowable_offset.clone(),
-					timestamp,
-				}
-			})
-			.collect();
-		let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
-		return response_result;
+		//
+		// let format_data: RawSourceKeys = format_data.clone().try_into().expect("format_data is too long");
+		let format_data_res = RawSourceKeys::try_create_on_vec(format_data_source_list);
+		// if format_data.is_err() {
+		// 	log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "authority_list" );
+		// }
+
+		if let Ok(format_data) = format_data_res {
+			// check_config
+			let response_result = Self::fetch_bulk_price_with_http(format_data);
+			let response_result = response_result.unwrap_or(Vec::new());
+			let response_result: Vec<PreCheckStruct> = response_result
+				.into_iter()
+				.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
+					let number_val = JsonNumberValue::new(number_val);
+					PreCheckStruct {
+						price_key,
+						number_val,
+						max_offset: check_config.allowable_offset.clone(),
+						timestamp,
+					}
+				})
+				.collect();
+
+			let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
+			return response_result;
+		}
+
+		log::warn!(
+				target: "pallet::ocw::take_price_for_pre_check",
+				"❗ PreCheckList can not be empty.",
+		);
+		PreCheckList::default()
+
+		// check_config
+		// let response_result = Self::fetch_bulk_price_with_http(format_data);
+		// let response_result = response_result.unwrap_or(Vec::new());
+		// let response_result: Vec<PreCheckStruct> = response_result
+		// 	.into_iter()
+		// 	.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
+		// 		let number_val = JsonNumberValue::new(number_val);
+		// 		PreCheckStruct {
+		// 			price_key,
+		// 			number_val,
+		// 			max_offset: check_config.allowable_offset.clone(),
+		// 			timestamp,
+		// 		}
+		// 	})
+		// 	.collect();
+		//
+		// let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
+		// return response_result;
 	}
 
 	// Record the per check results and add them to the storage structure.

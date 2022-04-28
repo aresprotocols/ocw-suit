@@ -38,6 +38,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::vec::Vec;
 	use pallet_session::SessionManager;
+	use sp_runtime::traits::Convert;
 	use sp_std::convert::TryFrom;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -66,6 +67,8 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
 			+ TryFrom<Self::AccountId>;
+
+		type ValidatorIdOf: Convert<Self::AccountId, Option<Self::AccountId>>;
 
 		/// Handler for managing new session.
 		type SessionManager: SessionManager<Self::ValidatorId>;
@@ -242,8 +245,10 @@ pub mod pallet {
 		UnReserveBalanceError,
 		//
 		TransferBalanceError,
-
-		VectorIsFull
+		//
+		VectorIsFull,
+		//
+		NoStashAccount,
 	}
 
 	#[pallet::hooks]
@@ -257,12 +262,13 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(1000)]
 		pub fn take_purchase_reward(origin: OriginFor<T>, ask_era: EraIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let controller = ensure_signed(origin)?;
+			let who = T::ValidatorIdOf::convert(controller);
+			ensure!(who.is_some(), Error::<T>::NoStashAccount);
+			let who: T::AccountId = who.unwrap();
 
 			let take_balance: BalanceOf<T> = Self::take_reward(ask_era, who.clone())?;
-
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
-
 			// Emit an event.
 			Self::deposit_event(Event::PurchaseRewardToken {
 				created_at: current_block_number,
@@ -276,7 +282,10 @@ pub mod pallet {
 
 		#[pallet::weight(1000)]
 		pub fn take_all_purchase_reward(origin: OriginFor<T>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let controller = ensure_signed(origin)?;
+			let who = T::ValidatorIdOf::convert(controller);
+			ensure!(who.is_some(), Error::<T>::NoStashAccount);
+			let who: T::AccountId = who.unwrap();
 
 			let reward_era_list:BoundedVec<(EraIndex, AskPointNum, PurchaseId), MaximumRewardEras>
 				= RewardEra::<T>::get(who.clone());
