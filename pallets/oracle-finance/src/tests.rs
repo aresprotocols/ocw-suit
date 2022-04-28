@@ -628,17 +628,27 @@ fn test_take_full_ear_reward() {
 		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_66"), <frame_system::Pallet<Test>>::block_number() ,2 ));
 
 
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_1);
+		assert_eq!(reward_list.len(), 2);
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_3);
+		assert_eq!(reward_list.len(), 2);
+		// println!("reward_list == {:?}", reward_list);
+
+		assert_ok!(
+			OracleFinance::take_all_purchase_reward(Origin::signed(ACCOUNT_ID_1)),
+		);
+
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_1);
+		assert_eq!(reward_list.len(), 1);
+		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_3);
+		assert_eq!(reward_list.len(), 2);
+		// println!("reward_list == {:?}", reward_list);
+
 		advance_session();
 		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 75 );
 		assert_eq!(Session::current_index(), 15 );
 		assert_eq!(OracleFinance::current_era(), Some(7));
 		assert_eq!(OracleFinance::eras_start_session_index(7), Some(16));
-
-		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_1);
-		assert_eq!(reward_list.len(), 2);
-		let reward_list = RewardEra::<Test>::get(ACCOUNT_ID_3);
-		assert_eq!(reward_list.len(), 2);
-		println!("reward_list == {:?}", reward_list);
 
 		assert_ok!(
 			OracleFinance::take_all_purchase_reward(Origin::signed(ACCOUNT_ID_1)),

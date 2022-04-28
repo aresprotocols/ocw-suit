@@ -174,6 +174,7 @@ pub struct AresPriceData<AccountId, BlockNumber> {
 	pub fraction_len: FractionLength,
 	pub raw_number: JsonNumberValue,
 	pub timestamp: u64,
+	pub update_bn: BlockNumber,
 }
 
 // migrated
@@ -349,6 +350,21 @@ impl Default for Releases {
 	}
 }
 
+pub type AresPriceDataVec<AccountId, BlockNumber> = BoundedVec<AresPriceData<AccountId, BlockNumber>, MaximumPoolSize>;
+
+// validator,
+// create_bn,
+// price_key,
+// retry_count,
+// price_pool,
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct AggregatedMission< BlockNumber, AccountId> {
+	// pub validator: AuthorityId,
+	pub create_bn: BlockNumber,
+	pub price_key: PriceKey,
+	pub retry_count: u32,
+	pub price_pool: AresPriceDataVec<AccountId, BlockNumber>,
+}
 
 // pub trait ToBoundVec<B, S, T> {
 // 	fn to_bound_vec(self) -> BoundedVec<T, S>;

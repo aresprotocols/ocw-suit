@@ -28,6 +28,7 @@ use sp_runtime::{
 };
 use sp_std::vec::Vec;
 use sp_std::{prelude::*, str};
+use pallet_authorship;
 
 use crate::traits::*;
 
@@ -58,6 +59,7 @@ pub mod types;
 
 pub mod aura_handler;
 pub mod babe_handler;
+pub mod author_events;
 // pub mod migrations;
 
 
@@ -130,6 +132,7 @@ pub mod pallet {
 		PerCheckTaskAlreadyExists,
 		PreCheckTokenListNotEmpty,
 		NotFoundPayToPurchaseId,
+		ValidatorNotMatch,
 	}
 
 	/// This pallet's configuration trait
@@ -194,6 +197,14 @@ pub mod pallet {
 				+
 			Self::check_and_clean_hostkey_list(14400u32.into())
 		}
+
+		// fn on_finalize(_: T::BlockNumber) {
+		// 	log::debug!(
+		// 		target: "runtime::system",
+		// 		"finalize() blocknumber = [{:?}]",
+		// 		Self::block_number(),
+		// 	);
+		// }
 
 		// fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// 	// To runtime v107
@@ -280,9 +291,12 @@ pub mod pallet {
 					log::warn!(target: "ares_oracle::offchain_worker", "❗ Not found author.");
 				}
 				Some(author) => {
+
 					if control_setting.open_free_price_reporter {
-						log::info!("🚅 ❗ ⛔ Ocw offchain start {:?} ", &author);
+						log::debug!("🚅 ❗ ⛔ Ocw offchain start {:?} offchain_bn={:?}, system_bn={:?} ", &author, &block_number, &<system::Pallet<T>>::block_number());
 						if Self::are_block_author_and_sotre_key_the_same(&author) {
+							// For debug.
+							// log::debug!("🚅 @ Ares call [0] find = {:?}, authorship = {:?}.", &author, <pallet_authorship::Pallet<T>>::author());
 							log::debug!("🚅 @ Ares call [1] ares-price-worker.");
 							// Try to get ares price.
 							match Self::ares_price_worker(block_number.clone(), author.clone()) {
@@ -393,7 +407,7 @@ pub mod pallet {
 					auth,
 					block_number,
 					take_price_list,
-					task_at
+					task_at,
 				) {
 					Ok(_) => {}
 					Err(e) => {
@@ -533,7 +547,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			log::info!(
+			log::debug!(
 				"🚅 Pre submit purchased price payload on block {:?}",
 				<system::Pallet<T>>::block_number()
 			);
@@ -576,9 +590,30 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			log::debug!(
-				"🚅 Pre submit price payload on block {:?}",
-				<system::Pallet<T>>::block_number()
+				"# Pre submit price payload on block {:?}/{:?}, chain author-stash {:?}",
+				&price_payload.block_number,
+				<system::Pallet<T>>::block_number(),
+				BlockAuthor::<T>::get(),
 			);
+
+			let mut block_author_trace = BlockAuthorTrace::<T>::get().unwrap_or(Default::default());
+			let mut pop_arr = AuthorTraceData::<T>::default();
+			// let mut block_trace_author = None;
+			// block_author_trace.iter().any(|(acc, bn)|{
+			// 	if &payload.block_number == bn {
+			// 		block_trace_author = Some(acc.clone());
+			// 		return true;
+			// 	}
+			// 	false
+			// });
+			while block_author_trace.len() > 0 && pop_arr.len() < 5 {
+				pop_arr.try_push(block_author_trace.pop().unwrap());
+			}
+			log::debug!(
+				"# Pop block-author {:?}",
+				&pop_arr,
+			);
+
 			// Nodes with the right to increase prices
 			let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
 			let mut price_key_list = Vec::new();
@@ -595,6 +630,7 @@ pub mod pallet {
 					json_number_value,
 					Self::get_price_pool_depth(),
 					timestamp,
+					price_payload.block_number.clone(),
 				) {
 					agg_result_list.push(agg_result);
 				}
@@ -853,7 +889,7 @@ pub mod pallet {
 						// check length
 						if old_price_list.len() > depth_usize {
 							let diff_len = old_price_list.len() - depth_usize;
-							let mut new_price_list = AresPriceDataVec::<T>::default();
+							let mut new_price_list = AresPriceDataVecOf::<T>::default();
 							for (index, value) in old_price_list.into_iter().enumerate() {
 								if !(index < diff_len) {
 									// kick out old value.
@@ -992,11 +1028,29 @@ pub mod pallet {
 				signature: ref signature,
 			} = call
 			{
+
+				let mut block_author_trace = BlockAuthorTrace::<T>::get().unwrap_or(Default::default());
+				let mut pop_arr = AuthorTraceData::<T>::default();
+				// let mut block_trace_author = None;
+				// block_author_trace.iter().any(|(acc, bn)|{
+				// 	if &payload.block_number == bn {
+				// 		block_trace_author = Some(acc.clone());
+				// 		return true;
+				// 	}
+				// 	false
+				// });
+				while block_author_trace.len() > 0 && pop_arr.len() < 5 {
+					pop_arr.try_push(block_author_trace.pop().unwrap());
+				}
+
 				log::debug!(
-					"🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ",
-					payload.block_number.clone(),
-					<system::Pallet<T>>::block_number(),
-					payload.public.clone()
+					"🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ship auth: {:?}, pop_arr: {:?}",
+					payload.block_number.clone(), // 236
+					<system::Pallet<T>>::block_number(), // 237 (next)
+					payload.public.clone(),
+					BlockAuthor::<T>::get(), // 237(236)
+					// block_trace_author, // 236
+					pop_arr,
 				);
 
 				if !Self::is_validator_member(&payload.auth) {
@@ -1016,7 +1070,7 @@ pub mod pallet {
 					return InvalidTransaction::BadProof.into();
 				}
 
-				Self::validate_transaction_parameters_of_ares(&payload.block_number, payload.price.to_vec())
+				Self::validate_transaction_parameters_of_ares(&payload.block_number, &payload.auth)
 			} else if let Call::submit_purchased_price_unsigned_with_signed_payload {
 				price_payload: ref payload,
 				ref signature,
@@ -1231,6 +1285,17 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
+	#[pallet::getter(fn block_author)]
+	pub type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
+
+	pub type AuthorTraceData<T: Config> = BoundedVec<(T::AccountId, T::BlockNumber), MaximumLogsSize> ;
+
+	#[pallet::storage]
+	#[pallet::getter(fn block_author_trace)]
+	pub type BlockAuthorTrace<T: Config> = StorageValue<_, AuthorTraceData<T>, OptionQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn purchased_default_setting)]
 	pub(super) type PurchasedDefaultSetting<T: Config> = StorageValue<_, PurchasedDefaultData, ValueQuery>;
 
@@ -1247,7 +1312,6 @@ pub mod pallet {
 		PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 		OptionQuery,
 	>;
-
 
 	pub type PurchasedPriceDataVec<T: Config> = BoundedVec<AresPriceData<T::AccountId, T::BlockNumber>, MaximumPoolSize>;
 
@@ -1310,8 +1374,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	pub type AresPriceDataVec<T: Config> = BoundedVec<AresPriceData<T::AccountId, T::BlockNumber>, MaximumPoolSize>;
+	// pub type AresPriceDataVec<T: Config> = BoundedVec<AresPriceData<T::AccountId, T::BlockNumber>, MaximumPoolSize>;
 
+	pub type AresPriceDataVecOf<T: Config> = AresPriceDataVec<T::AccountId, T::BlockNumber>;
 	// migrated
 	/// The lookup table for names.
 	#[pallet::storage]
@@ -1322,7 +1387,7 @@ pub mod pallet {
 			Blake2_128Concat,
 			PriceKey,
 			// Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
-			AresPriceDataVec<T>,
+			AresPriceDataVecOf<T>,
 			OptionQuery
 		>;
 
@@ -1494,6 +1559,15 @@ pub mod pallet {
 		OptionQuery
 	>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn price_counter)]
+	pub(super) type PriceCounter<T: Config> = StorageMap<_, Blake2_128Concat, PriceKey, u32>;
+
+	// AggregatedMission
+	#[pallet::storage]
+	#[pallet::getter(fn aggregated_mission)]
+	pub(super) type AggregatedMission<T: Config> = StorageMap<_, Blake2_128Concat, T::AuthorityAres, (PriceKey, T::BlockNumber, bool)>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub _phantom: sp_std::marker::PhantomData<T>,
@@ -1614,7 +1688,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn get_auth_id(stash: &T::AccountId) -> Option<T::AuthorityAres> {
+	pub fn get_auth_id(stash: &T::AccountId) -> Option<T::AuthorityAres> {
 		let authority_list = <Authorities<T>>::get();
 		if(authority_list.is_none()) {
 			return None;
@@ -1627,7 +1701,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	fn get_stash_id(auth: &T::AuthorityAres) -> Option<T::AccountId> {
+	pub fn get_stash_id(auth: &T::AuthorityAres) -> Option<T::AccountId> {
 		let authorities =  <Authorities<T>>::get() ;
 		if authorities.is_none() {
 			return None;
@@ -1666,7 +1740,8 @@ impl<T: Config> Pallet<T> {
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
 	{
-		let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number.clone(), account_id.clone()); // PriceKey::PRICE_KEY_IS_ETH
+		log::debug!("ares_price_worker: save ares price bn: {:?} who: {:?}", &block_number, &account_id);
+		let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number.clone(), account_id.clone());
 		if let Err(e) = res {
 			log::error!(
 				target: "pallet::ocw::ares_price_worker",
@@ -1759,7 +1834,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(request_base) = storage_request_base.get::<Vec<u8>>().unwrap_or(Some(Vec::new())) {
 
 			if let Ok(result_base_str) = sp_std::str::from_utf8(&request_base) {
-				log::info!("🚅 Ares local request base: {:?} # {:?} .", &result_base_str,  &request_base);
+				log::debug!("🚅 Ares local request base: {:?}.", &result_base_str);
 			}
 			let request_base_vec_res = RequestBaseVecU8::try_create_on_vec(request_base) ;
 			if let Ok(request_base_vec) = request_base_vec_res {
@@ -1773,7 +1848,6 @@ impl<T: Config> Pallet<T> {
 				"❗ Not found request base url."
 			);
 		}
-		// log::info!("Ares local request base : {:?} .", &result_base_str);
 		Default::default()
 	}
 
@@ -1793,11 +1867,27 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn get_block_author() -> Option<T::AuthorityAres> {
-		let digest = <frame_system::Pallet<T>>::digest();
-		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		let idx = <T as pallet::Config>::FindAuthor::find_author(pre_runtime_digests)?;
-		let validators = <Authorities<T>>::get().unwrap_or(StashAndAuthorityVec::<T>::default()) ;
-		validators.get(idx as usize).map(|(_, k)| k.clone())
+		// let digest = <frame_system::Pallet<T>>::digest();
+		// let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+		// let idx = <T as pallet::Config>::FindAuthor::find_author(pre_runtime_digests)?;
+		// let validators = <Authorities<T>>::get().unwrap_or(StashAndAuthorityVec::<T>::default()) ;
+		// validators.get(idx as usize).map(|(_, k)| k.clone())
+		log::debug!("get_block_author acc == starting");
+		if let Some(block_author) = BlockAuthor::<T>::get() {
+			return Authorities::<T>::get().map_or(None, |sets| {
+				let mut authority_ares = None;
+				sets.iter().any(|(acc, authority)| {
+					log::debug!("get_block_author acc == &block_author {:?} =? {:?}", acc, &block_author);
+					if acc == &block_author {
+						authority_ares = Some(authority.clone());
+						return true;
+					}
+					false
+				});
+				return authority_ares;
+			});
+		}
+		None
 	}
 
 	fn save_forced_clear_purchased_price_payload_signed(
@@ -1861,7 +1951,7 @@ impl<T: Config> Pallet<T> {
 		let purchased_key = Self::fetch_purchased_request_keys(account_id.clone());
 
 		if purchased_key.is_none() {
-			log::info!("🚅 Waiting for purchased service.");
+			log::debug!("🚅 Waiting for purchased service.");
 			return Ok(());
 		}
 
@@ -2083,7 +2173,7 @@ impl<T: Config> Pallet<T> {
 		if price_list.len() > 0 || jump_block.len() > 0 {
 			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
 			// Singer
-			let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+			let (acc_id, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
 				.with_filter(sign_public_keys)
 				.send_unsigned_transaction(
 					|account| PricePayload {
@@ -2248,15 +2338,12 @@ impl<T: Config> Pallet<T> {
 		// make request url
 		let (request_url_vu8, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
 		let request_url = sp_std::str::from_utf8(&request_url_vu8).unwrap();
-		// let bounded_request_url: BoundedVec<u8, MaximumURLLength> =
-		// 	request_url_vu8.clone().try_into().expect("url is too long");
-
 		// request and return http body.
 		if "" == request_url {
 			log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ Ares http requests cannot be empty.");
 			return Ok(Vec::new());
 		}
-		log::info!("🚅 Batch price request address: {:?}", request_url);
+		log::debug!("🚅 Batch price request address: {:?}", request_url);
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(4_000));
 		let request = http::Request::get(request_url.clone());
 		let pending = request
@@ -2602,6 +2689,7 @@ impl<T: Config> Pallet<T> {
 		json_number_value: JsonNumberValue,
 		max_len: u32,
 		timestamp: u64,
+		create_bn: T::BlockNumber,
 	) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
 		let key_str = price_key;
 		let current_block = <system::Pallet<T>>::block_number();
@@ -2640,13 +2728,14 @@ impl<T: Config> Pallet<T> {
 			new_price.push(AresPriceData {
 				price: price.clone(),
 				account_id: who.clone(),
-				create_bn: current_block,
+				create_bn,
 				fraction_len: fraction_length,
 				raw_number: json_number_value,
 				timestamp,
+				update_bn: current_block,
 			});
 
-			let new_price_res = AresPriceDataVec::<T>::try_create_on_vec(new_price);
+			let new_price_res = AresPriceDataVecOf::<T>::try_create_on_vec(new_price);
 			if let Ok(new_price) = new_price_res {
 				<AresPrice<T>>::insert(key_str.clone(), new_price);
 			}else{
@@ -2654,14 +2743,15 @@ impl<T: Config> Pallet<T> {
 			}
 		} else {
 			// push a new value.
-			let mut new_price: AresPriceDataVec<T> = AresPriceDataVec::<T>::default();
+			let mut new_price = AresPriceDataVecOf::<T>::default();
 			new_price.try_push(AresPriceData {
 				price: price.clone(),
 				account_id: who.clone(),
-				create_bn: current_block,
+				create_bn,
 				fraction_len: fraction_length,
 				raw_number: json_number_value,
 				timestamp,
+				update_bn: current_block,
 			});
 			<AresPrice<T>>::insert(key_str.clone(), new_price);
 		}
@@ -2957,7 +3047,7 @@ impl<T: Config> Pallet<T> {
 	fn add_purchased_price(
 		purchase_id: PurchaseId,
 		account_id: T::AccountId,
-		block_number: T::BlockNumber,
+		create_bn: T::BlockNumber,
 		price_list: PricePayloadSubPriceList,
 	) {
 		if <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), account_id.clone()) {
@@ -2969,10 +3059,11 @@ impl<T: Config> Pallet<T> {
 			price_data_vec.try_push(AresPriceData {
 				price: *b,
 				account_id: account_id.clone(),
-				create_bn: current_block,
+				create_bn: create_bn.clone(),
 				fraction_len: *c,
 				raw_number: d.clone(),
 				timestamp: timestamp.clone(),
+				update_bn: current_block
 			});
 			//
 			<PurchasedPricePool<T>>::insert(purchase_id.clone(), a.clone(), price_data_vec);
@@ -2982,7 +3073,7 @@ impl<T: Config> Pallet<T> {
 		<PurchasedOrderPool<T>>::insert(purchase_id.clone(), account_id.clone(), current_block.clone());
 
 		Self::deposit_event(Event::NewPurchasedPrice {
-			created_at: block_number.clone(),
+			created_at: create_bn,
 			price_list,
 			who: account_id,
 			finance_era: T::OracleFinanceHandler::current_era_num(),
@@ -3103,7 +3194,7 @@ impl<T: Config> Pallet<T> {
 	fn validate_transaction_parameters_of_ares(
 		block_number: &T::BlockNumber,
 		// _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
-		_price_list: Vec<PricePayloadSubPrice>,
+		auth: &T::AuthorityAres,
 	) -> TransactionValidity {
 		// Let's make sure to reject transactions from the future.
 		let current_block = <system::Pallet<T>>::block_number();
@@ -3111,9 +3202,14 @@ impl<T: Config> Pallet<T> {
 			return InvalidTransaction::Future.into();
 		}
 
+		log::debug!("ValidTransaction::provides source = {:?}, {:?}", block_number, auth);
+		let mut provides = block_number.clone().encode();
+		provides.append(&mut auth.clone().encode());
+		log::debug!("ValidTransaction::provides result = {:?}", &provides);
+
 		ValidTransaction::with_tag_prefix("ares-oracle::validate_transaction_parameters_of_ares")
 			.priority(T::UnsignedPriority::get())
-			.and_provides(block_number) // next_unsigned_at
+			.and_provides(provides) // next_unsigned_at
 			.longevity(5)
 			.propagate(true)
 			.build()

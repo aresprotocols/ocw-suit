@@ -175,6 +175,7 @@ pub mod pallet {
 		fn build(&self) {
 			let finance_account = <Pallet<T>>::account_id();
 			if T::Currency::total_balance(&finance_account).is_zero() {
+				log::info!("oracle-finance deposit creating, {:?}", T::Currency::minimum_balance());
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
 				// Self::deposit_event(Event::<T>::OracleFinanceDepositCreating(T::Currency::
 				// minimum_balance()));
@@ -263,7 +264,11 @@ pub mod pallet {
 		#[pallet::weight(1000)]
 		pub fn take_purchase_reward(origin: OriginFor<T>, ask_era: EraIndex) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let who = T::ValidatorIdOf::convert(controller);
+			let who = T::ValidatorIdOf::convert(controller.clone());
+			log::debug!(
+				"Call take_purchase_reward, Controller = {:?}, Stash = {:?}",
+				&controller.clone(), &who.clone(),
+			);
 			ensure!(who.is_some(), Error::<T>::NoStashAccount);
 			let who: T::AccountId = who.unwrap();
 
@@ -283,7 +288,11 @@ pub mod pallet {
 		#[pallet::weight(1000)]
 		pub fn take_all_purchase_reward(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let who = T::ValidatorIdOf::convert(controller);
+			let who = T::ValidatorIdOf::convert(controller.clone());
+			log::debug!(
+				"Call take_all_purchase_reward, Controller = {:?}, Stash = {:?}",
+				&controller.clone(), &who.clone(),
+			);
 			ensure!(who.is_some(), Error::<T>::NoStashAccount);
 			let who: T::AccountId = who.unwrap();
 
@@ -292,16 +301,23 @@ pub mod pallet {
 
 			ensure!(!reward_era_list.is_empty(), Error::<T>::NoRewardPoints);
 
-			let current_block_number = <frame_system::Pallet<T>>::block_number();
+
+			let current_era_opt = CurrentEra::<T>::get();
 			let mut era_list = Vec::new();
 			for (ask_era, _ask_point_num, pid) in reward_era_list {
+
 				if !era_list.iter().any(|exists_era|{
 					&ask_era == exists_era
 				}) {
-					era_list.push(ask_era);
+					if let (Some(current_era)) = current_era_opt {
+						if ask_era <  current_era {
+							era_list.push(ask_era);
+						}
+					}
 				}
 			}
 
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			for ask_era in era_list {
 				let take_balance: BalanceOf<T> = Self::take_reward(ask_era, who.clone())?;
 				// Emit an event.
