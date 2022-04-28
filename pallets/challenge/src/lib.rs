@@ -22,6 +22,7 @@ use frame_support::{
 };
 use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_consensus_babe::BABE_ENGINE_ID;
+use sp_std::boxed::Box;
 
 use frame_system::pallet_prelude::*;
 use log::info;
@@ -45,7 +46,8 @@ pub type NegativeImbalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 // type ReserveIdentifierOf<T, I = ()> =
-// 	<<T as Config<I>>::Currency as NamedReservableCurrency<<T as frame_system::Config>::AccountId>>::ReserveIdentifier;
+// 	<<T as Config<I>>::Currency as NamedReservableCurrency<<T as
+// frame_system::Config>::AccountId>>::ReserveIdentifier;
 
 #[frame_support::pallet]
 pub mod pallet {
