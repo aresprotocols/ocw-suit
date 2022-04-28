@@ -1,6 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(type_name_of_val)]
-
 mod tests;
 
 /// Edit this file to define custom logic or remove it if it is not needed.
