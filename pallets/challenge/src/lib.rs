@@ -308,9 +308,13 @@ where
 		let data = proposal.encode();
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_hash: T::Hash = <T as frame_system::Config>::Hashing::hash_of(&proposal);
+		let mut threshold = members_count;
+		if members_count > 3 {
+			threshold = members_count / 3 * 2;
+		}
 		if let Ok(proposal) = <T as pallet_collective::Config<I>>::Proposal::decode(&mut &data[..]) {
 			let call: pallet_collective::Call<T, I> = pallet_collective::Call::propose {
-				threshold: members_count,
+				threshold,
 				proposal: Box::new(proposal),
 				length_bound: proposal_len,
 			};
