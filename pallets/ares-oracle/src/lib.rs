@@ -1,3 +1,7 @@
+//! Oracle's main module, responsible for Oracle data submission,
+//! Offchain information verification,
+//! paid price and other functions.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_system::{
@@ -18,8 +22,6 @@ pub use pallet::*;
 use serde::{Deserialize, Deserializer};
 use sp_application_crypto::sp_core::crypto::UncheckedFrom;
 use sp_consensus_aura::AURA_ENGINE_ID;
-use sp_core::crypto::KeyTypeId;
-use sp_core::sr25519::Signature as Sr25519Signature;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{
 	offchain::{http, Duration},
@@ -41,7 +43,7 @@ use ares_oracle_provider_support::{
 	LOCAL_STORAGE_PRICE_REQUEST_LIST,
 	PreCheckList, PreCheckStatus, PreCheckStruct, PreCheckTaskConfig, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 use frame_support::pallet_prelude::{PhantomData, StorageMap};
-use frame_support::sp_runtime::{MultiSignature, MultiSigner, Percent};
+use frame_support::sp_runtime::{Percent};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
 use frame_support::weights::Weight;
 use frame_support::{BoundedVec, ConsensusEngineId};
@@ -49,60 +51,39 @@ use hex;
 use oracle_finance::traits::{IForPrice, IForReporter, IForBase};
 use oracle_finance::types::{BalanceOf, PurchaseId};
 use sp_runtime::app_crypto::Public;
-use sp_runtime::traits::{Saturating, UniqueSaturatedInto};
+use sp_runtime::traits::{Saturating, UniqueSaturatedInto, Zero};
 use sp_std::collections::btree_map::BTreeMap;
 use types::*;
 
-pub mod crypto2;
-pub mod traits;
-pub mod types;
 
-pub mod aura_handler;
+/// Modules that provide interface definitions.
+pub mod traits;
+/// Defines the underlying data types required by the Pallet but does not include storage.
+pub mod types;
+/// A module that implements [`EventHandler`](pallet_authorship::EventHandler) to record some block authors.
 pub mod author_events;
-pub mod babe_handler;
+/// Provides [`AresOracleFilter`](offchain_filter::AresOracleFilter) structure to determine whether the offchain transaction in the transaction pool is valid.
 pub mod offchain_filter;
 // pub mod migrations;
+/// Utility trait to be implemented on payloads that can be signed.
+pub mod ares_crypto;
 
-
+/// Compute price using `Average` on price pool.
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
+/// Compute price using `Median` on price pool.
 pub const CALCULATION_KIND_MEDIAN: u8 = 2;
+
 
 const ERROR_MAX_LENGTH_TARGET: &str = "ares_oracle::max_length";
 const ERROR_MAX_LENGTH_DESC: &str = "❗ MaxEncodedLen convert error.";
 
-pub const PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP: u8 = 1;
-pub const PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN: u8 = 2;
+/// The type of result returned when all nodes participate in the ask price after the quotation is generated.
+pub const PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE: u8 = 1;
+/// The type of result returned when the threshold is reached but not all nodes participate in the work.
+pub const PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE: u8 = 2;
 
 #[cfg(test)]
 mod tests;
-
-pub struct AresCrypto<AresPublic>(PhantomData<AresPublic>);
-
-impl<AresPublic: RuntimeAppPublic> frame_system::offchain::AppCrypto<MultiSigner, MultiSignature>
-	for AresCrypto<AresPublic>
-where
-	sp_application_crypto::sr25519::Signature: From<<AresPublic as sp_runtime::RuntimeAppPublic>::Signature>,
-	<AresPublic as sp_runtime::RuntimeAppPublic>::Signature: From<sp_application_crypto::sr25519::Signature>,
-	sp_application_crypto::sr25519::Public: From<AresPublic>,
-	AresPublic: From<sp_application_crypto::sr25519::Public>,
-{
-	type RuntimeAppPublic = AresPublic;
-	type GenericSignature = Sr25519Signature;
-	type GenericPublic = sp_core::sr25519::Public;
-}
-
-impl<AresPublic: RuntimeAppPublic>
-	frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for AresCrypto<AresPublic>
-where
-	sp_application_crypto::sr25519::Signature: From<<AresPublic as sp_runtime::RuntimeAppPublic>::Signature>,
-	<AresPublic as sp_runtime::RuntimeAppPublic>::Signature: From<sp_application_crypto::sr25519::Signature>,
-	sp_application_crypto::sr25519::Public: From<AresPublic>,
-	AresPublic: From<sp_application_crypto::sr25519::Public>,
-{
-	type RuntimeAppPublic = AresPublic;
-	type GenericSignature = Sr25519Signature;
-	type GenericPublic = sp_core::sr25519::Public;
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -123,17 +104,25 @@ pub mod pallet {
 	#[pallet::error]
 	#[derive(PartialEq, Eq)]
 	pub enum Error<T> {
+		/// The value range of the ask price threshold value must be 1~100 .
 		SubmitThresholdRangeError,
+		/// Waiting for delay block must be greater than 0 after ask priced.
 		DruationNumberNotBeZero,
-		UnknownAresPriceVersionNum,
+		// UnknownAresPriceVersionNum
+		/// Insufficient balance when the ask price to pay.
 		InsufficientBalance,
+		/// The `MaxFee` of the ask price payment limit is too low.
 		InsufficientMaxFee,
+		/// No available token pair are found.
 		NoPricePairsAvailable,
+		/// Occurred while requesting payment, please check if `Balance` is sufficient.
 		PayToPurchaseFeeFailed,
+		/// The validator `pre-check task` already exists, no need to resubmit.
 		PerCheckTaskAlreadyExists,
+		/// The list of pre-checked token pairs cannot be empty.
 		PreCheckTokenListNotEmpty,
-		NotFoundPayToPurchaseId,
-		ValidatorNotMatch,
+		/// The purchase ID was not found in the request pool.
+		PurchaseIdNotFoundInThePool
 	}
 
 	/// This pallet's configuration trait
@@ -159,7 +148,7 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ From<AuthorityId>;
 
-		type FindAuthor: FindAuthor<u32>;
+		// type FindAuthor: FindAuthor<u32>;
 
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
@@ -426,6 +415,15 @@ pub mod pallet {
 	/// A public part of the pallet.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		/// An offline method that submits and saves the local publicly data by the validator node to the chain for debugging.
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// - host_key: A random `u32` for a node
+		///	- request_domain: The warehouse parameter currently set by the node.
+		///	- authority_list: List of ares-authority public keys stored locally
+		///	- network_is_validator: Whether the node validator
 		#[pallet::weight(0)]
 		pub fn submit_local_xray(
 			origin: OriginFor<T>,
@@ -443,6 +441,14 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+
+		/// Submit an ares-price request, The request is processed by all online validators,
+		/// and the aggregated result is returned immediately.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - max_fee: The highest asking fee accepted by the signer.
+		/// - request_keys: A list of request pairs, separated by commas if multiple, such as: `eth-usdt, dot-sudt`, etc.
 		#[pallet::weight(1000)]
 		pub fn submit_ask_price(
 			origin: OriginFor<T>,
@@ -501,6 +507,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// An offline method that submits and saves the purchase-result data.
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// -- price_payload: Submitted data.
 		#[pallet::weight(0)]
 		pub fn submit_forced_clear_purchased_price_payload_signed(
 			origin: OriginFor<T>,
@@ -514,7 +525,7 @@ pub mod pallet {
 				// check that the validator threshold is up to standard.
 				if Self::is_validator_purchased_threshold_up_on(x.clone()) {
 					// Calculate the average price
-					let agg_count = Self::update_purchase_avg_price_storage(x.clone(), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+					let agg_count = Self::update_purchase_avg_price_storage(x.clone(), PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE);
 					// update report work point
 					Self::update_reporter_point(x.clone(), agg_count);
 					Self::purchased_storage_clean(x.clone());
@@ -573,7 +584,7 @@ pub mod pallet {
 				// Calculate the average price
 				let agg_count = Self::update_purchase_avg_price_storage(
 					price_payload.purchase_id.clone(),
-					PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP,
+					PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE,
 				);
 				// update report work point
 				Self::update_reporter_point(price_payload.purchase_id.clone(), agg_count);
@@ -583,6 +594,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// An offline method that submits and saves the free ares-price results.
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// - price_payload: Ares-price data to be uploaded.
 		#[pallet::weight(0)]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
@@ -599,14 +615,7 @@ pub mod pallet {
 
 			let mut block_author_trace = BlockAuthorTrace::<T>::get().unwrap_or(Default::default());
 			let mut pop_arr = AuthorTraceData::<T>::default();
-			// let mut block_trace_author = None;
-			// block_author_trace.iter().any(|(acc, bn)|{
-			// 	if &payload.block_number == bn {
-			// 		block_trace_author = Some(acc.clone());
-			// 		return true;
-			// 	}
-			// 	false
-			// });
+
 			while block_author_trace.len() > 0 && pop_arr.len() < 5 {
 				pop_arr.try_push(block_author_trace.pop().unwrap());
 			}
@@ -667,6 +676,15 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Submit a pre-check task.
+		/// When a new validator is elected, a pre_check_task task will be submitted through this method
+		/// within a specific period.
+		///
+		/// This task is used to ensure that the ares-price response function of the validator node can be used normally.
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// - precheck_payload: Pre-Check task data, including validators and their authority account data.
 		#[pallet::weight(0)]
 		pub fn submit_create_pre_check_task(
 			origin: OriginFor<T>,
@@ -691,6 +709,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// When the validator responds to the pre-check task, the pre-check result data is submitted to the chain.
+		/// If approved, it will be passed in the next election cycle, not immediately.
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// - preresult_payload: Review response result data, which will be compared on-chain.
 		#[pallet::weight(0)]
 		pub fn submit_offchain_pre_check_result(
 			origin: OriginFor<T>,
@@ -717,6 +741,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// When there is an error in the offchain http request, the error data will be submitted to the chain through this Call
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// - err_payload: Http err data.
 		#[pallet::weight(0)]
 		pub fn submit_offchain_http_err_trace_result(
 			origin: OriginFor<T>,
@@ -733,16 +762,25 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+
+		/// Updating the purchase-related parameter settings requires the `Technical-Committee` signature to execute.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - submit_threshold: The threshold for aggregation is a percentage
+		/// - max_duration: Maximum delay to wait for full node response.
+		/// - avg_keep_duration: Maximum length to keep aggregated results.
 		#[pallet::weight(0)]
 		pub fn update_purchased_param(
 			origin: OriginFor<T>,
 			submit_threshold: u8,
+			// submit_threshold: Percent,
 			max_duration: u64,
 			avg_keep_duration: u64,
 		) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			ensure!(
-				submit_threshold > 0 && submit_threshold <= 100,
+				submit_threshold > Zero::zero(),
 				Error::<T>::SubmitThresholdRangeError
 			);
 			ensure!(max_duration > 0, Error::<T>::DruationNumberNotBeZero);
@@ -1289,7 +1327,7 @@ pub mod pallet {
 	#[pallet::getter(fn block_author)]
 	pub(super) type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
-
+	/// Save recent block authors for filtering offchain requests submitted by non-block producers.
 	pub type AuthorTraceData<T: Config> = BoundedVec<(T::AccountId, T::BlockNumber), MaximumLogsSize> ;
 
 	#[pallet::storage]
@@ -1314,6 +1352,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Pool for storing ask-price result data.
 	pub type PurchasedPriceDataVec<T: Config> = BoundedVec<AresPriceData<T::AccountId, T::BlockNumber>, MaximumPoolSize>;
 
 	// migrated
@@ -1375,8 +1414,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	// pub type AresPriceDataVec<T: Config> = BoundedVec<AresPriceData<T::AccountId, T::BlockNumber>, MaximumPoolSize>;
 
+	/// The `Ares-price` pool structure, actually associated with [`AresPriceDataVec`](types::AresPriceDataVec)
 	pub type AresPriceDataVecOf<T: Config> = AresPriceDataVec<T::AccountId, T::BlockNumber>;
 	// migrated
 	/// The lookup table for names.
@@ -1392,6 +1431,7 @@ pub mod pallet {
 			OptionQuery
 		>;
 
+	/// Store `ares-price` data that deviates too much from the average price.
 	pub type AbnormalPriceDataVec<T: Config> = BoundedVec<(AresPriceData<T::AccountId, T::BlockNumber>, AvgPriceData), MaximumPoolSize>;
 
 	// migrated
@@ -1420,6 +1460,7 @@ pub mod pallet {
 	#[pallet::getter(fn price_allowable_offset)]
 	pub(super) type PriceAllowableOffset<T: Config> = StorageValue<_, u8, ValueQuery>;
 
+	/// Stores a list of data defined by price-token pairs.
 	pub type PricesRequestsVec = BoundedVec<(
 		PriceKey,   // price key
 		PriceToken, // price token
@@ -1444,12 +1485,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// For BoundedVec max length.
 	pub type MaximumRequestBaseSize = ConstU32<500>;
+	/// Store data read from werehouse.
 	pub type RequestBaseVecU8 = BoundedVec<u8, MaximumRequestBaseSize>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn request_base_onchain)]
-	pub(super) type RequestBaseOnchain<T: Config> = StorageValue<_, RequestBaseVecU8, ValueQuery>;
+	// #[pallet::storage]
+	// #[pallet::getter(fn request_base_onchain)]
+	// pub(super) type RequestBaseOnchain<T: Config> = StorageValue<_, RequestBaseVecU8, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn jump_block_number)]
@@ -1465,6 +1508,7 @@ pub mod pallet {
 		Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>)>,
 	>;
 
+	/// Stores a list of pre-check tasks.
 	pub type PreCheckTaskListVec<T: Config> = BoundedVec<(
 		T::AccountId,
 		T::AuthorityAres,
@@ -1509,7 +1553,9 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// For BoundedVec max length.
 	pub type MaximumLogsSize = ConstU32<5000>;
+	/// BoundedVec to storage [`HttpErrTraceData`](`types::HttpErrTraceData`)
 	pub type HttpErrTraceVec<T: Config> = BoundedVec<(
 		HttpErrTraceData<T::BlockNumber, T::AccountId>
 	), MaximumLogsSize>;
@@ -1527,8 +1573,9 @@ pub mod pallet {
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 
+	/// For BoundedVec max length.
 	pub type MaximumIdenSize = ConstU32<50>;
-	// pub type XRayIdenVecU8 = BoundedVec<u8, MaximumIdenSize>;
+	/// BoundedVec to store Ares-Authorities
 	pub type AuthorityAresVec<T: Config> = BoundedVec<T::AuthorityAres, MaximumPoolSize>;
 
 	#[pallet::storage]
@@ -1548,6 +1595,7 @@ pub mod pallet {
 			)
 		>;
 
+	/// List of stash and authority
 	pub type StashAndAuthorityVec<T: Config> = BoundedVec<(T::AccountId, T::AuthorityAres), MaximumPoolSize>;
 
 	/// The current authority set.
@@ -1597,20 +1645,6 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			if !self.price_requests.is_empty() {
-				// let price_requests: Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> = self
-				// 	.price_requests
-				// 	.iter()
-				// 	.map(|(price_key, price_token, parse_version, fraction, request_interval)| {
-				// 		let price_key: PriceKey = price_key.to_vec().try_into().expect("price key is too long");
-				// 		let price_token: PriceToken = price_token.to_vec().try_into().expect("price key is too long");
-				// 		(price_key, price_token, *parse_version, *fraction, *request_interval)
-				// 	})
-				// 	.collect();
-				// let price_requests: BoundedVec<
-				// 	(PriceKey, PriceToken, u32, FractionLength, RequestInterval),
-				// 	MaximumPricesRequestList,
-				// > = price_requests.try_into().expect("price_requests is too long");
-				// PricesRequests::<T>::put(&price_requests);
 				let price_request_list = self.price_requests.clone().into_iter().map(|(price_key, price_token,version, fraction_length, request_interval )| {
 					(
 						PriceKey::create_on_vec(price_key),
@@ -1630,9 +1664,9 @@ pub mod pallet {
 			if self.price_pool_depth > 0 {
 				PricePoolDepth::<T>::put(&self.price_pool_depth);
 			}
-			if self.request_base.len() > 0 {
-				RequestBaseOnchain::<T>::put(RequestBaseVecU8::create_on_vec(self.request_base.clone()));
-			}
+			// if self.request_base.len() > 0 {
+			// 	RequestBaseOnchain::<T>::put(RequestBaseVecU8::create_on_vec(self.request_base.clone()));
+			// }
 			Pallet::<T>::initialize_authorities(StashAndAuthorityVec::<T>::create_on_vec(self.authorities.clone()));
 			PriceAllowableOffset::<T>::put(&self.price_allowable_offset);
 			// For new vesrion.
@@ -1825,11 +1859,11 @@ impl<T: Config> Pallet<T> {
 
 	// Get request domain, include TCP protocol, example: http://www.xxxx.com
 	fn get_local_storage_request_domain() -> RequestBaseVecU8 {
-		let request_base_onchain = RequestBaseOnchain::<T>::get();
-		if request_base_onchain.len() > 0 {
-			return request_base_onchain;
-		}
 
+		// let request_base_onchain = RequestBaseOnchain::<T>::get();
+		// if request_base_onchain.len() > 0 {
+		// 	return request_base_onchain;
+		// }
 		let storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
 
 		if let Some(request_base) = storage_request_base.get::<Vec<u8>>().unwrap_or(Some(Vec::new())) {
@@ -2650,12 +2684,13 @@ impl<T: Config> Pallet<T> {
 		who: T::AccountId,
 		offer: BalanceOf<T>,
 		submit_threshold: u8,
+		// submit_threshold: Percent,
 		max_duration: u64,
 		purchase_id: PurchaseId,
 		request_keys: RequestKeys,
 	) -> Result<PurchaseId, Error<T>> {
-		// Judge submit_threshold range is (0,100]
 		if 0 >= submit_threshold || 100 < submit_threshold {
+		// if submit_threshold == Zero::zero() {
 			return Err(Error::<T>::SubmitThresholdRangeError);
 		}
 		if 0 >= max_duration {
@@ -2852,7 +2887,6 @@ impl<T: Config> Pallet<T> {
 	fn handler_purchase_avg_price_storage(
 		purchase_id: PurchaseId,
 		price_key: PriceKey,
-		// mut prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
 		mut prices_info: PurchasedPriceDataVec<T>,
 		reached_type: u8,
 	) -> Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)> {
@@ -3084,9 +3118,6 @@ impl<T: Config> Pallet<T> {
 	// Judge whether the predetermined conditions of the validator of the current
 	// purchased_id meet the requirements, and return true if it is
 	fn is_validator_purchased_threshold_up_on(purchase_id: PurchaseId) -> bool {
-		// if false == <PurchasedRequestPool<T>>::contains_key(purchase_id.clone()) {
-		// 	return false;
-		// }
 
 		let reporter_count = <PurchasedOrderPool<T>>::iter_prefix_values(purchase_id.clone()).count();
 		if 0 == reporter_count {
@@ -3105,11 +3136,12 @@ impl<T: Config> Pallet<T> {
 		let reporter_count = reporter_count as u64;
 
 		let div_val = (reporter_count * 100) / (validator_count);
-
-
 		let submit_threshold = purchased_request.submit_threshold as u64;
-
 		div_val >= submit_threshold
+
+
+		// let div_val = Percent::from_rational(reporter_count,validator_count);
+		// div_val >= purchased_request.submit_threshold
 	}
 
 	fn is_all_validator_submitted_price(purchased_id: PurchaseId) -> bool {
@@ -3218,7 +3250,7 @@ impl<T: Config> Pallet<T> {
 	fn update_reporter_point(purchase_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>> {
 		let request_mission = PurchasedRequestPool::<T>::get(purchase_id.clone());
 		if request_mission.is_none() {
-			return Err(Error::<T>::NotFoundPayToPurchaseId);
+			return Err(Error::<T>::PurchaseIdNotFoundInThePool);
 		}
 		let request_mission = request_mission.unwrap();
 
@@ -3318,25 +3350,26 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
 	fn on_disabled(_i: u32) {}
 }
 
-pub struct FindAresAccountFromAuthority<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+// pub struct FindAresAccountFromAuthority<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+//
+// impl<T: Config, Inner: FindAuthor<T::AuthorityAres>> FindAuthor<T::AccountId> for FindAresAccountFromAuthority<T, Inner>
+// where
+// 	<T as frame_system::Config>::AccountId: From<sp_runtime::AccountId32>,
+// {
+// 	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
+// 	where
+// 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
+// 	{
+// 		let find_auraid = Inner::find_author(digests)?;
+// 		let mut a = [0u8; 32];
+// 		a[..].copy_from_slice(&find_auraid.to_raw_vec());
+// 		// extract AccountId32 from store keys
+// 		let owner_account_id32 = sp_runtime::AccountId32::new(a);
+// 		let authro_account_id = owner_account_id32.clone().into();
+// 		Some(authro_account_id)
+// 	}
+// }
 
-impl<T: Config, Inner: FindAuthor<T::AuthorityAres>> FindAuthor<T::AccountId> for FindAresAccountFromAuthority<T, Inner>
-where
-	<T as frame_system::Config>::AccountId: From<sp_runtime::AccountId32>,
-{
-	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
-	where
-		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-	{
-		let find_auraid = Inner::find_author(digests)?;
-		let mut a = [0u8; 32];
-		a[..].copy_from_slice(&find_auraid.to_raw_vec());
-		// extract AccountId32 from store keys
-		let owner_account_id32 = sp_runtime::AccountId32::new(a);
-		let authro_account_id = owner_account_id32.clone().into();
-		Some(authro_account_id)
-	}
-}
 
 impl<T: Config> SymbolInfo for Pallet<T> {
 	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
@@ -3500,25 +3533,6 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 				"❗ PreCheckList can not be empty.",
 		);
 		PreCheckList::default()
-
-		// check_config
-		// let response_result = Self::fetch_bulk_price_with_http(format_data);
-		// let response_result = response_result.unwrap_or(Vec::new());
-		// let response_result: Vec<PreCheckStruct> = response_result
-		// 	.into_iter()
-		// 	.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
-		// 		let number_val = JsonNumberValue::new(number_val);
-		// 		PreCheckStruct {
-		// 			price_key,
-		// 			number_val,
-		// 			max_offset: check_config.allowable_offset.clone(),
-		// 			timestamp,
-		// 		}
-		// 	})
-		// 	.collect();
-		//
-		// let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
-		// return response_result;
 	}
 
 	// Record the per check results and add them to the storage structure.

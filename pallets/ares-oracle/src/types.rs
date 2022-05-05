@@ -6,6 +6,7 @@ use frame_support::BoundedVec;
 use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
+use sp_runtime::traits::Zero;
 use sp_std::fmt::Debug;
 use ares_oracle_provider_support::{MaximumPoolSize, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 
@@ -38,7 +39,7 @@ impl Default for OcwControlData {
 	}
 }
 
-// Migration
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PurchasedDefaultData {
 	pub submit_threshold: u8,
@@ -63,13 +64,36 @@ impl PurchasedDefaultData {
 	}
 }
 
+// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+// pub struct PurchasedDefaultData {
+// 	pub submit_threshold: Percent,
+// 	pub max_duration: u64,
+// 	pub avg_keep_duration: u64,
+// }
+
+// impl PurchasedDefaultData {
+// 	pub fn new(submit_threshold: Percent, max_duration: u64, avg_keep_duration: u64) -> Self {
+// 		if submit_threshold == Zero::zero() {
+// 			panic!("Submit Threshold range is (0 - 100] ");
+// 		}
+// 		if max_duration == 0 {
+// 			panic!("Max Duration can not be 0.");
+// 		}
+// 		Self {
+// 			submit_threshold,
+// 			max_duration,
+// 			avg_keep_duration,
+// 		}
+// 	}
+// }
+
 impl Default for PurchasedDefaultData {
 	fn default() -> Self {
 		Self {
 			submit_threshold: 60,
+			// submit_threshold: Percent::from_percent(60),
 			max_duration: 20,
 			avg_keep_duration: 14400,
-			// unit_price: 100_000_000_000_000,
 		}
 	}
 }
@@ -120,6 +144,7 @@ pub struct PurchasedRequestData<AccountId, Balance, BlockNumber> {
 	pub offer: Balance,
 	pub create_bn: BlockNumber,
 	pub submit_threshold: u8,
+	// pub submit_threshold: Percent,
 	pub max_duration: u64,
 	pub request_keys: RequestKeys,
 }

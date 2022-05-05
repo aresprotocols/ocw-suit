@@ -1,9 +1,10 @@
+
+
 use super::*;
 use sp_runtime::generic::UncheckedExtrinsic;
 use frame_support::traits::ExtrinsicCall;
 use sp_std::fmt::Debug;
 use crate::AuthorTraceData;
-
 
 pub struct AresOracleFilter<T, Address, Call, Signature, Extra>{
 	_t: PhantomData<T>,
@@ -21,7 +22,6 @@ impl <T: Config, Address, Call, Signature, Extra> AresOracleFilter<T, Address, C
 		  Signature: Debug,
 {
 	pub fn is_author_call(extrinsic :&UncheckedExtrinsic<Address, Call, Signature, Extra>) -> bool {
-		// log::info!("@@@@ == extrinsic = {:#?}", &extrinsic);
 		let in_call = extrinsic.call();
 		if let Some(x_call) = Call::try_get_pallet_call(in_call) {
 			if let super::pallet::Call::submit_price_unsigned_with_signed_payload {
@@ -38,14 +38,7 @@ impl <T: Config, Address, Call, Signature, Extra> AresOracleFilter<T, Address, C
 					false
 				});
 
-				let trace_pop1 = block_trace.pop(); //
-				let trace_pop2 = block_trace.pop(); //
 				let releation_stash_opt = super::pallet::Pallet::<T>::get_stash_id(&payload.auth);
-				// log::info!("@@@@3 price_payload.stash = {:?} price_payload.block_number =  {:?} block_trace_author = {:?},",
-				// 	&releation_stash_opt,
-				// 	payload.block_number,
-				// 	block_trace_author,
-				// );
 				if let Some(stash_trace) = block_trace_author {
 					if let Some(rel_stash) = releation_stash_opt {
 						return &stash_trace == &rel_stash;

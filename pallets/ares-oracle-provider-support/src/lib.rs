@@ -15,6 +15,7 @@ pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_lis
 pub const LOCAL_STORAGE_PRICE_REQUEST_DOMAIN: &[u8] = b"are-ocw::price_request_domain";
 pub const LOCAL_HOST_KEY: &[u8] = b"are-ocw::local_host_key";
 
+/// For `ares` authority.
 pub mod crypto;
 
 pub type MaximumPriceKey = ConstU32<15>;
@@ -121,6 +122,7 @@ impl Default for PreCheckTaskConfig {
 		}
 	}
 }
+
 
 pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	//

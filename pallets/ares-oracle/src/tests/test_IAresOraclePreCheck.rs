@@ -103,12 +103,6 @@ fn test_take_price_for_pre_check() {
 	let keystore = KeyStore::new();
 	SyncCryptoStore::sr25519_generate_new(&keystore, AuraId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 
-	let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID)
-		.get(0)
-		.unwrap()
-		.clone();
-	let create_account = public_key_1.into_account();
-
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.register_extension(TransactionPoolExt::new(pool));
 	t.register_extension(KeystoreExt(Arc::new(keystore)));

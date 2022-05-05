@@ -72,6 +72,7 @@ use frame_support::sp_runtime::app_crypto::Ss58Codec;
 use frame_support::sp_runtime::testing::{Digest, DigestItem};
 use frame_support::sp_std::convert::TryFrom;
 use sp_application_crypto::Pair;
+use sp_consensus_aura::AURA_ENGINE_ID;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -262,12 +263,12 @@ ord_parameter_types! {
 
 impl Config for Test {
 	type Event = Event;
-	type OffchainAppCrypto = crate::AresCrypto<AuraId>;
+	type OffchainAppCrypto = crate::ares_crypto::AresCrypto<AuraId>;
 	type AuthorityAres = AuraId;
 	type Call = Call;
 	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
 	type UnsignedPriority = UnsignedPriority;
-	type FindAuthor = TestFindAuthor;
+	// type FindAuthor = TestFindAuthor;
 	type CalculationKind = CalculationKind;
 	type ErrLogPoolDepth = ErrLogPoolDepth;
 	type AuthorityCount = TestAuthorityCount;
@@ -676,6 +677,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let request_acc = <Test as SigningTypes>::Public::from(public_key_1.clone());
 		let offer = 10u64;
 		let submit_threshold = 100u8;
+		// let submit_threshold = Percent::from_percent(100); // 100u8;
 		let max_duration = 3u64;
 		let request_keys = RequestKeys::create_on_vec(   vec![ PriceKey::create_on_vec(to_test_vec("btc_price"))] );
 
@@ -723,7 +725,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 					<Test as SigningTypes>::Public,
 					<Test as frame_system::Config>::BlockNumber,
 					AuraId,
-				> as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
+				> as SignedPayload<Test>>::verify::<crate::ares_crypto::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
 			assert!(signature_valid);
 
 			// Test purchased submit call
@@ -985,6 +987,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
 		let submit_threshold = 60u8;
+		// let submit_threshold = Percent::from_percent(60); // 60u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price")];
 
@@ -1198,6 +1201,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
 		let submit_threshold = 60u8;
+		// let submit_threshold = Percent::from_percent(60) ; //60u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price")];
 		Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
@@ -1554,6 +1558,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		let request_acc = <Test as SigningTypes>::Public::from(public_key_1.clone());
 		let offer = 10u64;
 		let submit_threshold = 100u8;
+		// let submit_threshold = Percent::from_percent(100);// 100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("doge_price")];
 
@@ -1600,7 +1605,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 					<Test as SigningTypes>::Public,
 					<Test as frame_system::Config>::BlockNumber,
 					AuraId,
-				> as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
+				> as SignedPayload<Test>>::verify::<crate::ares_crypto::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
 			assert!(signature_valid);
 
 			// Test purchased submit call
@@ -1912,6 +1917,7 @@ fn update_purchase_avg_price_storage() {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
 				submit_threshold: 60,
+				// submit_threshold: Percent::from_percent(60), //60,
 				create_bn: Default::default(),
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -1924,6 +1930,7 @@ fn update_purchase_avg_price_storage() {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
 				submit_threshold: 60,
+				// submit_threshold: Percent::from_percent(60), //60,
 				create_bn: Default::default(),
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -2007,7 +2014,7 @@ fn update_purchase_avg_price_storage() {
 		).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("abc")), PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP);
+		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("abc")), PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE);
 		AresOcw::purchased_storage_clean(PurchaseId::create_on_vec(to_test_vec("abc")));
 		// Get avg
 		let avg_price = <PurchasedAvgPrice<Test>>::get(
@@ -2018,7 +2025,7 @@ fn update_purchase_avg_price_storage() {
 			avg_price,
 			PurchasedAvgPriceData {
 				create_bn: 2,
-				reached_type: PURCHASED_FINAL_TYPE_IS_THRESHOLD_UP,
+				reached_type: PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE,
 				price_data: (101, 2)
 			}
 		);
@@ -2036,7 +2043,7 @@ fn update_purchase_avg_price_storage() {
 		).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("bcd")), PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN);
+		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("bcd")), PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE);
 		AresOcw::purchased_storage_clean(PurchaseId::create_on_vec(to_test_vec("bcd")));
 		// Get avg
 		let avg_price = <PurchasedAvgPrice<Test>>::get(
@@ -2047,7 +2054,7 @@ fn update_purchase_avg_price_storage() {
 			avg_price,
 			PurchasedAvgPriceData {
 				create_bn: 2,
-				reached_type: PURCHASED_FINAL_TYPE_IS_FORCE_CLEAN,
+				reached_type: PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE,
 				price_data: (201, 2)
 			}
 		);
@@ -2075,6 +2082,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 				account_id: AccountId::from_raw([0;32]),
 				offer: 0,
 				submit_threshold: 60,
+				// submit_threshold: Percent::from_percent(60), //60,
 				create_bn: 1,
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -2148,6 +2156,7 @@ fn test_ask_price() {
 		let account_id1 = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
 		let submit_threshold = 100u8;
+		// let submit_threshold = Percent::from_percent(100); //100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("eth_price")];
 
@@ -2228,6 +2237,7 @@ fn test_fetch_purchased_request_keys() {
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
 		let submit_threshold = 100u8;
+		// let submit_threshold = Percent::from_percent(100); //100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("eth_price")];
 
@@ -2312,10 +2322,12 @@ fn test_update_purchased_param() {
 		assert_eq!(AresOcw::purchased_default_setting(), PurchasedDefaultData::default());
 		// submit_threshold: u8, max_duration: u64, unit_price: u64
 		assert_ok!(AresOcw::update_purchased_param(Origin::root(), 10, 20, 30));
+		// assert_ok!(AresOcw::update_purchased_param(Origin::root(), Percent::from_percent(10), 20, 30));
 		assert_eq!(
 			AresOcw::purchased_default_setting(),
 			PurchasedDefaultData {
 				submit_threshold: 10,
+				// submit_threshold: Percent::from_percent(10), // 10,
 				max_duration: 20,
 				avg_keep_duration: 30,
 				// unit_price: 30,
@@ -3458,7 +3470,7 @@ fn save_fetch_ares_price_and_send_payload_signed() {
 				<Test as SigningTypes>::Public,
 				<Test as frame_system::Config>::BlockNumber,
 				AuraId,
-			> as SignedPayload<Test>>::verify::<crate::AresCrypto<AuraId>>(
+			> as SignedPayload<Test>>::verify::<crate::ares_crypto::AresCrypto<AuraId>>(
 				&price_payload_b1, signature.clone()
 			);
 			assert!(signature_valid);
