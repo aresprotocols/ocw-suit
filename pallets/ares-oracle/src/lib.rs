@@ -58,8 +58,9 @@ pub mod traits;
 pub mod types;
 
 pub mod aura_handler;
-pub mod babe_handler;
 pub mod author_events;
+pub mod babe_handler;
+pub mod offchain_filter;
 // pub mod migrations;
 
 
@@ -1286,14 +1287,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn block_author)]
-	pub type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+	pub(super) type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 
 	pub type AuthorTraceData<T: Config> = BoundedVec<(T::AccountId, T::BlockNumber), MaximumLogsSize> ;
 
 	#[pallet::storage]
 	#[pallet::getter(fn block_author_trace)]
-	pub type BlockAuthorTrace<T: Config> = StorageValue<_, AuthorTraceData<T>, OptionQuery>;
+	pub(super) type BlockAuthorTrace<T: Config> = StorageValue<_, AuthorTraceData<T>, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn purchased_default_setting)]
@@ -1872,7 +1873,6 @@ impl<T: Config> Pallet<T> {
 		// let idx = <T as pallet::Config>::FindAuthor::find_author(pre_runtime_digests)?;
 		// let validators = <Authorities<T>>::get().unwrap_or(StashAndAuthorityVec::<T>::default()) ;
 		// validators.get(idx as usize).map(|(_, k)| k.clone())
-		log::debug!("get_block_author acc == starting");
 		if let Some(block_author) = BlockAuthor::<T>::get() {
 			return Authorities::<T>::get().map_or(None, |sets| {
 				let mut authority_ares = None;
@@ -3227,9 +3227,6 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::PayToPurchaseFeeFailed);
 		}
 
-		// let request_mission: PurchasedRequestData<T::AccountId, BalanceOf<T>, T::BlockNumber> =
-		// 	PurchasedRequestPool::<T>::get(purchase_id.clone());
-		// update report work point
 		<PurchasedOrderPool<T>>::iter_prefix(purchase_id.clone())
 			.into_iter()
 			.any(|(acc, _)| {
