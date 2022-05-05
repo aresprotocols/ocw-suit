@@ -773,8 +773,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn update_purchased_param(
 			origin: OriginFor<T>,
-			submit_threshold: u8,
-			// submit_threshold: Percent,
+			// submit_threshold: u8,
+			submit_threshold: Percent,
 			max_duration: u64,
 			avg_keep_duration: u64,
 		) -> DispatchResult {
@@ -1490,9 +1490,9 @@ pub mod pallet {
 	/// Store data read from werehouse.
 	pub type RequestBaseVecU8 = BoundedVec<u8, MaximumRequestBaseSize>;
 
-	// #[pallet::storage]
-	// #[pallet::getter(fn request_base_onchain)]
-	// pub(super) type RequestBaseOnchain<T: Config> = StorageValue<_, RequestBaseVecU8, ValueQuery>;
+	#[pallet::storage]
+	#[pallet::getter(fn request_base_onchain)]
+	pub(super) type RequestBaseOnchain<T: Config> = StorageValue<_, RequestBaseVecU8, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn jump_block_number)]
@@ -1664,9 +1664,9 @@ pub mod pallet {
 			if self.price_pool_depth > 0 {
 				PricePoolDepth::<T>::put(&self.price_pool_depth);
 			}
-			// if self.request_base.len() > 0 {
-			// 	RequestBaseOnchain::<T>::put(RequestBaseVecU8::create_on_vec(self.request_base.clone()));
-			// }
+			if self.request_base.len() > 0 {
+				RequestBaseOnchain::<T>::put(RequestBaseVecU8::create_on_vec(self.request_base.clone()));
+			}
 			Pallet::<T>::initialize_authorities(StashAndAuthorityVec::<T>::create_on_vec(self.authorities.clone()));
 			PriceAllowableOffset::<T>::put(&self.price_allowable_offset);
 			// For new vesrion.
@@ -1860,10 +1860,11 @@ impl<T: Config> Pallet<T> {
 	// Get request domain, include TCP protocol, example: http://www.xxxx.com
 	fn get_local_storage_request_domain() -> RequestBaseVecU8 {
 
-		// let request_base_onchain = RequestBaseOnchain::<T>::get();
-		// if request_base_onchain.len() > 0 {
-		// 	return request_base_onchain;
-		// }
+		let request_base_onchain = RequestBaseOnchain::<T>::get();
+		if request_base_onchain.len() > 0 {
+			return request_base_onchain;
+		}
+
 		let storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
 
 		if let Some(request_base) = storage_request_base.get::<Vec<u8>>().unwrap_or(Some(Vec::new())) {
@@ -1877,11 +1878,6 @@ impl<T: Config> Pallet<T> {
 			}else{
 				log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "request_base_vec" );
 			}
-		} else {
-			log::warn!(
-				target: "pallet::ocw::get_local_storage_request_domain",
-				"❗ Not found request base url."
-			);
 		}
 		Default::default()
 	}
@@ -2683,14 +2679,14 @@ impl<T: Config> Pallet<T> {
 	fn ask_price(
 		who: T::AccountId,
 		offer: BalanceOf<T>,
-		submit_threshold: u8,
-		// submit_threshold: Percent,
+		// submit_threshold: u8,
+		submit_threshold: Percent,
 		max_duration: u64,
 		purchase_id: PurchaseId,
 		request_keys: RequestKeys,
 	) -> Result<PurchaseId, Error<T>> {
-		if 0 >= submit_threshold || 100 < submit_threshold {
-		// if submit_threshold == Zero::zero() {
+		// if 0 >= submit_threshold || 100 < submit_threshold {
+		if submit_threshold == Zero::zero() {
 			return Err(Error::<T>::SubmitThresholdRangeError);
 		}
 		if 0 >= max_duration {
@@ -3135,13 +3131,12 @@ impl<T: Config> Pallet<T> {
 
 		let reporter_count = reporter_count as u64;
 
-		let div_val = (reporter_count * 100) / (validator_count);
-		let submit_threshold = purchased_request.submit_threshold as u64;
-		div_val >= submit_threshold
+		// let div_val = (reporter_count * 100) / (validator_count);
+		// let submit_threshold = purchased_request.submit_threshold as u64;
+		// div_val >= submit_threshold
 
-
-		// let div_val = Percent::from_rational(reporter_count,validator_count);
-		// div_val >= purchased_request.submit_threshold
+		let div_val = Percent::from_rational(reporter_count,validator_count);
+		div_val >= purchased_request.submit_threshold
 	}
 
 	fn is_all_validator_submitted_price(purchased_id: PurchaseId) -> bool {

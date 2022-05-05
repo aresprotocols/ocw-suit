@@ -42,14 +42,14 @@ impl Default for OcwControlData {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PurchasedDefaultData {
-	pub submit_threshold: u8,
+	pub submit_threshold: Percent,
 	pub max_duration: u64,
 	pub avg_keep_duration: u64,
 }
 
 impl PurchasedDefaultData {
-	pub fn new(submit_threshold: u8, max_duration: u64, avg_keep_duration: u64) -> Self {
-		if submit_threshold == 0 || submit_threshold > 100 {
+	pub fn new(submit_threshold: Percent, max_duration: u64, avg_keep_duration: u64) -> Self {
+		if submit_threshold == Zero::zero() {
 			panic!("Submit Threshold range is (0 - 100] ");
 		}
 		if max_duration == 0 {
@@ -59,7 +59,6 @@ impl PurchasedDefaultData {
 			submit_threshold,
 			max_duration,
 			avg_keep_duration,
-			// unit_price,
 		}
 	}
 }
@@ -90,8 +89,8 @@ impl PurchasedDefaultData {
 impl Default for PurchasedDefaultData {
 	fn default() -> Self {
 		Self {
-			submit_threshold: 60,
-			// submit_threshold: Percent::from_percent(60),
+			// submit_threshold: 60,
+			submit_threshold: Percent::from_percent(60),
 			max_duration: 20,
 			avg_keep_duration: 14400,
 		}
@@ -143,8 +142,8 @@ pub struct PurchasedRequestData<AccountId, Balance, BlockNumber> {
 	pub account_id: AccountId,
 	pub offer: Balance,
 	pub create_bn: BlockNumber,
-	pub submit_threshold: u8,
-	// pub submit_threshold: Percent,
+	// pub submit_threshold: u8,
+	pub submit_threshold: Percent,
 	pub max_duration: u64,
 	pub request_keys: RequestKeys,
 }

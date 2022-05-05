@@ -676,8 +676,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		// Add purchased request.
 		let request_acc = <Test as SigningTypes>::Public::from(public_key_1.clone());
 		let offer = 10u64;
-		let submit_threshold = 100u8;
-		// let submit_threshold = Percent::from_percent(100); // 100u8;
+		// let submit_threshold = 100u8;
+		let submit_threshold = Percent::from_percent(100); // 100u8;
 		let max_duration = 3u64;
 		let request_keys = RequestKeys::create_on_vec(   vec![ PriceKey::create_on_vec(to_test_vec("btc_price"))] );
 
@@ -986,8 +986,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		// Add purchased request.
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
-		let submit_threshold = 60u8;
-		// let submit_threshold = Percent::from_percent(60); // 60u8;
+		// let submit_threshold = 60u8;
+		let submit_threshold = Percent::from_percent(60); // 60u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price")];
 
@@ -1200,8 +1200,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		// Add purchased request.
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
-		let submit_threshold = 60u8;
-		// let submit_threshold = Percent::from_percent(60) ; //60u8;
+		// let submit_threshold = 60u8;
+		let submit_threshold = Percent::from_percent(60) ; //60u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price")];
 		Balances::set_balance(Origin::root(), request_acc, 100000_000000000000, 0);
@@ -1557,8 +1557,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		// Add purchased request.
 		let request_acc = <Test as SigningTypes>::Public::from(public_key_1.clone());
 		let offer = 10u64;
-		let submit_threshold = 100u8;
-		// let submit_threshold = Percent::from_percent(100);// 100u8;
+		// let submit_threshold = 100u8;
+		let submit_threshold = Percent::from_percent(100);// 100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("doge_price")];
 
@@ -1916,8 +1916,8 @@ fn update_purchase_avg_price_storage() {
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
-				submit_threshold: 60,
-				// submit_threshold: Percent::from_percent(60), //60,
+				// submit_threshold: 60,
+				submit_threshold: Percent::from_percent(60), //60,
 				create_bn: Default::default(),
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -1929,8 +1929,8 @@ fn update_purchase_avg_price_storage() {
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
-				submit_threshold: 60,
-				// submit_threshold: Percent::from_percent(60), //60,
+				// submit_threshold: 60,
+				submit_threshold: Percent::from_percent(60), //60,
 				create_bn: Default::default(),
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -2081,8 +2081,8 @@ fn test_is_validator_purchased_threshold_up_on() {
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0;32]),
 				offer: 0,
-				submit_threshold: 60,
-				// submit_threshold: Percent::from_percent(60), //60,
+				// submit_threshold: 60,
+				submit_threshold: Percent::from_percent(60), //60,
 				create_bn: 1,
 				max_duration: 0,
 				request_keys: Default::default(),
@@ -2155,8 +2155,8 @@ fn test_ask_price() {
 		//
 		let account_id1 = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
-		let submit_threshold = 100u8;
-		// let submit_threshold = Percent::from_percent(100); //100u8;
+		// let submit_threshold = 100u8;
+		let submit_threshold = Percent::from_percent(100); //100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("eth_price")];
 
@@ -2236,8 +2236,8 @@ fn test_fetch_purchased_request_keys() {
 		// Add purchased request.
 		let request_acc = AccountId::from_raw([1; 32]);
 		let offer = 10u64;
-		let submit_threshold = 100u8;
-		// let submit_threshold = Percent::from_percent(100); //100u8;
+		// let submit_threshold = 100u8;
+		let submit_threshold = Percent::from_percent(100); //100u8;
 		let max_duration = 3u64;
 		let request_keys = vec![to_test_vec("btc_price"), to_test_vec("eth_price")];
 
@@ -2321,13 +2321,13 @@ fn test_update_purchased_param() {
 	t.execute_with(|| {
 		assert_eq!(AresOcw::purchased_default_setting(), PurchasedDefaultData::default());
 		// submit_threshold: u8, max_duration: u64, unit_price: u64
-		assert_ok!(AresOcw::update_purchased_param(Origin::root(), 10, 20, 30));
-		// assert_ok!(AresOcw::update_purchased_param(Origin::root(), Percent::from_percent(10), 20, 30));
+		// assert_ok!(AresOcw::update_purchased_param(Origin::root(), 10, 20, 30));
+		assert_ok!(AresOcw::update_purchased_param(Origin::root(), Percent::from_percent(10), 20, 30));
 		assert_eq!(
 			AresOcw::purchased_default_setting(),
 			PurchasedDefaultData {
-				submit_threshold: 10,
-				// submit_threshold: Percent::from_percent(10), // 10,
+				// submit_threshold: 10,
+				submit_threshold: Percent::from_percent(10), // 10,
 				max_duration: 20,
 				avg_keep_duration: 30,
 				// unit_price: 30,
