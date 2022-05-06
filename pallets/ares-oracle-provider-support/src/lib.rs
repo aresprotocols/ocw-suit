@@ -123,21 +123,25 @@ impl Default for PreCheckTaskConfig {
 	}
 }
 
-
+/// `Pre-Check trait`
 pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
-	//
+
+	/// Determine whether there is a pre-check task for the `validator` through a stash account.
 	fn has_pre_check_task(stash: AccountId) -> bool;
 
-	//
+	/// Get the pre-check information related to a certain `ares-authority` collection,
+	/// the specific matching authority-id, account-id, and the block submitted by the task.
+	///
+	/// Precheck tasks that only match the first `ares-authority`
 	fn get_pre_task_by_authority_set(auth_list: Vec<AuthorityId>) -> Option<(AccountId, AuthorityId, BlockNumber)>;
 
 	//
 	fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
 
-	// Obtain a set of price data according to the task configuration structure.
+	/// Obtain a set of price data according to the task configuration structure.
 	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList;
 
-	// Record the per check results and add them to the storage structure.
+	/// Record the per check results and add them to the storage structure.
 	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus;
 
 	//
@@ -150,31 +154,25 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> bool;
 }
 
+
 impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	fn has_pre_check_task(_stash: AC) -> bool {
 		false
 	}
-
 	fn get_pre_task_by_authority_set(_auth_list: Vec<AU>) -> Option<(AC, AU, B)> {
 		None
 	}
-
 	fn check_and_clean_obsolete_task(_maximum_due: B) -> u64 {
 		0
 	}
-
 	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> PreCheckList {
 		Default::default()
 	}
-
 	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) -> PreCheckStatus { PreCheckStatus::Review }
-
 	fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
 		None
 	}
-
 	fn clean_pre_check_status(_stash: AC) {}
-
 	fn create_pre_check_task(_stash: AC, _auth: AU, _bn: B) -> bool {
 		false
 	}

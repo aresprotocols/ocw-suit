@@ -64,7 +64,10 @@ pub mod types;
 pub mod author_events;
 /// Provides [`AresOracleFilter`](offchain_filter::AresOracleFilter) structure to determine whether the offchain transaction in the transaction pool is valid.
 pub mod offchain_filter;
-// pub mod migrations;
+/// For Offchain-payload handler functions.
+pub mod offchain_payload_helper;
+/// for Offchain-storage handler functions
+pub mod offchain_storage_helper;
 /// Utility trait to be implemented on payloads that can be signed.
 pub mod ares_crypto;
 
@@ -508,6 +511,9 @@ pub mod pallet {
 		}
 
 		/// An offline method that submits and saves the purchase-result data.
+		/// If the count of validator submitted by `purchase-id` already
+		/// reached the threshold requirements, then average price will be
+		/// aggregation and mark [PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE)
 		///
 		/// The dispatch origin fo this call must be __none__.
 		///
@@ -1454,7 +1460,6 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-
 	/// The `Ares-price` pool structure, actually associated with [`AresPriceDataVec`](types::AresPriceDataVec)
 	pub type AresPriceDataVecOf<T: Config> = AresPriceDataVec<T::AccountId, T::BlockNumber>;
 	// migrated
@@ -1888,50 +1893,6 @@ impl<T: Config> Pallet<T> {
 		result
 	}
 
-	/// Calculate a random integer and store it in `local-storage`,
-	/// the key is [LOCAL_HOST_KEY](ares_oracle_provider_support::LOCAL_HOST_KEY)
-	fn get_local_host_key() -> u32 {
-		let storage_local_host_key = StorageValueRef::persistent(LOCAL_HOST_KEY);
-
-		let old_key = storage_local_host_key.get::<u32>();
-		if let Some(storage_key) = old_key.unwrap() {
-			return storage_key;
-		}
-
-		let seed = sp_io::offchain::random_seed();
-		let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()));
-		if random.is_ok() {
-			let random = random.unwrap();
-			storage_local_host_key.set(&random);
-			return random;
-		}
-		0
-	}
-
-	/// Get the request address set by werahouse.
-	fn get_local_storage_request_domain() -> RequestBaseVecU8 {
-
-		let request_base_onchain = RequestBaseOnchain::<T>::get();
-		if request_base_onchain.len() > 0 {
-			return request_base_onchain;
-		}
-
-		let storage_request_base = StorageValueRef::persistent(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN);
-
-		if let Some(request_base) = storage_request_base.get::<Vec<u8>>().unwrap_or(Some(Vec::new())) {
-
-			if let Ok(result_base_str) = sp_std::str::from_utf8(&request_base) {
-				log::debug!("🚅 Ares local request base: {:?}.", &result_base_str);
-			}
-			let request_base_vec_res = RequestBaseVecU8::try_create_on_vec(request_base) ;
-			if let Ok(request_base_vec) = request_base_vec_res {
-				return request_base_vec;
-			}else{
-				log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "request_base_vec" );
-			}
-		}
-		Default::default()
-	}
 
 	/// Link `sub_path` behind `request_domain`.
 	fn make_local_storage_request_uri_by_vec_u8(sub_path: Vec<u8>) -> RequestBaseVecU8 {
@@ -1970,39 +1931,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	fn save_forced_clear_purchased_price_payload_signed(
-		block_number: T::BlockNumber,
-		account_id: T::AuthorityAres,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let force_request_list = Self::get_expired_purchased_transactions();
-
-		log::debug!("🚅 Force request list length: {:?} .", &force_request_list.len());
-		if force_request_list.len() > 0 {
-			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-			// Singer
-			let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-				.with_filter(sign_public_keys)
-				.send_unsigned_transaction(
-					|account| PurchasedForceCleanPayload {
-						block_number,
-						purchase_id_list: force_request_list.clone(),
-						auth: account_id.clone(),
-						public: account.public.clone(),
-					},
-					|payload, signature| Call::submit_forced_clear_purchased_price_payload_signed {
-						price_payload: payload,
-						signature,
-					},
-				)
-				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-			result.map_err(|()| "⛔ Unable to submit transaction")?;
-		}
-		Ok(())
-	}
-
+	/// Convert `AuthorityAres` type to `Public` type
 	fn handler_get_sign_public_keys(account_id: T::AuthorityAres) -> Vec<<T as SigningTypes>::Public>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -2018,158 +1947,7 @@ impl<T: Config> Pallet<T> {
 		sign_public_keys
 	}
 
-	//
-	fn save_fetch_purchased_price_and_send_payload_signed(
-		block_number: T::BlockNumber,
-		account_id: T::AuthorityAres,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let mut price_list = Vec::new();
-		// Get purchased request by AccountId
-		let purchased_key = Self::fetch_purchased_request_keys(account_id.clone());
-
-		if purchased_key.is_none() {
-			log::debug!("🚅 Waiting for purchased service.");
-			return Ok(());
-		}
-
-		let purchased_key = purchased_key.unwrap();
-		if 0 == purchased_key.raw_source_keys.len() {
-			log::warn!(
-				target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
-				"❗ Purchased raw key is empty."
-			);
-			return Ok(());
-		}
-
-		let fetch_http_result = Self::fetch_bulk_price_with_http(purchased_key.clone().raw_source_keys);
-
-		let price_result = fetch_http_result;
-		if price_result.is_err() {
-			log::error!(
-				target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
-				"⛔ Ocw network error."
-			);
-			// Record http error.
-			Self::trace_network_error(
-				account_id,
-				purchased_key.clone().raw_source_keys,
-				price_result.err().unwrap(),
-				"purchased_worker".as_bytes().to_vec(),
-			);
-			return Ok(());
-		}
-
-		for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result.unwrap() {
-			if price_option.is_some() {
-				// record price to vec!
-				price_list.push(PricePayloadSubPrice(
-					price_key,
-					price_option.unwrap(),
-					fraction_length,
-					JsonNumberValue::new(json_number_value),
-					timestamp,
-				));
-			}
-		}
-		let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price list is too long");
-		log::debug!("🚅 fetch purchased price count: {:?}", price_list.len());
-		if price_list.len() > 0 {
-			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-			// Singer
-			let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-				.with_filter(sign_public_keys)
-				.send_unsigned_transaction(
-					|account| PurchasedPricePayload {
-						price: price_list.clone(),
-						block_number,
-						purchase_id: purchased_key.purchase_id.clone(),
-						auth: account_id.clone(),
-						public: account.public.clone(),
-					},
-					|payload, signature| Call::submit_purchased_price_unsigned_with_signed_payload {
-						price_payload: payload,
-						signature,
-					},
-				)
-				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-			result.map_err(|()| "⛔ Unable to submit transaction")?;
-		}
-		Ok(())
-	}
-
-	fn save_offchain_pre_check_result(
-		stash_id: T::AccountId,
-		auth_id: T::AuthorityAres,
-		block_number: T::BlockNumber,
-		pre_check_list: PreCheckList,
-		task_at: T::BlockNumber,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let sign_public_keys = Self::handler_get_sign_public_keys(auth_id.clone());
-		// Singer
-		let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-			.with_filter(sign_public_keys)
-			.send_unsigned_transaction(
-				|account| PreCheckResultPayload {
-					pre_check_stash: stash_id.clone(),
-					pre_check_auth: auth_id.clone(),
-					block_number,
-					pre_check_list: pre_check_list.clone(),
-					task_at,
-					public: account.public.clone(),
-				},
-				|payload, signature| Call::submit_offchain_pre_check_result {
-					preresult_payload: payload,
-					signature,
-				},
-			)
-			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-		result.map_err(|()| "⛔ Unable to submit transaction")?;
-		Ok(())
-	}
-
-	fn trace_network_error(
-		account_id: T::AuthorityAres,
-		_format_arr: RawSourceKeys,
-		http_err: HttpError,
-		// tip: VecTraceDataTip,
-		tip: Vec<u8>,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-		// let tip: BoundedVec<u8, MaximumErrorTip> = tip.try_into().expect("tip is too long");
-		// Singer
-		let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-			.with_filter(sign_public_keys)
-			.send_unsigned_transaction(
-				|account| HttpErrTracePayload {
-					trace_data: HttpErrTraceData {
-						block_number: <system::Pallet<T>>::block_number(),
-						// request_list: format_arr.clone(),
-						err_auth: Self::get_stash_id(&account_id.clone()).unwrap(),
-						err_status: http_err.clone(),
-						tip: DataTipVec::create_on_vec(tip.clone()) ,
-					},
-					auth: account_id.clone(),
-					public: account.public.clone(),
-				},
-				|payload, signature| Call::submit_offchain_http_err_trace_result {
-					err_payload: payload,
-					signature,
-				},
-			)
-			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-		result.map_err(|()| "⛔ Unable to submit transaction")?;
-		Ok(())
-	}
-
+	/// r
 	fn save_create_pre_check_task(
 		account_id: T::AuthorityAres,
 		stash_id: T::AccountId,
@@ -2921,14 +2699,13 @@ impl<T: Config> Pallet<T> {
 		}
 		None
 	}
-	// to determine whether the submit price period has expired but there is still no submit.
-	// This function returns a list of purchased_id.
+
+	/// Find those requests that have exceeded the `max_duration` limit,
+	/// but are still in the commit state, return `purchase-id` list.
 	fn get_expired_purchased_transactions() -> Vec<PurchaseId> {
-		// let a : PurchasedRequestData<T> ;
 		let mut purchased_id_list: Vec<PurchaseId> = Vec::default();
 		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
 
-		//TODO should be return Result<>
 		<PurchasedRequestPool<T>>::iter().any(|(p_id, p_d)| {
 			if current_block >= p_d.max_duration {
 				purchased_id_list.push(p_id.clone());
@@ -2938,7 +2715,11 @@ impl<T: Config> Pallet<T> {
 		purchased_id_list
 	}
 
-	fn handler_purchase_avg_price_storage(
+	/// Save paid price results,The submitted price will be compared with the average price,
+	/// and if the offset is too large, it will be recorded in `AresAbnormalPrice<T>`.
+	///
+	/// Offset setting parameters are stored in `PriceAllowableOffset<T>`
+	fn handler_purchase_avg_price_storage (
 		purchase_id: PurchaseId,
 		price_key: PriceKey,
 		mut prices_info: PurchasedPriceDataVec<T>,
@@ -2963,9 +2744,7 @@ impl<T: Config> Pallet<T> {
 					_ => Percent::from_percent(0),
 				};
 				if offset_percent > <PriceAllowableOffset<T>>::get()  {
-					// Set price to abnormal list and pick out check_price
-					// TODO:: need update struct of AresAbnormalPrice , add the comparison value of the current
-					// deviation
+
 					<AresAbnormalPrice<T>>::try_append(
 						price_key.clone(),
 						(
@@ -3022,7 +2801,10 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	// Return aggregation count
+	/// Execute the average price aggregation of `ask-price`, and the expired data will be deleted after aggregation
+	/// - purchase_id: `ask-price` order id.
+	/// - reached_type: Take the value of [PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE)
+	/// or [PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE).
 	fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) -> usize {
 		// Get purchase price pool
 		let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
@@ -3050,6 +2832,8 @@ impl<T: Config> Pallet<T> {
 		result_count
 	}
 
+	/// Check and clear old data, the duration of data saving is stored in `PurchasedDefaultSetting<T>`,
+	/// you can modify it by the [update_purchased_param()](pallet::update_purchased_param)
 	fn check_and_clear_expired_purchased_average_price_storage(
 		// purchase_id: PurchaseId,
 		current_block_num: u64,
@@ -3067,20 +2851,9 @@ impl<T: Config> Pallet<T> {
 		});
 
 		return has_remove;
-
-		// let avg_trace = <PurchasedAvgTrace<T>>::get(purchase_id.clone());
-		// let avg_trace_num: u64 = avg_trace.unique_saturated_into();
-		// let purchase_setting = <PurchasedDefaultSetting<T>>::get();
-		// let comp_blocknum = purchase_setting.avg_keep_duration.saturating_add(avg_trace_num);
-		// if current_block_num > comp_blocknum {
-		// 	<PurchasedAvgPrice<T>>::remove_prefix(purchase_id.clone(), None);
-		// 	<PurchasedAvgTrace<T>>::remove(purchase_id.clone());
-		// 	return true;
-		// }
-		// false
 	}
 
-	//
+	/// Clear on-chain data of a `trading-pair`, including its average price.
 	fn clear_price_storage_data(price_key: PriceKey) {
 		<AresPrice<T>>::remove(&price_key);
 		<AresAvgPrice<T>>::remove(&price_key);
@@ -3125,7 +2898,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	// handleCalculateJumpBlock((interval,jump_block))
+	/// Calculate jump blocks
 	fn handle_calculate_jump_block(jump_format: (u64, u64)) -> (u64, u64) {
 		let (interval, jump_block) = jump_format;
 		assert!(interval > 0, "The minimum interval value is 1");
@@ -3137,6 +2910,7 @@ impl<T: Config> Pallet<T> {
 		(interval, new_jump_block)
 	}
 
+	///
 	fn add_purchased_price(
 		purchase_id: PurchaseId,
 		account_id: T::AccountId,
@@ -3225,10 +2999,6 @@ impl<T: Config> Pallet<T> {
 			return Default::default();
 		}
 		let purchased_str = purchased_str.unwrap();
-		// remove space char.
-		// let purchased_str: Vec<char> = purchased_str.chars().filter(|c|{!c.is_whitespace()}).collect();
-		// let purchased_str: Vec<u8> = purchased_str.iter().map(|x|{ x.as_()}).collect();
-		// // let purchased_str = sp_std::str::from_utf8(purchased_str.as_slice()).unwrap();
 
 		let purchased_vec: Vec<&str> = purchased_str.split(',').collect();
 
@@ -3245,7 +3015,10 @@ impl<T: Config> Pallet<T> {
 		result
 	}
 
-	// Increase jump block number, PARAM:: price_key, interval
+	/// When in the Aura consensus system, in order to avoid a certain `trading-pairs`
+	/// being repeatedly `submit` by a certain validator, the `jump block` mechanism appears.
+	///
+	/// This method can change the execution interval of `submit` to avoid this problem.
 	fn increase_jump_block_number(price_key: PriceKey, interval: u64) -> (u64, u64) {
 		let (old_interval, jump_number) =
 			Self::handle_calculate_jump_block((interval, Self::get_jump_block_number(price_key.clone())));
@@ -3253,16 +3026,17 @@ impl<T: Config> Pallet<T> {
 		(old_interval, jump_number)
 	}
 
-	// Get jump block number
+	/// Get the number of `jump block` associated with `trading-pairs`.
 	fn get_jump_block_number(price_key: PriceKey) -> u64 {
 		<JumpBlockNumber<T>>::get(&price_key).unwrap_or(0)
 	}
 
-	// delete a jump block info.
+	/// Delete jump block data
 	fn remove_jump_block_number(price_key: PriceKey) {
 		<JumpBlockNumber<T>>::remove(&price_key);
 	}
 
+	/// Calculates the median for the given `prices`.
 	fn calculation_average_price(mut prices: Vec<u64>, kind: u8) -> Option<u64> {
 		if 2 == kind {
 			// use median
@@ -3281,6 +3055,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
+	/// For offchian validate.
 	fn validate_transaction_parameters_of_ares(
 		block_number: &T::BlockNumber,
 		// _price_list: Vec<(Vec<u8>, u64, FractionLength, JsonNumberValue)>,
@@ -3305,6 +3080,7 @@ impl<T: Config> Pallet<T> {
 			.build()
 	}
 
+	/// When `ask-price` completes, the function updates the points to the financial system.
 	fn update_reporter_point(purchase_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>> {
 		let request_mission = PurchasedRequestPool::<T>::get(purchase_id.clone());
 		if request_mission.is_none() {
@@ -3332,7 +3108,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
+fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 where
 	D: Deserializer<'de>,
 {
