@@ -21,11 +21,16 @@ pub type OffchainSignature<T> = <T as SigningTypes>::Signature;
 pub type PricePayloadSubPriceList = BoundedVec<PricePayloadSubPrice, MaximumPoolSize>;
 pub type PricePayloadSubJumpBlockList = BoundedVec<PricePayloadSubJumpBlock, MaximumPoolSize>;
 
-
+/// Parameter group that controls the execution of ares-oracle
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct OcwControlData {
+	/// Whether to start the validator checker,
+	/// if not, the block producer will not be verified,
+	/// this is only used in the debugging phase
 	pub need_verifier_check: bool,
+	/// Whether the `free-price` moudle is enabled
 	pub open_free_price_reporter: bool,
+	/// Whether the `ask-price` moudle is enabled
 	pub open_paid_price_reporter: bool,
 }
 

@@ -113,7 +113,7 @@ pub mod pallet {
 		InsufficientBalance,
 		/// The `MaxFee` of the ask price payment limit is too low.
 		InsufficientMaxFee,
-		/// No available token pair are found.
+		/// No available `Trading pairs` are found.
 		NoPricePairsAvailable,
 		/// Occurred while requesting payment, please check if `Balance` is sufficient.
 		PayToPurchaseFeeFailed,
@@ -284,7 +284,7 @@ pub mod pallet {
 
 					if control_setting.open_free_price_reporter {
 						log::debug!("🚅 ❗ ⛔ Ocw offchain start {:?} offchain_bn={:?}, system_bn={:?} ", &author, &block_number, &<system::Pallet<T>>::block_number());
-						if Self::are_block_author_and_sotre_key_the_same(&author) {
+						if Self::check_block_author_and_sotre_key_the_same(&author) {
 							// For debug.
 							// log::debug!("🚅 @ Ares call [0] find = {:?}, authorship = {:?}.", &author, <pallet_authorship::Pallet<T>>::author());
 							log::debug!("🚅 @ Ares call [1] ares-price-worker.");
@@ -448,7 +448,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// - max_fee: The highest asking fee accepted by the signer.
-		/// - request_keys: A list of request pairs, separated by commas if multiple, such as: `eth-usdt, dot-sudt`, etc.
+		/// - request_keys: A list of `Trading pairs`, separated by commas if multiple, such as: `eth-usdt, dot-sudt`, etc.
 		#[pallet::weight(1000)]
 		pub fn submit_ask_price(
 			origin: OriginFor<T>,
@@ -466,7 +466,7 @@ pub mod pallet {
 
 			let raw_source_keys = Self::filter_raw_price_source_list(request_keys.clone());
 
-			// Filter out unsupported request pairs.
+			// Filter out unsupported `Trading pairs`.
 			let request_keys = raw_source_keys.into_iter().map(|(price_key, _, _, _)|{
 				price_key
 			}).collect::<Vec<_>>();
@@ -790,6 +790,14 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+
+		/// Update the control parameters of ares-oracle
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - need_verifier_check: Whether to start the validator checker.
+		/// - open_free_price_reporter: Whether the `free-price` moudle is enabled.
+		/// - open_paid_price_reporter: Whether the `ask-price` moudle is enabled.
 		#[pallet::weight(0)]
 		pub fn update_ocw_control_setting(
 			origin: OriginFor<T>,
@@ -808,6 +816,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Revoke the `key-pair` on the request token list.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - price_key: A price key, such as `btc-usdt`
 		#[pallet::weight(0)]
 		pub fn revoke_update_request_propose(origin: OriginFor<T>, price_key: Vec<u8>) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
@@ -827,6 +840,15 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Modify or add a `key-pair` to the request list.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - price_key: A price key, such as `btc-usdt`.
+		/// - price_token: A price token, such as `btc`.
+		/// - parse_version: Parse version, currently only parameter 2 is supported.
+		/// - fraction_num: Fractions when parsing numbers.
+		/// - request_interval: The interval between validators submitting price on chain.
 		#[pallet::weight(0)]
 		pub fn update_request_propose(
 			origin: OriginFor<T>,
@@ -900,14 +922,25 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Update the value of the `allowable offset` parameter to determine the abnormal range of the submitted price
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - offset: A Percent value.
 		#[pallet::weight(0)]
-		pub fn update_allowable_offset_propose(origin: OriginFor<T>, offset: u8) -> DispatchResult {
+		pub fn update_allowable_offset_propose(origin: OriginFor<T>, offset: Percent) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			<PriceAllowableOffset<T>>::put(offset);
 			Self::deposit_event(Event::PriceAllowableOffsetUpdate { offset });
 			Ok(())
 		}
 
+		/// Update the depth of the price pool. When the price pool reaches the maximum value,
+		/// the average price will be aggregated and put on the chain.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - depth: u32 integer
 		#[pallet::weight(0)]
 		pub fn update_pool_depth_propose(origin: OriginFor<T>, depth: u32) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
@@ -948,6 +981,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Update the pre-checked `Trading pairs` list for checking the validator price feature.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - token_list: [`PriceToken`](ares_oracle_provider_support::PriceToken)
 		#[pallet::weight(0)]
 		pub fn update_pre_check_token_list(origin: OriginFor<T>, token_list: TokenList) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
@@ -956,6 +994,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// `session-multi` indicates the trigger `pre-check` session period before the era.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - multi: integer
 		#[pallet::weight(0)]
 		pub fn update_pre_check_session_multi(origin: OriginFor<T>, multi: T::BlockNumber) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
@@ -963,6 +1006,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// The maximum offset allowed for `pre-check` when validation.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - offset: Percent
 		#[pallet::weight(0)]
 		pub fn update_pre_check_allowable_offset(origin: OriginFor<T>, offset: Percent) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
@@ -975,17 +1023,9 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// (price_key, price_val, fraction len)
 		AggregatedPrice {
 			results: Vec<(PriceKey, u64, FractionLength, Vec<T::AccountId>)>,
 		},
-		// NewPrice {
-		// 	results: Vec<(PriceKey, u64, FractionLength)>,
-		// 	jump_blocks: PricePayloadSubJumpBlockList,
-		// 	who: T::AccountId,
-		// },
-		// AbnormalPrice(PriceKey, AresPriceData<T::AccountId, T::BlockNumber>),
-		// The report request was closed when the price was submitted
 		PurchasedRequestWorkHasEnded {
 			purchase_id: PurchaseId,
 			who: T::AccountId,
@@ -1034,7 +1074,7 @@ pub mod pallet {
 			depth: u32,
 		},
 		PriceAllowableOffsetUpdate {
-			offset: u8,
+			offset: Percent,
 		},
 		InsufficientCountOfValidators {
 			purchase_id: PurchaseId,
@@ -1458,9 +1498,9 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn price_allowable_offset)]
-	pub(super) type PriceAllowableOffset<T: Config> = StorageValue<_, u8, ValueQuery>;
+	pub(super) type PriceAllowableOffset<T: Config> = StorageValue<_, Percent, ValueQuery>;
 
-	/// Stores a list of data defined by price-token pairs.
+	/// Stores a list of data defined by `Trading pairs`.
 	pub type PricesRequestsVec = BoundedVec<(
 		PriceKey,   // price key
 		PriceToken, // price token
@@ -1621,7 +1661,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub _phantom: sp_std::marker::PhantomData<T>,
 		pub request_base: Vec<u8>,
-		pub price_allowable_offset: u8,
+		pub price_allowable_offset: Percent,
 		pub price_pool_depth: u32,
 		pub price_requests: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>,
 		pub authorities: Vec<(T::AccountId, T::AuthorityAres)>,
@@ -1633,7 +1673,7 @@ pub mod pallet {
 			GenesisConfig {
 				_phantom: Default::default(),
 				request_base: Default::default(),
-				price_allowable_offset: 10u8,
+				price_allowable_offset: Percent::from_percent(10),
 				price_pool_depth: 10u32,
 				price_requests: Default::default(),
 				authorities: Default::default(),
@@ -1690,14 +1730,12 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 
-	// fn change_authorities(new: Vec<(T::AccountId, T::AuthorityAres)>) {
+	/// Update the new validator set.
 	fn change_authorities(new: StashAndAuthorityVec<T>) {
-		// let new: BoundedVec<(T::AccountId, T::AuthorityAres), MaximumAuthorities> =
-		// 	new.try_into().expect("authorities is too long");
 		<Authorities<T>>::put(&new);
 	}
 
-	//
+	/// If `local-xray` data has exceeded the length defined by the `maximum_due` parameter, it is removed.
 	fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
 		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
 		let mut weight :Weight = 1;
@@ -1711,6 +1749,7 @@ impl<T: Config> Pallet<T> {
 		weight
 	}
 
+	/// Used to initialize the ares-oracle validator data in the genesis configuration.
 	fn initialize_authorities(authorities: StashAndAuthorityVec<T>) {
 		if !authorities.is_empty() {
 			assert!(
@@ -1723,6 +1762,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Get the `ares-authority` through `stash-id`
 	pub fn get_auth_id(stash: &T::AccountId) -> Option<T::AuthorityAres> {
 		let authority_list = <Authorities<T>>::get();
 		if(authority_list.is_none()) {
@@ -1736,6 +1776,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
+	/// Get the `stash-id` through `ares-authority`
 	pub fn get_stash_id(auth: &T::AuthorityAres) -> Option<T::AccountId> {
 		let authorities =  <Authorities<T>>::get() ;
 		if authorities.is_none() {
@@ -1750,14 +1791,8 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	// fn get_stash_id_or_default(auth: &T::AuthorityAres) -> T::AccountId {
-	// 	if let Some(stash_id) = Self::get_stash_id(auth) {
-	// 		return stash_id;
-	// 	}
-	// 	Default::default()
-	// }
-
-	fn are_block_author_and_sotre_key_the_same(block_author: &T::AuthorityAres) -> bool {
+	/// Check whether the authority of the current block author has a private key on the local node.
+	fn check_block_author_and_sotre_key_the_same(block_author: &T::AuthorityAres) -> bool {
 		let mut is_same = !<OcwControlSetting<T>>::get().need_verifier_check;
 		if is_same {
 			log::warn!(
@@ -1770,7 +1805,12 @@ impl<T: Config> Pallet<T> {
 		worker_ownerid_list.iter().any(|local_auth| local_auth == block_author)
 	}
 
-	/// Obtain ares price and submit it.
+	/// Sign the `free-price data` by some `ares-authority `and submit it to the chain
+	///
+	/// - block_number: Incoming committed block
+	/// - account_id: The ares-authority account to be signed,
+	///
+	/// Tip: this account must have a private key stored in the keystore on the local node to sign the data.
 	fn ares_price_worker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -1787,7 +1827,12 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// Dispose purchased price request.
+	/// Sign the `purchased-price data` by some `ares-authority `and submit it to the chain
+	///
+	/// - block_number: Incoming committed block
+	/// - account_id: The ares-authority account to be signed,
+	///
+	/// Tip: this account must have a private key stored in the keystore on the local node to sign the data.
 	fn ares_purchased_worker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -1803,7 +1848,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// Dispose purchased price request.
+	/// Check and clear purchase-price data as these data are only retained for a specific period of time.
+	/// - block_number: The block height at which to check.
+	/// - account_id: The ares-authority to the offchain submission data signature.
 	fn ares_purchased_checker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
 	where
 		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -1819,7 +1866,10 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// get uri key raw of ARES price
+	/// Get a list of `Trading pairs`, this list also contains specific ParseVersion, FractionLength, RequestInterval.
+	///
+	/// `Vec<(PriceKey, PriceToken, ParseVersion, FractionLength, RequestInterval)>`
+	///
 	fn get_raw_price_source_list() -> Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> {
 		let result: Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get()
 			.into_iter()
@@ -1827,7 +1877,6 @@ impl<T: Config> Pallet<T> {
 				|(price_key, price_token, parse_version, fraction_length, request_interval)| {
 					(
 						price_key,
-						// sp_std::str::from_utf8(&request_url).unwrap().clone(),
 						price_token,
 						parse_version,
 						fraction_length,
@@ -1839,6 +1888,8 @@ impl<T: Config> Pallet<T> {
 		result
 	}
 
+	/// Calculate a random integer and store it in `local-storage`,
+	/// the key is [LOCAL_HOST_KEY](ares_oracle_provider_support::LOCAL_HOST_KEY)
 	fn get_local_host_key() -> u32 {
 		let storage_local_host_key = StorageValueRef::persistent(LOCAL_HOST_KEY);
 
@@ -1857,7 +1908,7 @@ impl<T: Config> Pallet<T> {
 		0
 	}
 
-	// Get request domain, include TCP protocol, example: http://www.xxxx.com
+	/// Get the request address set by werahouse.
 	fn get_local_storage_request_domain() -> RequestBaseVecU8 {
 
 		let request_base_onchain = RequestBaseOnchain::<T>::get();
@@ -1882,10 +1933,7 @@ impl<T: Config> Pallet<T> {
 		Default::default()
 	}
 
-	// fn make_local_storage_request_uri_by_str(sub_path: &str) -> Vec<u8> {
-	//     Self::make_local_storage_request_uri_by_vec_u8(sub_path.as_bytes().to_vec())
-	// }
-
+	/// Link `sub_path` behind `request_domain`.
 	fn make_local_storage_request_uri_by_vec_u8(sub_path: Vec<u8>) -> RequestBaseVecU8 {
 		let domain = Self::get_local_storage_request_domain(); //.as_bytes().to_vec();
 		let local_storage_request_url_res = RequestBaseVecU8::try_create_on_vec([domain.to_vec(), sub_path].concat());
@@ -1897,6 +1945,8 @@ impl<T: Config> Pallet<T> {
 		Default::default()
 	}
 
+	/// Get the `ares-authority` of the block producer of the current block,
+	/// which needs to configure the EventHandler of `pallet_authorship`
 	fn get_block_author() -> Option<T::AuthorityAres> {
 		// let digest = <frame_system::Pallet<T>>::digest();
 		// let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
@@ -2587,12 +2637,13 @@ impl<T: Config> Pallet<T> {
 		Some(JsonNumberValue::new(price).to_price(param_length))
 	}
 
-	// Get price pool size
+	// Get the maximum depth of the `price` pool.
 	fn get_price_pool_depth() -> u32 {
 		// T::PriceVecMaxSize::get()
 		<PricePoolDepth<T>>::get()
 	}
 
+	/// Get all `ares-authorities` users in keystore.
 	fn get_ares_authority_list() -> Vec<T::AuthorityAres> {
 		let authority_list = T::AuthorityAres::all(); // T::AuthorityAres::all();
 		authority_list
@@ -2817,12 +2868,19 @@ impl<T: Config> Pallet<T> {
 			// Pick abnormal price.
 			if 0 < price_list_of_pool.len() {
 				for (index, check_price) in price_list_of_pool.iter().enumerate() {
+					// let offset_percent = match check_price.price {
+					// 	x if &x > &average => ((x - average) * 100) / average,
+					// 	x if &x < &average => ((average - x) * 100) / average,
+					// 	_ => 0,
+					// };
+
 					let offset_percent = match check_price.price {
-						x if &x > &average => ((x - average) * 100) / average,
-						x if &x < &average => ((average - x) * 100) / average,
-						_ => 0,
+						x if &x > &average => Percent::from_rational((x - average), average),
+						x if &x < &average => Percent::from_rational((average - x), average),
+						_ => Percent::from_percent(0),
 					};
-					if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
+
+					if offset_percent > <PriceAllowableOffset<T>>::get() {
 						// Set price to abnormal list and pick out check_price
 						<AresAbnormalPrice<T>>::try_append(
 							key_str.clone(),
@@ -2894,12 +2952,17 @@ impl<T: Config> Pallet<T> {
 		// Pick abnormal price.
 		if 0 < prices_info.len() {
 			for (index, check_price) in prices_info.iter().enumerate() {
+				// let offset_percent = match check_price.price {
+				// 	x if &x > &average => ((x - average) * 100) / average,
+				// 	x if &x < &average => ((average - x) * 100) / average,
+				// 	_ => 0,
+				// };
 				let offset_percent = match check_price.price {
-					x if &x > &average => ((x - average) * 100) / average,
-					x if &x < &average => ((average - x) * 100) / average,
-					_ => 0,
+					x if &x > &average => Percent::from_rational((x - average), average),
+					x if &x < &average => Percent::from_rational((average - x), average),
+					_ => Percent::from_percent(0),
 				};
-				if offset_percent > <PriceAllowableOffset<T>>::get() as u64 {
+				if offset_percent > <PriceAllowableOffset<T>>::get()  {
 					// Set price to abnormal list and pick out check_price
 					// TODO:: need update struct of AresAbnormalPrice , add the comparison value of the current
 					// deviation
@@ -3279,7 +3342,6 @@ where
 
 #[derive(Deserialize, Encode, Decode, Clone, Default)]
 struct LocalPriceRequestStorage {
-	// Specify our own deserializing function to convert JSON string to vector of bytes
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	price_key: Vec<u8>,
 	#[serde(deserialize_with = "de_string_to_bytes")]
@@ -3288,8 +3350,6 @@ struct LocalPriceRequestStorage {
 }
 
 impl fmt::Debug for LocalPriceRequestStorage {
-	// `fmt` converts the vector of bytes inside the struct back to string for
-	//  more friendly display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
@@ -3302,13 +3362,11 @@ impl fmt::Debug for LocalPriceRequestStorage {
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T>
-// where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
 	type Public = T::AuthorityAres;
 }
 
 impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
-// where sp_runtime::AccountId32: From<<T as frame_system::Config>::AccountId>
 {
 	type Key = T::AuthorityAres;
 
@@ -3344,27 +3402,6 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
 
 	fn on_disabled(_i: u32) {}
 }
-
-// pub struct FindAresAccountFromAuthority<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
-//
-// impl<T: Config, Inner: FindAuthor<T::AuthorityAres>> FindAuthor<T::AccountId> for FindAresAccountFromAuthority<T, Inner>
-// where
-// 	<T as frame_system::Config>::AccountId: From<sp_runtime::AccountId32>,
-// {
-// 	fn find_author<'a, I>(digests: I) -> Option<T::AccountId>
-// 	where
-// 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-// 	{
-// 		let find_auraid = Inner::find_author(digests)?;
-// 		let mut a = [0u8; 32];
-// 		a[..].copy_from_slice(&find_auraid.to_raw_vec());
-// 		// extract AccountId32 from store keys
-// 		let owner_account_id32 = sp_runtime::AccountId32::new(a);
-// 		let authro_account_id = owner_account_id32.clone().into();
-// 		Some(authro_account_id)
-// 	}
-// }
-
 
 impl<T: Config> SymbolInfo for Pallet<T> {
 	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {

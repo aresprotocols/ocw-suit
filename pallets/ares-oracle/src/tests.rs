@@ -3867,9 +3867,9 @@ fn test_jump_block_submit() {
 fn test_update_allowable_offset_propose() {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
-		assert_eq!(AresOcw::price_allowable_offset(), 10);
-		assert_ok!(AresOcw::update_allowable_offset_propose(Origin::root(), 20));
-		assert_eq!(AresOcw::price_allowable_offset(), 20);
+		assert_eq!(AresOcw::price_allowable_offset(), Percent::from_percent(10));
+		assert_ok!(AresOcw::update_allowable_offset_propose(Origin::root(), Percent::from_percent(20)));
+		assert_eq!(AresOcw::price_allowable_offset(), Percent::from_percent(20));
 	});
 }
 
@@ -4276,7 +4276,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	crate::GenesisConfig::<Test>{
         _phantom: Default::default(),
         request_base: "http://127.0.0.1:5566".as_bytes().to_vec()  ,
-        price_allowable_offset: 10u8,
+        price_allowable_offset: Percent::from_percent(10),
         price_pool_depth: 3u32,
         price_requests: vec![
             // price , key sign, version, fraction_length, request interval.
