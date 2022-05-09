@@ -2,6 +2,22 @@ use super::*;
 
 impl<T: Config> Pallet<T> {
 
+    /// Convert `AuthorityAres` type to `Public` type
+    pub fn handler_get_sign_public_keys(account_id: T::AuthorityAres) -> Vec<<T as SigningTypes>::Public>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
+        let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
+        let encode_data: Vec<u8> = account_id.encode();
+        assert!(32 == encode_data.len());
+        let raw_data = encode_data.try_into();
+        let raw_data = raw_data.unwrap();
+        // let new_account = T::AuthorityAres::unchecked_from(raw_data);
+        let new_account = sp_core::sr25519::Public::from_raw(raw_data);
+        sign_public_keys.push(new_account.into());
+        sign_public_keys
+    }
+
     /// Get the list of `purchase-ids` that reached the delay,
     /// and construct the offchain-payload to submit the list to the chain.
     pub fn save_forced_clear_purchased_price_payload_signed(
@@ -189,6 +205,116 @@ impl<T: Config> Pallet<T> {
             )
             .ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
         result.map_err(|()| "⛔ Unable to submit transaction")?;
+        Ok(())
+    }
+
+    /// Submit a pre-checked offchain extrinsics.
+    /// - account_id: The `ares-authority` to sign the current commit data.
+    /// - stash_id: Stash ID to review.
+    /// - auth_id: Authority ID associated with Stash ID.
+    /// - block_number: Submit block number.
+    pub fn save_create_pre_check_task(
+        account_id: T::AuthorityAres,
+        stash_id: T::AccountId,
+        auth_id: T::AuthorityAres,
+        block_number: T::BlockNumber,
+    ) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
+        let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+
+        let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            .with_filter(sign_public_keys)
+            .send_unsigned_transaction(
+                |account| PreCheckPayload {
+                    block_number,
+                    pre_check_stash: stash_id.clone(),
+                    pre_check_auth: auth_id.clone(),
+                    auth: account_id.clone(),
+                    public: account.public.clone(),
+                },
+                |payload, signature| Call::submit_create_pre_check_task {
+                    precheck_payload: payload,
+                    signature,
+                },
+            )
+            .ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
+        result.map_err(|()| "⛔ Unable to submit transaction")?;
+        Ok(())
+    }
+
+    /// Submit a set of prices on-chain via `offchian`.
+    pub fn save_fetch_ares_price_and_send_payload_signed(
+        block_number: T::BlockNumber,
+        account_id: T::AuthorityAres,
+    ) -> Result<(), &'static str>
+        where
+            <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
+    {
+        let mut price_list = Vec::new();
+        // Get raw request.
+        let format_arr = Self::make_bulk_price_format_data(block_number);
+        // Filter jump block info
+        let (format_arr, jump_block) = Self::filter_jump_block_data(
+            format_arr.clone(),
+            Self::get_stash_id(&account_id).unwrap(),
+            block_number,
+        );
+        let price_result = Self::fetch_bulk_price_with_http(format_arr.clone());
+        if price_result.is_err() {
+            log::error!(
+				target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
+				"⛔ Ocw network error."
+			);
+            Self::trace_network_error(
+                account_id,
+                format_arr.clone(),
+                price_result.err().unwrap(),
+                "ares_price_worker".as_bytes().to_vec(),
+            );
+            return Ok(());
+        }
+        let price_result = price_result.unwrap();
+        for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result {
+            if price_option.is_some() {
+                // record price to vec!
+                price_list.push(PricePayloadSubPrice(
+                    price_key,
+                    price_option.unwrap(),
+                    fraction_length,
+                    JsonNumberValue::new(json_number_value),
+                    timestamp,
+                ));
+            }
+        }
+        log::debug!(
+			"🚅 fetch price count: {:?}, jump block count: {:?}",
+			price_list.len(),
+			jump_block.len()
+		);
+        let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price_list is too long");
+        if price_list.len() > 0 || jump_block.len() > 0 {
+            let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
+            // Singer
+            let (acc_id, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+                .with_filter(sign_public_keys)
+                .send_unsigned_transaction(
+                    |account| PricePayload {
+                        price: price_list.clone(),
+                        jump_block: jump_block.clone(),
+                        block_number,
+                        auth: account_id.clone(),
+                        public: account.public.clone(),
+                    },
+                    |payload, signature| Call::submit_price_unsigned_with_signed_payload {
+                        price_payload: payload,
+                        signature,
+                    },
+                )
+                .ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
+            result.map_err(|()| "⛔ Unable to submit transaction")?;
+        }
         Ok(())
     }
 }

@@ -3209,56 +3209,56 @@ fn bulk_parse_price_ares_works() {
 }
 
 // This test will be discarded.
-#[test]
-fn parse_price_ares_works() {
-	let test_data = vec![
-		(get_are_json_of_btc(), Some(50261)),
-		(get_are_json_of_eth(), Some(3107)),
-		(get_are_json_of_dot(), Some(35)),
-		(get_are_json_of_xrp(), Some(1)),
-	];
-
-	for (json, expected) in test_data {
-		let second = AresOcw::parse_price_of_ares(json, 0);
-		assert_eq!(expected, second);
-	}
-
-	let test_data = vec![
-		(get_are_json_of_btc(), Some(5026137)),
-		(get_are_json_of_eth(), Some(310771)),
-		(get_are_json_of_dot(), Some(3599)),
-		(get_are_json_of_xrp(), Some(109)),
-	];
-
-	for (json, expected) in test_data {
-		let second = AresOcw::parse_price_of_ares(json, 2);
-		assert_eq!(expected, second);
-	}
-
-	let test_data = vec![
-		(get_are_json_of_btc(), Some(50261372)),
-		(get_are_json_of_eth(), Some(3107710)),
-		(get_are_json_of_dot(), Some(35992)),
-		(get_are_json_of_xrp(), Some(1092)),
-	];
-
-	for (json, expected) in test_data {
-		let second = AresOcw::parse_price_of_ares(json, 3);
-		assert_eq!(expected, second);
-	}
-
-	let test_data = vec![
-		(get_are_json_of_btc(), Some(50261372000)),
-		(get_are_json_of_eth(), Some(3107710000)),
-		(get_are_json_of_dot(), Some(35992100)),
-		(get_are_json_of_xrp(), Some(1092720)),
-	];
-
-	for (json, expected) in test_data {
-		let second = AresOcw::parse_price_of_ares(json, 6);
-		assert_eq!(expected, second);
-	}
-}
+// #[test]
+// fn parse_price_ares_works() {
+// 	let test_data = vec![
+// 		(get_are_json_of_btc(), Some(50261)),
+// 		(get_are_json_of_eth(), Some(3107)),
+// 		(get_are_json_of_dot(), Some(35)),
+// 		(get_are_json_of_xrp(), Some(1)),
+// 	];
+//
+// 	for (json, expected) in test_data {
+// 		let second = AresOcw::parse_price_of_ares(json, 0);
+// 		assert_eq!(expected, second);
+// 	}
+//
+// 	let test_data = vec![
+// 		(get_are_json_of_btc(), Some(5026137)),
+// 		(get_are_json_of_eth(), Some(310771)),
+// 		(get_are_json_of_dot(), Some(3599)),
+// 		(get_are_json_of_xrp(), Some(109)),
+// 	];
+//
+// 	for (json, expected) in test_data {
+// 		let second = AresOcw::parse_price_of_ares(json, 2);
+// 		assert_eq!(expected, second);
+// 	}
+//
+// 	let test_data = vec![
+// 		(get_are_json_of_btc(), Some(50261372)),
+// 		(get_are_json_of_eth(), Some(3107710)),
+// 		(get_are_json_of_dot(), Some(35992)),
+// 		(get_are_json_of_xrp(), Some(1092)),
+// 	];
+//
+// 	for (json, expected) in test_data {
+// 		let second = AresOcw::parse_price_of_ares(json, 3);
+// 		assert_eq!(expected, second);
+// 	}
+//
+// 	let test_data = vec![
+// 		(get_are_json_of_btc(), Some(50261372000)),
+// 		(get_are_json_of_eth(), Some(3107710000)),
+// 		(get_are_json_of_dot(), Some(35992100)),
+// 		(get_are_json_of_xrp(), Some(1092720)),
+// 	];
+//
+// 	for (json, expected) in test_data {
+// 		let second = AresOcw::parse_price_of_ares(json, 6);
+// 		assert_eq!(expected, second);
+// 	}
+// }
 
 #[test]
 fn test_get_raw_price_source_list() {
@@ -3600,8 +3600,9 @@ fn test_update_last_price_list_for_author() {
 		);
 
 		AresOcw::update_last_price_list_for_author(
-			vec![price_key_btc_price.clone(), price_key_eth_price.clone()],
+			vec![price_key_btc_price.clone(), price_key_eth_price.clone(),],
 			stash_1.clone(),
+			2
 		);
 
 		assert_eq!(
@@ -3614,11 +3615,11 @@ fn test_update_last_price_list_for_author() {
 		);
 
 		assert_eq!(
-			Some(stash_1.clone()),
+			Some((stash_1.clone(), 2)),
 			AresOcw::get_last_price_author(price_key_btc_price.clone())
 		);
 		assert_eq!(
-			Some(stash_1.clone()),
+			Some((stash_1.clone(),2)),
 			AresOcw::get_last_price_author(price_key_eth_price.clone())
 		);
 
@@ -3631,18 +3632,19 @@ fn test_update_last_price_list_for_author() {
 		AresOcw::update_last_price_list_for_author(
 			vec![price_key_dot_price.clone(), price_key_eth_price.clone()],
 			stash_2.clone(),
+			4,
 		);
 
 		assert_eq!(
-			Some(stash_1.clone()),
+			Some((stash_1.clone(), 2)),
 			AresOcw::get_last_price_author(price_key_btc_price.clone())
 		);
 		assert_eq!(
-			Some(stash_2.clone()),
+			Some((stash_2.clone(), 4)),
 			AresOcw::get_last_price_author(price_key_eth_price.clone())
 		);
 		assert_eq!(
-			Some(stash_2.clone()),
+			Some((stash_2.clone(), 4)),
 			AresOcw::get_last_price_author(price_key_dot_price.clone())
 		);
 
@@ -3739,6 +3741,11 @@ fn test_jump_block_submit() {
 		assert_eq!(AresOcw::get_last_price_author(price_key_btc_price.clone()), None);
 		assert_eq!(AresOcw::get_last_price_author(price_key_eth_price.clone()), None);
 
+		let stash_id = AresOcw::get_stash_id(&authority_1.clone());
+		let mut trace_data = AuthorTraceData::<Test>::default();
+		trace_data.try_push((stash_id.unwrap(), 2));
+		BlockAuthorTrace::<Test>::put(trace_data);
+
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -3748,13 +3755,15 @@ fn test_jump_block_submit() {
 			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
 		}
 
+		assert_eq!(BlockAuthorTrace::<Test>::get().unwrap().len(), 0usize);
+
 		assert_eq!(
 			AresOcw::get_last_price_author(price_key_btc_price.clone()),
-			Some(stash_1.clone())
+			Some((stash_1.clone(),2))
 		);
 		assert_eq!(
 			AresOcw::get_last_price_author(price_key_eth_price.clone()),
-			Some(stash_1.clone())
+			Some((stash_1.clone(),2))
 		);
 		assert_eq!(
 			AresOcw::is_need_update_jump_block(price_key_btc_price.clone(), stash_1.clone()),
@@ -3774,6 +3783,12 @@ fn test_jump_block_submit() {
 
 		assert_eq!(AresOcw::get_jump_block_number(PriceKey::create_on_vec(to_test_vec("btc_price"))), 0);
 		assert_eq!(AresOcw::get_jump_block_number(PriceKey::create_on_vec(to_test_vec("eth_price"))), 0);
+
+		let stash_id = AresOcw::get_stash_id(&authority_1.clone());
+		let mut trace_data = AuthorTraceData::<Test>::default();
+		trace_data.try_push((stash_id.unwrap(), 2));
+		BlockAuthorTrace::<Test>::put(trace_data);
+
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(2, authority_1.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -3810,6 +3825,12 @@ fn test_jump_block_submit() {
 		assert_eq!(AresOcw::get_jump_block_number(price_key_btc_price.clone()), 0);
 		assert_eq!(AresOcw::get_jump_block_number(price_key_eth_price.clone()), 1);
 		assert_eq!(AresOcw::get_jump_block_number(price_key_dot_price.clone()), 0);
+
+		let stash_id = AresOcw::get_stash_id(&authority_2.clone());
+		let mut trace_data = AuthorTraceData::<Test>::default();
+		trace_data.try_push((stash_id.unwrap(), 3));
+		BlockAuthorTrace::<Test>::put(trace_data);
+
 		AresOcw::save_fetch_ares_price_and_send_payload_signed(3, authority_2.clone()).unwrap();
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
@@ -3824,15 +3845,15 @@ fn test_jump_block_submit() {
 
 		assert_eq!(
 			AresOcw::get_last_price_author(price_key_btc_price.clone()),
-			Some(stash_2.clone())
+			Some((stash_2.clone(),3))
 		);
 		assert_eq!(
 			AresOcw::get_last_price_author(price_key_eth_price.clone()),
-			Some(stash_2.clone())
+			Some((stash_2.clone(),3))
 		);
 		assert_eq!(
 			AresOcw::get_last_price_author(price_key_dot_price.clone()),
-			Some(stash_2.clone())
+			Some((stash_2.clone(),3))
 		);
 
 		assert_eq!(
@@ -3861,6 +3882,175 @@ fn test_jump_block_submit() {
 			true
 		);
 	});
+}
+
+
+#[test]
+fn test_debug_old_block_attack() {
+	let mut t = new_test_ext();
+
+	let price_key_btc_price = PriceKey::create_on_vec(to_test_vec("btc_price"));
+	let price_key_eth_price = PriceKey::create_on_vec(to_test_vec("eth_price"));
+	let price_key_dot_price = PriceKey::create_on_vec(to_test_vec("dot_price"));
+	let price_key_xrp_price = PriceKey::create_on_vec(to_test_vec("xrp_price"));
+
+	let price_token_btc = PriceKey::create_on_vec(to_test_vec("btc"));
+	let price_token_eth = PriceKey::create_on_vec(to_test_vec("eth"));
+	let price_token_dot = PriceKey::create_on_vec(to_test_vec("dot"));
+	let price_token_xrp = PriceKey::create_on_vec(to_test_vec("xrp"));
+
+
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+	let keystore = KeyStore::new();
+
+	SyncCryptoStore::sr25519_generate_new(&keystore, AuraId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	SyncCryptoStore::sr25519_generate_new(&keystore, AuraId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+
+	let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AuraId::ID)
+		.get(1)
+		.unwrap()
+		.clone();
+
+	t.register_extension(OffchainWorkerExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
+
+	let padding_request = testing::PendingRequest {
+		method: "GET".into(),
+		uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth".into(),
+		response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
+		sent: true,
+		..Default::default()
+	};
+
+	offchain_state.write().expect_request(padding_request);
+
+	t.execute_with(|| {
+		init_aura_enging_digest();
+
+		let price_key_btc_price = PriceKey::create_on_vec(to_test_vec("btc_price"));
+		let price_key_eth_price = PriceKey::create_on_vec(to_test_vec("eth_price"));
+
+		let (stash_1, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
+		let (stash_2, authority_2) = <Authorities<Test>>::get().unwrap()[1].clone();
+		let (stash_3, authority_3) = <Authorities<Test>>::get().unwrap()[2].clone();
+		let (stash_4, authority_4) = <Authorities<Test>>::get().unwrap()[3].clone();
+
+		assert_eq!(AresOcw::get_last_price_author(price_key_btc_price.clone()), None);
+		assert_eq!(AresOcw::get_last_price_author(price_key_eth_price.clone()), None);
+
+		let mut trace_data = AuthorTraceData::<Test>::default();
+		trace_data.try_push((stash_2.clone(), 19));
+		trace_data.try_push((stash_2.clone(), 20));
+		trace_data.try_push((stash_2.clone(), 21));
+		trace_data.try_push((stash_1.clone(), 22));
+		trace_data.try_push((stash_3.clone(), 23));
+		trace_data.try_push((stash_2.clone(), 24));
+		BlockAuthorTrace::<Test>::put(trace_data);
+
+		AresOcw::save_fetch_ares_price_and_send_payload_signed(22, authority_1.clone()).unwrap();
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+
+		use sp_runtime::transaction_validity::{
+			InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+			ValidTransaction,
+		};
+
+
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
+			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
+		}
+
+		assert_eq!(BlockAuthorTrace::<Test>::get().unwrap().len(), 5usize);
+
+		let mut price_list = PricePayloadSubPriceList::default();
+		// (pub PriceKey, pub u64, pub FractionLength, pub JsonNumberValue, pub u64);
+		price_list.try_push(PricePayloadSubPrice{
+			0: PriceKey::create_on_vec(to_test_vec("btc_price")),
+			1: 0,
+			2: 0,
+			3: Default::default(),
+			4: 0,
+		});
+
+		// Self::handler_get_sign_public_keys(account_id.clone());
+		let (acc_id, result) = Signer::<Test, <Test as Config>::OffchainAppCrypto>::any_account()
+			.with_filter(vec![public_key_2.try_into().unwrap()])
+			.send_unsigned_transaction(
+				|account| PricePayload {
+					price: price_list.clone(),
+					jump_block: PricePayloadSubJumpBlockList::default(),
+					block_number: 21,
+					auth: authority_2.clone(),
+					public: account.public.clone(),
+				},
+				|payload, signature| {
+					let call = ares_oracle::Call::submit_price_unsigned_with_signed_payload {
+						price_payload: payload,
+						signature,
+					} ;
+					let validate_unsigned = <AresOcw as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+						TransactionSource::External,
+						&call,
+					);
+					if(validate_unsigned.is_ok()) {
+
+					}
+					assert!(validate_unsigned.is_err());
+					call
+				},
+			).unwrap();
+
+		let (acc_id, result) = Signer::<Test, <Test as Config>::OffchainAppCrypto>::any_account()
+			.with_filter(vec![public_key_2.try_into().unwrap()])
+			.send_unsigned_transaction(
+				|account| PricePayload {
+					price: price_list.clone(),
+					jump_block: PricePayloadSubJumpBlockList::default(),
+					block_number: 24,
+					auth: authority_2.clone(),
+					public: account.public.clone(),
+				},
+				|payload, signature| {
+					let call = ares_oracle::Call::submit_price_unsigned_with_signed_payload {
+						price_payload: payload,
+						signature,
+					} ;
+					let validate_unsigned = <AresOcw as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+						TransactionSource::External,
+						&call,
+					);
+					if(validate_unsigned.is_ok()) {
+
+					}
+					assert!(validate_unsigned.is_ok());
+					call
+				},
+			).unwrap();
+
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		if let Call::AresOcw(crate::Call::submit_price_unsigned_with_signed_payload
+							 { price_payload: body, signature }
+		) = tx.call {
+			AresOcw::submit_price_unsigned_with_signed_payload(Origin::none(), body, signature);
+		}
+
+		assert_eq!(BlockAuthorTrace::<Test>::get().unwrap().len(), 4usize);
+		println!("={:?}", AresPrice::<Test>::get(PriceKey::create_on_vec(to_test_vec("btc_price"))));
+
+	});
+
 }
 
 #[test]

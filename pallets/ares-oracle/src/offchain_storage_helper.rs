@@ -2,6 +2,18 @@ use super::*;
 
 impl<T: Config> Pallet<T> {
 
+    /// Link `sub_path` behind `request_domain`.
+    pub fn make_local_storage_request_uri_by_vec_u8(sub_path: Vec<u8>) -> RequestBaseVecU8 {
+        let domain = Self::get_local_storage_request_domain(); //.as_bytes().to_vec();
+        let local_storage_request_url_res = RequestBaseVecU8::try_create_on_vec([domain.to_vec(), sub_path].concat());
+        if let Ok(local_storage_request_url) = local_storage_request_url_res {
+            return local_storage_request_url;
+        }else{
+            log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "local_storage_request_url" );
+        }
+        Default::default()
+    }
+
     /// Calculate a random integer and store it in `local-storage`,
     /// the key is [LOCAL_HOST_KEY](ares_oracle_provider_support::LOCAL_HOST_KEY)
     pub fn get_local_host_key() -> u32 {
@@ -20,6 +32,20 @@ impl<T: Config> Pallet<T> {
             return random;
         }
         0
+    }
+
+    /// If `local-xray` data has exceeded the length defined by the `maximum_due` parameter, it is removed.
+    pub(crate) fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
+        let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
+        let mut weight :Weight = 1;
+        <LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _, _))|{
+            if current_block_num.saturating_sub(create_bn) > maximum_due {
+                <LocalXRay<T>>::remove(host_key);
+                weight +=1;
+            }
+            false
+        });
+        weight
     }
 
     /// Get the request address set by werahouse.

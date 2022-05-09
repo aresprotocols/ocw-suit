@@ -62,14 +62,27 @@ pub mod traits;
 pub mod types;
 /// A module that implements [`EventHandler`](pallet_authorship::EventHandler) to record some block authors.
 pub mod author_events;
+/// Handling ares-authority account.
+pub mod authority_helper;
+/// Utility trait to be implemented on payloads that can be signed.
+pub mod ares_crypto;
+/// For config of Oracle related storage
+pub mod config_helper;
+/// For Offchain-http handler functions.
+pub mod http_helper;
+/// For Jump-block handler functions.
+pub mod jumpblock_helper;
 /// Provides [`AresOracleFilter`](offchain_filter::AresOracleFilter) structure to determine whether the offchain transaction in the transaction pool is valid.
 pub mod offchain_filter;
 /// For Offchain-payload handler functions.
 pub mod offchain_payload_helper;
-/// for Offchain-storage handler functions
+/// For Offchain-storage handler functions
 pub mod offchain_storage_helper;
-/// Utility trait to be implemented on payloads that can be signed.
-pub mod ares_crypto;
+/// For price related functions.
+pub mod pricer_helper;
+/// Check offchain unsigned call.
+pub mod validate_unsigned;
+
 
 /// Compute price using `Average` on price pool.
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;
@@ -111,7 +124,6 @@ pub mod pallet {
 		SubmitThresholdRangeError,
 		/// Waiting for delay block must be greater than 0 after ask priced.
 		DruationNumberNotBeZero,
-		// UnknownAresPriceVersionNum
 		/// Insufficient balance when the ask price to pay.
 		InsufficientBalance,
 		/// The `MaxFee` of the ask price payment limit is too low.
@@ -125,7 +137,9 @@ pub mod pallet {
 		/// The list of pre-checked token pairs cannot be empty.
 		PreCheckTokenListNotEmpty,
 		/// The purchase ID was not found in the request pool.
-		PurchaseIdNotFoundInThePool
+		PurchaseIdNotFoundInThePool,
+		/// Block author not found.
+		BlockAuthorNotFound,
 	}
 
 	/// This pallet's configuration trait
@@ -557,6 +571,13 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// An offline method that submits and saves the purchase-result data.
+		/// If all validators submit price-result, then average price will be
+		/// aggregation and mark [PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE)
+		///
+		/// The dispatch origin fo this call must be __none__.
+		///
+		/// -- price_payload: Submitted data.
 		#[pallet::weight(0)]
 		pub fn submit_purchased_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
@@ -613,10 +634,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			log::debug!(
-				"# Pre submit price payload on block {:?}/{:?}, chain author-stash {:?}",
+				"# Pre submit price payload on block {:?}/{:?}",
 				&price_payload.block_number,
 				<system::Pallet<T>>::block_number(),
-				BlockAuthor::<T>::get(),
+			);
+
+			let stash_id_opt = Self::get_stash_id(&price_payload.auth);
+			ensure!(
+				stash_id_opt.is_some(),
+				Error::<T>::BlockAuthorNotFound
+			);
+			let stash_id = stash_id_opt.unwrap();
+
+			// remove author trace data
+			ensure!(
+				Self::remove_block_author_on_trace(&stash_id, &price_payload.block_number),
+				Error::<T>::BlockAuthorNotFound
 			);
 
 			let mut block_author_trace = BlockAuthorTrace::<T>::get().unwrap_or(Default::default());
@@ -667,6 +700,7 @@ pub mod pallet {
 			Self::update_last_price_list_for_author (
 				price_key_list,
 				Self::get_stash_id(&price_payload.auth).unwrap(),
+				price_payload.block_number.clone(),
 			);
 
 			// Set jump block
@@ -1116,41 +1150,61 @@ pub mod pallet {
 
 				let mut block_author_trace = BlockAuthorTrace::<T>::get().unwrap_or(Default::default());
 				let mut pop_arr = AuthorTraceData::<T>::default();
-				// let mut block_trace_author = None;
-				// block_author_trace.iter().any(|(acc, bn)|{
-				// 	if &payload.block_number == bn {
-				// 		block_trace_author = Some(acc.clone());
-				// 		return true;
-				// 	}
-				// 	false
-				// });
+
 				while block_author_trace.len() > 0 && pop_arr.len() < 5 {
 					pop_arr.try_push(block_author_trace.pop().unwrap());
 				}
 
 				log::debug!(
-					"🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?} ship auth: {:?}, pop_arr: {:?}",
+					"🚅 Validate price payload data, on block: {:?}/{:?}, author: {:?}, pop_arr: {:?}",
 					payload.block_number.clone(), // 236
 					<system::Pallet<T>>::block_number(), // 237 (next)
 					payload.public.clone(),
-					BlockAuthor::<T>::get(), // 237(236)
-					// block_trace_author, // 236
 					pop_arr,
 				);
 
-				if !Self::is_validator_member(&payload.auth) {
-					log::error!(
-						target: "pallet::ocw::validate_unsigned",
-						"⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
-					);
-					return InvalidTransaction::BadProof.into();
-				}
+				// if !Self::is_validator_member(&payload.auth) {
+				// 	log::error!(
+				// 		target: "pallet::ocw::validate_unsigned",
+				// 		"⛔️ Payload public id is no longer in the members. `InvalidTransaction` on price "
+				// 	);
+				// 	return InvalidTransaction::BadProof.into();
+				// }
 
 				let signature_valid = SignedPayload::<T>::verify::<T::OffchainAppCrypto>(payload, signature.clone());
 				if !signature_valid {
 					log::error!(
 						target: "pallet::ocw::validate_unsigned",
 						"⛔️ Signature invalid. `InvalidTransaction` on price"
+					);
+					return InvalidTransaction::BadProof.into();
+				}
+
+				let author_trace = BlockAuthorTrace::<T>::get();
+				if author_trace.is_none() {
+					return InvalidTransaction::BadProof.into();
+				}
+
+				let stash_id = Self::get_stash_id(&payload.auth);
+				let stash_id = stash_id.unwrap();
+
+				let author_trace = author_trace.unwrap();
+				if !author_trace.iter().any(|(block_author, block_number)|{
+					&stash_id == block_author
+					&& &payload.block_number == block_number
+				}) {
+					log::error!(
+						target: "pallet::ocw::validate_unsigned",
+						"⛔️ Payload block_author error on author-trace. `InvalidTransaction` on price"
+					);
+					return InvalidTransaction::BadProof.into();
+				}
+
+				let pairs_list:PricePayloadSubPriceList = payload.price.clone();
+				if !Self::submission_interval_check(pairs_list, payload.block_number.clone()) {
+					log::error!(
+						target: "pallet::ocw::validate_unsigned",
+						"⛔️ Payload block_author error on submission-check. `InvalidTransaction` on price"
 					);
 					return InvalidTransaction::BadProof.into();
 				}
@@ -1369,6 +1423,10 @@ pub mod pallet {
 		}
 	}
 
+	// #[pallet::storage]
+	// #[pallet::getter(fn block_author)]
+	// pub(super) type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn block_author)]
 	pub(super) type BlockAuthor<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
@@ -1456,7 +1514,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		PriceKey, // price_key
-		T::AccountId,
+		(T::AccountId, T::BlockNumber),
 		OptionQuery,
 	>;
 
@@ -1722,10 +1780,6 @@ pub mod pallet {
 			token_list.try_push(PriceToken::create_on_vec(b"btc-usdt".to_vec()));
 			token_list.try_push(PriceToken::create_on_vec(b"eth-usdt".to_vec()));
 			token_list.try_push(PriceToken::create_on_vec(b"dot-usdt".to_vec()));
-			// token_list.try_push(b"btc-usdt".to_vec().try_into().expect("symbol is too long"));
-			// token_list.try_push(b"eth-usdt".to_vec().try_into().expect("symbol is too long"));
-			// token_list.try_push(b"dot-usdt".to_vec().try_into().expect("symbol is too long"));
-
 			ConfPreCheckTokenList::<T>::put(token_list);
 			// V1_2_0
 			StorageVersion::<T>::put(Releases::V1_2_0);
@@ -1735,23 +1789,36 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 
+	pub fn remove_block_author_on_trace(del_stash: &T::AccountId, del_bn: &T::BlockNumber) -> bool {
+		// <BlockAuthorTrace<T>>::mutate(|(stash, bn)| {
+		// 	for (index, (old_price_key, _, _, _, _)) in prices_request.clone().into_iter().enumerate() {
+		// 		if &price_key == &old_price_key {
+		// 			// remove old one
+		// 			prices_request.remove(index);
+		// 			Self::clear_price_storage_data(price_key.clone());
+		// 			break;
+		// 		}
+		// 	}
+		// });
+
+		let old_trace = <BlockAuthorTrace<T>>::take();
+		if let Some(trace_data) = old_trace.clone() {
+			for (index, (old_stash, old_bn)) in trace_data.iter().enumerate() {
+				if  old_stash == del_stash && old_bn == del_bn {
+					if let Some(mut new_data) = old_trace {
+						new_data.remove(index);
+						BlockAuthorTrace::<T>::put(new_data);
+						return true;
+					}
+				}
+			}
+		}
+		false
+	}
+
 	/// Update the new validator set.
 	fn change_authorities(new: StashAndAuthorityVec<T>) {
 		<Authorities<T>>::put(&new);
-	}
-
-	/// If `local-xray` data has exceeded the length defined by the `maximum_due` parameter, it is removed.
-	fn check_and_clean_hostkey_list(maximum_due: T::BlockNumber) -> Weight {
-		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
-		let mut weight :Weight = 1;
-		<LocalXRay<T>>::iter().any(|(host_key,(create_bn, _, _, _))|{
-			if current_block_num.saturating_sub(create_bn) > maximum_due {
-				<LocalXRay<T>>::remove(host_key);
-				weight +=1;
-			}
-			false
-		});
-		weight
 	}
 
 	/// Used to initialize the ares-oracle validator data in the genesis configuration.
@@ -1767,153 +1834,9 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Get the `ares-authority` through `stash-id`
-	pub fn get_auth_id(stash: &T::AccountId) -> Option<T::AuthorityAres> {
-		let authority_list = <Authorities<T>>::get();
-		if(authority_list.is_none()) {
-			return None;
-		}
-		for (storage_stash, auth) in authority_list.unwrap().into_iter() {
-			if stash == &storage_stash {
-				return Some(auth);
-			}
-		}
-		None
-	}
-
-	/// Get the `stash-id` through `ares-authority`
-	pub fn get_stash_id(auth: &T::AuthorityAres) -> Option<T::AccountId> {
-		let authorities =  <Authorities<T>>::get() ;
-		if authorities.is_none() {
-			return None;
-		}
-		let authorities = authorities.unwrap();
-		for (stash, storage_auth) in authorities.into_iter() {
-			if auth == &storage_auth {
-				return Some(stash);
-			}
-		}
-		None
-	}
-
-	/// Check whether the authority of the current block author has a private key on the local node.
-	fn check_block_author_and_sotre_key_the_same(block_author: &T::AuthorityAres) -> bool {
-		let mut is_same = !<OcwControlSetting<T>>::get().need_verifier_check;
-		if is_same {
-			log::warn!(
-				target: "pallet::are_block_author_and_sotre_key_the_same",
-				"❗❗❗ verifier_check is disable, current status is debug."
-			);
-			return true;
-		}
-		let worker_ownerid_list = Self::get_ares_authority_list();
-		worker_ownerid_list.iter().any(|local_auth| local_auth == block_author)
-	}
-
-	/// Sign the `free-price data` by some `ares-authority `and submit it to the chain
-	///
-	/// - block_number: Incoming committed block
-	/// - account_id: The ares-authority account to be signed,
-	///
-	/// Tip: this account must have a private key stored in the keystore on the local node to sign the data.
-	fn ares_price_worker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		log::debug!("ares_price_worker: save ares price bn: {:?} who: {:?}", &block_number, &account_id);
-		let res = Self::save_fetch_ares_price_and_send_payload_signed(block_number.clone(), account_id.clone());
-		if let Err(e) = res {
-			log::error!(
-				target: "pallet::ocw::ares_price_worker",
-				"⛔ block number = {:?}, account = {:?}, error = {:?}",
-				block_number, account_id, e
-			);
-		}
-		Ok(())
-	}
-
-	/// Sign the `purchased-price data` by some `ares-authority `and submit it to the chain
-	///
-	/// - block_number: Incoming committed block
-	/// - account_id: The ares-authority account to be signed,
-	///
-	/// Tip: this account must have a private key stored in the keystore on the local node to sign the data.
-	fn ares_purchased_worker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let res = Self::save_fetch_purchased_price_and_send_payload_signed(block_number.clone(), account_id.clone());
-		if let Err(e) = res {
-			log::error!(
-				target: "pallet::ocw::purchased_price_worker",
-				"⛔ block number = {:?}, account = {:?}, error = {:?}",
-				block_number, account_id, e
-			);
-		}
-		Ok(())
-	}
-
-	/// Check and clear purchase-price data as these data are only retained for a specific period of time.
-	/// - block_number: The block height at which to check.
-	/// - account_id: The ares-authority to the offchain submission data signature.
-	fn ares_purchased_checker(block_number: T::BlockNumber, account_id: T::AuthorityAres) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let res = Self::save_forced_clear_purchased_price_payload_signed(block_number.clone(), account_id.clone());
-		if let Err(e) = res {
-			log::error!(
-				target: "pallet::ocw::ares_purchased_checker",
-				"⛔ block number = {:?}, account = {:?}, error = {:?}",
-				block_number, account_id, e
-			);
-		}
-		Ok(())
-	}
-
-	/// Get a list of `Trading pairs`, this list also contains specific ParseVersion, FractionLength, RequestInterval.
-	///
-	/// `Vec<(PriceKey, PriceToken, ParseVersion, FractionLength, RequestInterval)>`
-	///
-	fn get_raw_price_source_list() -> Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> {
-		let result: Vec<(PriceKey, PriceToken, u32, FractionLength, RequestInterval)> = <PricesRequests<T>>::get()
-			.into_iter()
-			.map(
-				|(price_key, price_token, parse_version, fraction_length, request_interval)| {
-					(
-						price_key,
-						price_token,
-						parse_version,
-						fraction_length,
-						request_interval,
-					)
-				},
-			)
-			.collect();
-		result
-	}
-
-
-	/// Link `sub_path` behind `request_domain`.
-	fn make_local_storage_request_uri_by_vec_u8(sub_path: Vec<u8>) -> RequestBaseVecU8 {
-		let domain = Self::get_local_storage_request_domain(); //.as_bytes().to_vec();
-		let local_storage_request_url_res = RequestBaseVecU8::try_create_on_vec([domain.to_vec(), sub_path].concat());
-		if let Ok(local_storage_request_url) = local_storage_request_url_res {
-			return local_storage_request_url;
-		}else{
-			log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "local_storage_request_url" );
-		}
-		Default::default()
-	}
-
 	/// Get the `ares-authority` of the block producer of the current block,
 	/// which needs to configure the EventHandler of `pallet_authorship`
 	fn get_block_author() -> Option<T::AuthorityAres> {
-		// let digest = <frame_system::Pallet<T>>::digest();
-		// let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		// let idx = <T as pallet::Config>::FindAuthor::find_author(pre_runtime_digests)?;
-		// let validators = <Authorities<T>>::get().unwrap_or(StashAndAuthorityVec::<T>::default()) ;
-		// validators.get(idx as usize).map(|(_, k)| k.clone())
 		if let Some(block_author) = BlockAuthor::<T>::get() {
 			return Authorities::<T>::get().map_or(None, |sets| {
 				let mut authority_ares = None;
@@ -1931,187 +1854,8 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
-	/// Convert `AuthorityAres` type to `Public` type
-	fn handler_get_sign_public_keys(account_id: T::AuthorityAres) -> Vec<<T as SigningTypes>::Public>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let mut sign_public_keys: Vec<<T as SigningTypes>::Public> = Vec::new();
-		let encode_data: Vec<u8> = account_id.encode();
-		assert!(32 == encode_data.len());
-		let raw_data = encode_data.try_into();
-		let raw_data = raw_data.unwrap();
-		// let new_account = T::AuthorityAres::unchecked_from(raw_data);
-		let new_account = sp_core::sr25519::Public::from_raw(raw_data);
-		sign_public_keys.push(new_account.into());
-		sign_public_keys
-	}
-
-	/// r
-	fn save_create_pre_check_task(
-		account_id: T::AuthorityAres,
-		stash_id: T::AccountId,
-		auth_id: T::AuthorityAres,
-		block_number: T::BlockNumber,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-
-		let (_, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-			.with_filter(sign_public_keys)
-			.send_unsigned_transaction(
-				|account| PreCheckPayload {
-					block_number,
-					pre_check_stash: stash_id.clone(),
-					pre_check_auth: auth_id.clone(),
-					auth: account_id.clone(),
-					public: account.public.clone(),
-				},
-				|payload, signature| Call::submit_create_pre_check_task {
-					precheck_payload: payload,
-					signature,
-				},
-			)
-			.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-		result.map_err(|()| "⛔ Unable to submit transaction")?;
-		Ok(())
-	}
-
-	fn save_fetch_ares_price_and_send_payload_signed(
-		block_number: T::BlockNumber,
-		account_id: T::AuthorityAres,
-	) -> Result<(), &'static str>
-	where
-		<T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
-	{
-		let mut price_list = Vec::new();
-		// Get raw request.
-		let format_arr = Self::make_bulk_price_format_data(block_number);
-		// Filter jump block info
-		let (format_arr, jump_block) = Self::filter_jump_block_data(
-			format_arr.clone(),
-			Self::get_stash_id(&account_id).unwrap(),
-			block_number,
-		);
-		let price_result = Self::fetch_bulk_price_with_http(format_arr.clone());
-		if price_result.is_err() {
-			log::error!(
-				target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
-				"⛔ Ocw network error."
-			);
-			Self::trace_network_error(
-				account_id,
-				format_arr.clone(),
-				price_result.err().unwrap(),
-				"ares_price_worker".as_bytes().to_vec(),
-			);
-			return Ok(());
-		}
-		let price_result = price_result.unwrap();
-		for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result {
-			if price_option.is_some() {
-				// record price to vec!
-				price_list.push(PricePayloadSubPrice(
-					price_key,
-					price_option.unwrap(),
-					fraction_length,
-					JsonNumberValue::new(json_number_value),
-					timestamp,
-				));
-			}
-		}
-		log::debug!(
-			"🚅 fetch price count: {:?}, jump block count: {:?}",
-			price_list.len(),
-			jump_block.len()
-		);
-		let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price_list is too long");
-		if price_list.len() > 0 || jump_block.len() > 0 {
-			let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
-			// Singer
-			let (acc_id, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
-				.with_filter(sign_public_keys)
-				.send_unsigned_transaction(
-					|account| PricePayload {
-						price: price_list.clone(),
-						jump_block: jump_block.clone(),
-						block_number,
-						auth: account_id.clone(),
-						public: account.public.clone(),
-					},
-					|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-						price_payload: payload,
-						signature,
-					},
-				)
-				.ok_or("❗ No local accounts accounts available, `ares` StoreKey needs to be set.")?;
-			result.map_err(|()| "⛔ Unable to submit transaction")?;
-		}
-		Ok(())
-	}
-
-	//
-	fn make_bulk_price_request_url(format: RawSourceKeys) -> (Vec<u8>, Vec<u8>) {
-		let raw_request_url = Self::make_local_storage_request_uri_by_vec_u8(
-			"/api/getBulkCurrencyPrices?currency=usdt".as_bytes().to_vec(),
-		);
-
-		let mut request_url = Vec::new();
-		for (_, extract_key, _) in format {
-			if request_url.len() == 0 {
-				request_url = [
-					raw_request_url.clone().to_vec(),
-					"&symbol=".as_bytes().to_vec(),
-					extract_key.to_vec(),
-				]
-				.concat();
-			} else {
-				request_url = [request_url, "_".as_bytes().to_vec(), extract_key.to_vec()].concat();
-			}
-		}
-		(request_url, "usdt".as_bytes().to_vec())
-	}
-
-	// Use to filter out those format_data of price that need to jump block.
-	fn filter_jump_block_data(
-		format_data: Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)>,
-		account: T::AccountId,
-		_block_number: T::BlockNumber,
-	) -> (RawSourceKeys, PricePayloadSubJumpBlockList) {
-		// isNeedUpdateJumpBlock
-		let mut new_format_data: RawSourceKeys = Default::default();
-		let mut jump_format_data: PricePayloadSubJumpBlockList = Default::default();
-
-		format_data
-			.iter()
-			.any(|(price_key, price_token, fraction_length, request_interval)| {
-				if Self::is_need_update_jump_block(price_key.clone(), account.clone()) {
-					jump_format_data.try_push(PricePayloadSubJumpBlock(price_key.clone(), *request_interval));
-				} else {
-					new_format_data.try_push((price_key.clone(), price_token.clone(), *fraction_length));
-				}
-				false
-			});
-		(new_format_data, jump_format_data)
-	}
-
-	// Judge the author who submitted the price last time, and return true if it is consistent with this
-	// time.
-	fn is_need_update_jump_block(price_key: PriceKey, account: T::AccountId) -> bool {
-		if !Self::is_aura() || 1 == T::AuthorityCount::get_validators_count() {
-			return false;
-		}
-		match Self::get_last_price_author(price_key) {
-			None => false,
-			Some(x) => x == account,
-		}
-	}
-
 	fn keystore_validator_member() -> Option<T::AuthorityAres>
-	where
-		<T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
+		where <T as frame_system::Config>::AccountId: From<sp_application_crypto::sr25519::Public>,
 	{
 		let local_keys: Vec<T::AuthorityAres> = Self::get_ares_authority_list();
 		for local_auth in local_keys.into_iter() {
@@ -2122,6 +1866,7 @@ impl<T: Config> Pallet<T> {
 		None
 	}
 
+	/// Determining that an authority is a validator
 	fn is_validator_member(validator: &T::AuthorityAres) -> bool {
 		// let mut find_validator = !T::NeedVerifierCheck::get();
 		let mut find_validator = !<OcwControlSetting<T>>::get().need_verifier_check;
@@ -2135,23 +1880,7 @@ impl<T: Config> Pallet<T> {
 		<Authorities<T>>::get().unwrap_or(Default::default()).iter().any(|(_, auth)| auth == validator)
 	}
 
-	// Store the list of authors in the price list.
-	fn update_last_price_list_for_author(price_list: Vec<PriceKey>, author: T::AccountId) {
-		price_list.iter().any(|price_key| {
-			// find_author()
-			<LastPriceAuthor<T>>::insert(price_key.clone(), author.clone());
-			false
-		});
-	}
-
-	// Get
-	fn get_last_price_author(price_key: PriceKey) -> Option<T::AccountId> {
-		if <LastPriceAuthor<T>>::contains_key(&price_key) {
-			return Some(<LastPriceAuthor<T>>::get(price_key).unwrap().into());
-		}
-		None
-	}
-
+	/// Determine whether it is aura consensus.
 	fn is_aura() -> bool {
 		let digest = frame_system::Pallet::<T>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
@@ -2165,539 +1894,11 @@ impl<T: Config> Pallet<T> {
 		is_aura
 	}
 
-	// Make bulk request format array.
-	fn make_bulk_price_format_data(
-		block_number: T::BlockNumber,
-	) -> Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)> {
-		let mut format = Vec::new();
-
-		// price_key, request_url, parse_version, fraction_length
-		let source_list = Self::get_raw_price_source_list();
-
-		// In the new version, it is more important to control the request interval here.
-		for (price_key, extract_key, parse_version, fraction_length, request_interval) in source_list {
-			if 2 == parse_version {
-				let mut round_number: u64 = block_number.unique_saturated_into();
-				round_number += Self::get_jump_block_number(price_key.clone());
-				let remainder: u64 = (round_number % request_interval as u64).into();
-				if 0 == remainder {
-					format.push((price_key, extract_key, fraction_length, request_interval));
-				}
-			}
-		}
-		log::debug!("🚅 Ares will be request list count {:?}", format.len());
-		format
-	}
-
-	//
-	fn fetch_bulk_price_with_http(
-		format_arr: RawSourceKeys,
-	) -> Result<Vec<(PriceKey, Option<u64>, FractionLength, NumberValue, u64)>, HttpError> {
-		// make request url
-		let (request_url_vu8, base_coin) = Self::make_bulk_price_request_url(format_arr.clone());
-		let request_url = sp_std::str::from_utf8(&request_url_vu8).unwrap();
-		// request and return http body.
-		if "" == request_url {
-			log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ Ares http requests cannot be empty.");
-			return Ok(Vec::new());
-		}
-		log::debug!("🚅 Batch price request address: {:?}", request_url);
-		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(4_000));
-		let request = http::Request::get(request_url.clone());
-		let pending = request
-			.deadline(deadline)
-			.send()
-			.map_err(|_| HttpError::IoErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())))?;
-		let response = pending.try_wait(deadline).map_err(|e| {
-			log::warn!(
-				target: "pallet::ocw::fetch_bulk_price_with_http",
-				"❗ The network cannot connect. http::Error::DeadlineReached error = {:?}",
-				e
-			);
-			// http::Error::DeadlineReached
-			// HttpError::TimeOut
-		});
-
-		if response.is_err() {
-			return Err(HttpError::TimeOut(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));
-		}
-
-		let response = response.unwrap();
-
-		if let Err(e) = response {
-			log::warn!(
-				target: "pallet::ocw::fetch_bulk_price_with_http",
-				"❗ Https is not currently supported. msg = {:#?}", e
-			);
-			return Err(HttpError::IoErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));
-		}
-
-		// if response.is_err() {
-		// 	log::warn!(
-		// 		target: "pallet::ocw::fetch_bulk_price_with_http",
-		// 		"❗ Https is not currently supported.",
-		// 	);
-		// 	return Err(HttpError::IoErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));
-		// }
-
-		let response = response.unwrap();
-
-		if response.code != 200 {
-			log::warn!(
-				target: "pallet::ocw::fetch_bulk_price_with_http",
-				"❗ Unexpected http status code: {}",
-				response.code
-			);
-			// return Err(http::Error::Unknown);
-			return Err(HttpError::StatusErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default()), response.code));
-		}
-		let body = response.body().collect::<Vec<u8>>();
-		// Create a str slice from the body.
-		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
-			log::warn!(
-				target: "pallet::ocw::fetch_bulk_price_with_http",
-				"❗ Extracting body error, No UTF8 body!"
-			);
-			// http::Error::IoError
-			HttpError::ParseErr(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default()))
-		})?;
-
-		log::debug!("Batch price request body length: {:?}", body_str);
-
-		Ok(Self::bulk_parse_price_of_ares(body_str, base_coin, format_arr))
-	}
-
-	// handler for bulk_parse_price_of_ares
-	fn extract_bulk_price_by_json_value(
-		json_val: JsonValue,
-		find_key: &str,
-		param_length: FractionLength,
-	) -> Option<(u64, NumberValue, u64)> {
-		assert!(param_length <= 6, "Fraction length must be less than or equal to 6");
-		let price_value = match json_val {
-			JsonValue::Object(obj) => {
-				// TODO:: need test again.
-				let find_result = obj.into_iter().find(|(k, _)| {
-					// let tmp_k = k.iter().copied();
-					k.iter().copied().eq(find_key.chars())
-				});
-
-				match find_result {
-					None => {
-						return None;
-					}
-					Some((_, sub_val)) => match sub_val {
-						JsonValue::Object(price_obj) => {
-							let (_, price) = price_obj
-								.clone()
-								.into_iter()
-								.find(|(k, _)| k.iter().copied().eq("price".chars()))
-								.unwrap();
-							let match_number = match price {
-								JsonValue::Number(number) => number,
-								_ => return None,
-							};
-							let (_, timestamp) = price_obj
-								.into_iter()
-								.find(|(k, _)| k.iter().copied().eq("timestamp".chars()))
-								.unwrap();
-							let match_timestamp = match timestamp {
-								JsonValue::Number(timestamp) => timestamp.integer as u64,
-								_ => return None,
-							};
-							Some((match_number, match_timestamp))
-						}
-						_ => {
-							return None;
-						}
-					},
-				}
-			}
-			_ => {
-				return None;
-			}
-		};
-
-		if price_value.is_none() {
-			return None;
-		}
-		let price_value = price_value.unwrap();
-
-		// Make u64 with fraction length
-		let result_price = JsonNumberValue::new(price_value.0.clone()).to_price(param_length);
-
-		// A price of 0 means that the correct result of the data is not obtained.
-		if result_price == 0 {
-			return None;
-		}
-		Some((result_price, price_value.0, price_value.1))
-	}
-
-	fn bulk_parse_price_of_ares(
-		price_str: &str,
-		base_coin: Vec<u8>,
-		format: RawSourceKeys,
-	) -> Vec<(PriceKey, Option<u64>, FractionLength, NumberValue, u64)> {
-		let val = lite_json::parse_json(price_str);
-
-		let mut result_vec = Vec::new();
-		match val.ok() {
-			None => {
-				return Vec::new();
-			}
-			Some(obj) => {
-				match obj {
-					JsonValue::Object(obj) => {
-						// find code root.
-						let (_, v_data) = obj
-							.into_iter()
-							.find(|(k, _)| {
-								let _tmp_k = k.iter().copied();
-								k.iter().copied().eq("data".chars())
-							})
-							.unwrap();
-
-						for (price_key, extract_key, fraction_length) in format {
-							let new_extract_key = [extract_key.to_vec(), base_coin.clone()].concat();
-							let extract_key = sp_std::str::from_utf8(&new_extract_key).unwrap();
-							let extract_price_grp =
-								Self::extract_bulk_price_by_json_value(v_data.clone(), extract_key, fraction_length);
-
-							if extract_price_grp.is_some() {
-								let (extract_price, json_number_value, timestamp) = extract_price_grp.unwrap();
-								// TODO::need recheck why use Some(extract_price)
-								result_vec.push((
-									price_key,
-									Some(extract_price),
-									fraction_length,
-									json_number_value,
-									timestamp,
-								));
-							}
-						}
-					}
-					_ => return Vec::new(),
-				}
-			}
-		}
-		result_vec
-	}
-
-	fn parse_price_of_ares(price_str: &str, param_length: FractionLength) -> Option<u64> {
-		assert!(param_length <= 6, "Fraction length must be less than or equal to 6");
-
-		let val = lite_json::parse_json(price_str);
-		let price = match val.ok()? {
-			JsonValue::Object(obj) => {
-				// find code root.
-				let (_, v_data) = obj.into_iter().find(|(k, _)| {
-					let _tmp_k = k.iter().copied();
-					k.iter().copied().eq("data".chars())
-				})?;
-				// find price value
-				match v_data {
-					JsonValue::Object(obj) => {
-						let (_, v) = obj.into_iter().find(|(k, _)| {
-							// let tmp_k = k.iter().copied();
-							k.iter().copied().eq("price".chars())
-						})?;
-						match v {
-							JsonValue::Number(number) => number,
-							_ => return None,
-						}
-					}
-					_ => return None,
-				}
-			}
-			_ => return None,
-		};
-		// Some(Self::format_price_fraction_to_u64(price, param_length))
-		Some(JsonNumberValue::new(price).to_price(param_length))
-	}
-
-	// Get the maximum depth of the `price` pool.
-	fn get_price_pool_depth() -> u32 {
-		// T::PriceVecMaxSize::get()
-		<PricePoolDepth<T>>::get()
-	}
-
-	/// Get all `ares-authorities` users in keystore.
-	fn get_ares_authority_list() -> Vec<T::AuthorityAres> {
-		let authority_list = T::AuthorityAres::all(); // T::AuthorityAres::all();
-		authority_list
-	}
-
-	fn filter_raw_price_source_list(
-		request_data: RequestKeys,
-	) -> Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)> {
-		let source_list = Self::get_raw_price_source_list();
-		let mut result = Vec::new();
-		source_list
-			.iter()
-			.any(|(price_key, price_token, _version, fraction, interval)| {
-				if request_data.iter().any(|x| x == price_key) {
-					result.push((price_key.clone(), price_token.clone(), *fraction, *interval));
-				}
-				false
-			});
-		result
-	}
-
+	/// Clear the stored data corresponding to a `purchase-id`.
 	fn purchased_storage_clean(p_id: PurchaseId) {
 		<PurchasedPricePool<T>>::remove_prefix(p_id.clone(), None);
 		<PurchasedRequestPool<T>>::remove(p_id.clone());
 		<PurchasedOrderPool<T>>::remove_prefix(p_id.clone(), None);
-	}
-
-	//
-	fn fetch_purchased_request_keys(who: T::AuthorityAres) -> Option<PurchasedSourceRawKeys> // Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>
-	{
-		let mut raw_source_keys = Vec::new();
-		let mut raw_purchase_id: PurchaseId = PurchaseId::default();
-
-		let stash_id = Self::get_stash_id(&who).unwrap();
-		// Iter
-		<PurchasedRequestPool<T>>::iter().any(|(purchase_id, request_data)| {
-			if false == <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), stash_id.clone()) {
-				raw_purchase_id = purchase_id.clone();
-				raw_source_keys = Self::filter_raw_price_source_list(request_data.request_keys)
-					.iter()
-					.map(|(price_key, parse_key, fraction_len, _)| {
-						(price_key.clone(), parse_key.clone(), *fraction_len)
-					})
-					.collect();
-				return true;
-			}
-			false
-		});
-
-		if raw_source_keys.len() == 0 {
-			return None;
-		}
-		let raw_source_keys: RawSourceKeys = raw_source_keys.clone().try_into().expect("raw_source_keys is too long");
-		Some(PurchasedSourceRawKeys {
-			purchase_id: raw_purchase_id,
-			raw_source_keys,
-		})
-	}
-
-	fn make_purchase_price_id(who: T::AccountId, add_up: u8) -> PurchaseId {
-		// check add up
-		if add_up == u8::MAX {
-			panic!("⛔ Add up number too large.");
-		}
-		let mut account_vec: Vec<u8> = who.encode();
-		// Get block number to u64
-		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();
-		let current_blocknumber: u64 = current_block_num.unique_saturated_into();
-		let mut current_bn_vec: Vec<u8> = current_blocknumber.encode();
-		account_vec.append(&mut current_bn_vec);
-		// Get add up number
-		let mut add_u8_vec: Vec<u8> = add_up.encode();
-		account_vec.append(&mut add_u8_vec);
-
-		let purchase_id: PurchaseId = account_vec.clone().try_into().expect("`PurchaseId` BoundLength Error.");
-		// Check id exists.
-		if PurchasedRequestPool::<T>::contains_key(&purchase_id) {
-			return Self::make_purchase_price_id(who, add_up.saturating_add(1));
-		}
-		purchase_id
-	}
-
-	// submit price on chain.
-	fn ask_price(
-		who: T::AccountId,
-		offer: BalanceOf<T>,
-		// submit_threshold: u8,
-		submit_threshold: Percent,
-		max_duration: u64,
-		purchase_id: PurchaseId,
-		request_keys: RequestKeys,
-	) -> Result<PurchaseId, Error<T>> {
-		// if 0 >= submit_threshold || 100 < submit_threshold {
-		if submit_threshold == Zero::zero() {
-			return Err(Error::<T>::SubmitThresholdRangeError);
-		}
-		if 0 >= max_duration {
-			return Err(Error::<T>::DruationNumberNotBeZero);
-		}
-		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
-		let request_data = PurchasedRequestData {
-			account_id: who,
-			offer,
-			submit_threshold,
-			create_bn: <system::Pallet<T>>::block_number(),
-			max_duration: current_block.saturating_add(max_duration),
-			request_keys,
-		};
-		<PurchasedRequestPool<T>>::insert(purchase_id.clone(), request_data.clone());
-		Self::deposit_event(Event::NewPurchasedRequest {
-			purchase_id: purchase_id.clone(),
-			request_data,
-			value: offer,
-			finance_era: T::OracleFinanceHandler::current_era_num(),
-		});
-		Ok(purchase_id)
-	}
-
-	// add price on chain
-	fn add_price_and_try_to_agg(
-		who: T::AccountId,
-		price: u64,
-		price_key: PriceKey,
-		fraction_length: FractionLength,
-		json_number_value: JsonNumberValue,
-		max_len: u32,
-		timestamp: u64,
-		create_bn: T::BlockNumber,
-	) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
-		let key_str = price_key;
-		let current_block = <system::Pallet<T>>::block_number();
-		// 1. Check key exists
-		if <AresPrice<T>>::contains_key(key_str.clone()) {
-			// get and reset .
-			let old_price = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default());
-
-			let mut is_fraction_changed = false;
-			// check fraction length inconsistent.
-			for (_index, price_data) in old_price.clone().iter().enumerate() {
-				if &price_data.fraction_len != &fraction_length {
-					is_fraction_changed = true;
-					break;
-				}
-			}
-			//
-			let mut new_price = Vec::new();
-			let max_len: usize = max_len.clone() as usize;
-
-			for (index, value) in old_price.iter().enumerate() {
-				if old_price.len() >= max_len && 0 == index {
-					continue;
-				}
-
-				let mut old_value = (*value).clone();
-				if is_fraction_changed {
-					old_value = (*value).clone();
-					old_value.price = old_value.raw_number.to_price(fraction_length.clone());
-					old_value.fraction_len = fraction_length.clone();
-				}
-
-				// let new_value = old_value;
-				new_price.push(old_value);
-			}
-			new_price.push(AresPriceData {
-				price: price.clone(),
-				account_id: who.clone(),
-				create_bn,
-				fraction_len: fraction_length,
-				raw_number: json_number_value,
-				timestamp,
-				update_bn: current_block,
-			});
-
-			let new_price_res = AresPriceDataVecOf::<T>::try_create_on_vec(new_price);
-			if let Ok(new_price) = new_price_res {
-				<AresPrice<T>>::insert(key_str.clone(), new_price);
-			}else{
-				log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "new_price" );
-			}
-		} else {
-			// push a new value.
-			let mut new_price = AresPriceDataVecOf::<T>::default();
-			new_price.try_push(AresPriceData {
-				price: price.clone(),
-				account_id: who.clone(),
-				create_bn,
-				fraction_len: fraction_length,
-				raw_number: json_number_value,
-				timestamp,
-				update_bn: current_block,
-			});
-			<AresPrice<T>>::insert(key_str.clone(), new_price);
-		}
-
-		let avg_check_result = Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
-		// Check if the price request exists, if not, clear storage data.
-		let price_request_list = <PricesRequests<T>>::get();
-		let has_key = price_request_list
-			.iter()
-			.any(|(any_price, _, _, _, _)| any_price == &key_str);
-		if !has_key {
-			Self::clear_price_storage_data(key_str);
-		}
-		avg_check_result
-	}
-
-	fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
-		let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default()).len();
-		if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
-			return Self::update_avg_price_storage(key_str.clone());
-		}
-		None
-	}
-
-	fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength, Vec<T::AccountId>)> {
-		let prices_info = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default());
-		let average_price_result = Self::average_price(prices_info, T::CalculationKind::get());
-		if let Some((average, fraction_length, account_list)) = average_price_result {
-			let mut price_list_of_pool = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default());
-			// Abnormal price index list
-			let mut abnormal_price_index_list = Vec::new();
-			// Pick abnormal price.
-			if 0 < price_list_of_pool.len() {
-				for (index, check_price) in price_list_of_pool.iter().enumerate() {
-					// let offset_percent = match check_price.price {
-					// 	x if &x > &average => ((x - average) * 100) / average,
-					// 	x if &x < &average => ((average - x) * 100) / average,
-					// 	_ => 0,
-					// };
-
-					let offset_percent = match check_price.price {
-						x if &x > &average => Percent::from_rational((x - average), average),
-						x if &x < &average => Percent::from_rational((average - x), average),
-						_ => Percent::from_percent(0),
-					};
-
-					if offset_percent > <PriceAllowableOffset<T>>::get() {
-						// Set price to abnormal list and pick out check_price
-						<AresAbnormalPrice<T>>::try_append(
-							key_str.clone(),
-							(
-								check_price,
-								AvgPriceData {
-									integer: average,
-									fraction_len: fraction_length,
-								},
-							),
-						);
-						// abnormal_price_index_list
-						abnormal_price_index_list.push(index);
-					}
-				}
-
-				let mut remove_count = 0;
-				// has abnormal price.
-				if abnormal_price_index_list.len() > 0 {
-					// pick out abnormal
-					abnormal_price_index_list.iter().any(|remove_index| {
-						price_list_of_pool.remove(*remove_index - remove_count);
-						remove_count += 1;
-						false
-					});
-					// reset price pool
-					<AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
-					return Self::update_avg_price_storage(key_str.clone());
-				}
-
-				// Update avg price
-				<AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
-				// Clear price pool.
-				<AresPrice<T>>::remove(key_str.clone());
-				//
-				return Some((key_str.clone(), average, fraction_length, account_list));
-			}
-		}
-		None
 	}
 
 	/// Find those requests that have exceeded the `max_duration` limit,
@@ -2715,122 +1916,7 @@ impl<T: Config> Pallet<T> {
 		purchased_id_list
 	}
 
-	/// Save paid price results,The submitted price will be compared with the average price,
-	/// and if the offset is too large, it will be recorded in `AresAbnormalPrice<T>`.
-	///
-	/// Offset setting parameters are stored in `PriceAllowableOffset<T>`
-	fn handler_purchase_avg_price_storage (
-		purchase_id: PurchaseId,
-		price_key: PriceKey,
-		mut prices_info: PurchasedPriceDataVec<T>,
-		reached_type: u8,
-	) -> Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)> {
-		let (average, fraction_length, account_list) =
-			Self::average_price(prices_info.clone(), T::CalculationKind::get()).expect("The average is not empty.");
 
-		// Abnormal price index list
-		let mut abnormal_price_index_list = Vec::new();
-		// Pick abnormal price.
-		if 0 < prices_info.len() {
-			for (index, check_price) in prices_info.iter().enumerate() {
-				// let offset_percent = match check_price.price {
-				// 	x if &x > &average => ((x - average) * 100) / average,
-				// 	x if &x < &average => ((average - x) * 100) / average,
-				// 	_ => 0,
-				// };
-				let offset_percent = match check_price.price {
-					x if &x > &average => Percent::from_rational((x - average), average),
-					x if &x < &average => Percent::from_rational((average - x), average),
-					_ => Percent::from_percent(0),
-				};
-				if offset_percent > <PriceAllowableOffset<T>>::get()  {
-
-					<AresAbnormalPrice<T>>::try_append(
-						price_key.clone(),
-						(
-							check_price,
-							AvgPriceData {
-								integer: average,
-								fraction_len: fraction_length,
-							},
-						),
-					);
-					// abnormal_price_index_list
-					abnormal_price_index_list.push(index);
-				}
-			}
-
-			let mut remove_count = 0;
-			// has abnormal price.
-			if abnormal_price_index_list.len() > 0 {
-				// pick out abnormal
-				abnormal_price_index_list.iter().any(|remove_index| {
-					prices_info.remove(*remove_index - remove_count);
-					remove_count += 1;
-					false
-				});
-				// reset price pool
-				return Self::handler_purchase_avg_price_storage(
-					purchase_id.clone(),
-					price_key.clone(),
-					prices_info.clone(),
-					reached_type,
-				);
-			}
-			// let current_block = <system::Pallet<T>>::block_number() as u64;
-			let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
-			// get valid request price accounts
-			let valid_request_account_id_list: Vec<T::AccountId> = prices_info
-				.into_iter()
-				.map(|x| {
-					// Self::get_stash_id(&x.account_id).unwrap()
-					x.account_id
-				})
-				.collect();
-
-			let avg_price_data = PurchasedAvgPriceData {
-				create_bn: current_block,
-				reached_type,
-				price_data: (average.clone(), fraction_length.clone()),
-			};
-			// Update avg price (average, fraction_length)
-			<PurchasedAvgPrice<T>>::insert(purchase_id.clone(), price_key.clone(), avg_price_data.clone());
-			<PurchasedAvgTrace<T>>::insert(purchase_id.clone(), <system::Pallet<T>>::block_number());
-			return Some((price_key.clone(), avg_price_data, valid_request_account_id_list));
-		}
-		None
-	}
-
-	/// Execute the average price aggregation of `ask-price`, and the expired data will be deleted after aggregation
-	/// - purchase_id: `ask-price` order id.
-	/// - reached_type: Take the value of [PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE)
-	/// or [PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE).
-	fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) -> usize {
-		// Get purchase price pool
-		let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
-		//
-		let mut event_result_list = Vec::new();
-		//
-		price_key_list.iter().any(|x| {
-			let prices_info = <PurchasedPricePool<T>>::get(purchase_id.clone(), x.clone()).unwrap_or(Default::default());
-			let result =
-				Self::handler_purchase_avg_price_storage(purchase_id.clone(), x.clone(), prices_info, reached_type);
-			event_result_list.push(result);
-			false
-		});
-
-		let result_count =event_result_list.len();
-		Self::deposit_event(Event::PurchasedAvgPrice {
-			purchase_id: purchase_id.clone(),
-			event_results: event_result_list,
-			finance_era: T::OracleFinanceHandler::current_era_num(),
-		});
-		let current_block: u64 = <system::Pallet<T>>::block_number().unique_saturated_into();
-
-		Self::check_and_clear_expired_purchased_average_price_storage(current_block);
-
-		result_count
-	}
 
 	/// Check and clear old data, the duration of data saving is stored in `PurchasedDefaultSetting<T>`,
 	/// you can modify it by the [update_purchased_param()](pallet::update_purchased_param)
@@ -2857,95 +1943,6 @@ impl<T: Config> Pallet<T> {
 	fn clear_price_storage_data(price_key: PriceKey) {
 		<AresPrice<T>>::remove(&price_key);
 		<AresAvgPrice<T>>::remove(&price_key);
-	}
-
-	/// Calculate current average price. // fraction_length: FractionLength
-	fn average_price(
-		// prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
-		prices_info: PurchasedPriceDataVec<T>,
-		kind: u8,
-	) -> Option<(u64, FractionLength, Vec<T::AccountId>)> {
-		let mut fraction_length_of_pool: FractionLength = 0;
-		// Check and get fraction_length.
-		prices_info.clone().into_iter().any(|tmp_price_data| {
-			if 0 == fraction_length_of_pool {
-				fraction_length_of_pool = tmp_price_data.fraction_len;
-			}
-			if fraction_length_of_pool != tmp_price_data.fraction_len {
-				panic!("Inconsistent of fraction lenght.")
-			}
-			false
-		});
-
-		let mut prices: Vec<u64> = Vec::new(); // prices_info.clone().into_iter().map(|price_data| price_data.price).collect();
-		let mut account_list: Vec<T::AccountId> = Vec::new(); // prices_info.into_iter().map(|price_data| price_data.account_id).collect();
-
-		for price_info in prices_info {
-			prices.push(price_info.price);
-			account_list.push(price_info.account_id);
-		}
-
-		if prices.is_empty() {
-			return None;
-		}
-
-		match Self::calculation_average_price(prices, kind) {
-			Some(price_value) => {
-				return Some((price_value, fraction_length_of_pool, account_list));
-			}
-			_ => {}
-		}
-		None
-	}
-
-	/// Calculate jump blocks
-	fn handle_calculate_jump_block(jump_format: (u64, u64)) -> (u64, u64) {
-		let (interval, jump_block) = jump_format;
-		assert!(interval > 0, "The minimum interval value is 1");
-
-		let new_jump_block = match jump_block.checked_sub(1) {
-			None => interval.saturating_sub(1),
-			Some(_x) => jump_block.saturating_sub(1),
-		};
-		(interval, new_jump_block)
-	}
-
-	///
-	fn add_purchased_price(
-		purchase_id: PurchaseId,
-		account_id: T::AccountId,
-		create_bn: T::BlockNumber,
-		price_list: PricePayloadSubPriceList,
-	) {
-		if <PurchasedOrderPool<T>>::contains_key(purchase_id.clone(), account_id.clone()) {
-			return ();
-		}
-		let current_block = <system::Pallet<T>>::block_number();
-		price_list.iter().any(|PricePayloadSubPrice(a, b, c, d, timestamp)| {
-			let mut price_data_vec = <PurchasedPricePool<T>>::get(purchase_id.clone(), a.clone()).unwrap_or(Default::default());
-			price_data_vec.try_push(AresPriceData {
-				price: *b,
-				account_id: account_id.clone(),
-				create_bn: create_bn.clone(),
-				fraction_len: *c,
-				raw_number: d.clone(),
-				timestamp: timestamp.clone(),
-				update_bn: current_block
-			});
-			//
-			<PurchasedPricePool<T>>::insert(purchase_id.clone(), a.clone(), price_data_vec);
-			false
-		});
-
-		<PurchasedOrderPool<T>>::insert(purchase_id.clone(), account_id.clone(), current_block.clone());
-
-		Self::deposit_event(Event::NewPurchasedPrice {
-			created_at: create_bn,
-			price_list,
-			who: account_id,
-			finance_era: T::OracleFinanceHandler::current_era_num(),
-			purchase_id
-		});
 	}
 
 	// Judge whether the predetermined conditions of the validator of the current
@@ -3015,46 +2012,6 @@ impl<T: Config> Pallet<T> {
 		result
 	}
 
-	/// When in the Aura consensus system, in order to avoid a certain `trading-pairs`
-	/// being repeatedly `submit` by a certain validator, the `jump block` mechanism appears.
-	///
-	/// This method can change the execution interval of `submit` to avoid this problem.
-	fn increase_jump_block_number(price_key: PriceKey, interval: u64) -> (u64, u64) {
-		let (old_interval, jump_number) =
-			Self::handle_calculate_jump_block((interval, Self::get_jump_block_number(price_key.clone())));
-		<JumpBlockNumber<T>>::insert(&price_key, jump_number.clone());
-		(old_interval, jump_number)
-	}
-
-	/// Get the number of `jump block` associated with `trading-pairs`.
-	fn get_jump_block_number(price_key: PriceKey) -> u64 {
-		<JumpBlockNumber<T>>::get(&price_key).unwrap_or(0)
-	}
-
-	/// Delete jump block data
-	fn remove_jump_block_number(price_key: PriceKey) {
-		<JumpBlockNumber<T>>::remove(&price_key);
-	}
-
-	/// Calculates the median for the given `prices`.
-	fn calculation_average_price(mut prices: Vec<u64>, kind: u8) -> Option<u64> {
-		if 2 == kind {
-			// use median
-			prices.sort();
-			if prices.len() % 2 == 0 {
-				// get 2 mid element then calculation average.
-				return Some((prices[prices.len() / 2] + prices[prices.len() / 2 - 1]) / 2);
-			} else {
-				// get 1 mid element and return.
-				return Some(prices[prices.len() / 2]);
-			}
-		}
-		if 1 == kind {
-			return Some(prices.iter().fold(0_u64, |a, b| a.saturating_add(*b)) / prices.len() as u64);
-		}
-		None
-	}
-
 	/// For offchian validate.
 	fn validate_transaction_parameters_of_ares(
 		block_number: &T::BlockNumber,
@@ -3105,6 +2062,30 @@ impl<T: Config> Pallet<T> {
 				false
 			});
 		Ok(())
+	}
+
+	/// Check if the blocks submitted by the transaction pair in the list meet the minimum interval requirement.
+	/// If not, there may be behaviors using `old-block` attacks and need to be careful.
+	fn submission_interval_check(pairs_list: PricePayloadSubPriceList, check_bn: T::BlockNumber) -> bool {
+		let price_request_vec = PricesRequests::<T>::get();
+		for price_pair in pairs_list {
+			let is_ok = price_request_vec.clone().into_iter().any(|(check_price_key, _, _, _, check_interval)|{
+				if price_pair.0 == check_price_key {
+					// Find out last submit price
+					if let Some((_, last_submit_bn)) = Self::get_last_price_author(check_price_key) {
+						// Compare whether the current check_bn is greater than or equal to
+						// the last submit bn + check_interval of the last quotation.
+						return check_bn >= last_submit_bn.saturating_add(check_interval.into());
+					}
+					return true;
+				}
+				false
+			});
+			if !is_ok {
+				return false;
+			}
+		}
+		true
 	}
 }
 
@@ -3246,7 +2227,6 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 		None
 	}
 
-	//
 	fn check_and_clean_obsolete_task(maximum_due: T::BlockNumber) -> Weight {
 		let mut old_task_list = <PreCheckTaskList<T>>::get().unwrap_or(Default::default());
 		let current_block_num: T::BlockNumber = <system::Pallet<T>>::block_number();

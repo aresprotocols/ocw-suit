@@ -13,6 +13,7 @@ pub trait SymbolInfo {
 	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength>;
 }
 
+///
 pub trait IsAresOracleCall<T: Config, Call> {
 	fn try_get_pallet_call(in_call: &Call) -> Option<&super::pallet::Call<T>>;
 }

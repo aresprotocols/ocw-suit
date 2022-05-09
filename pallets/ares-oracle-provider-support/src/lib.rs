@@ -36,7 +36,7 @@ pub type RequestKeys = BoundedVec<PriceKey, MaximumPoolSize>;
 pub type PreCheckList = BoundedVec<PreCheckStruct, MaximumPoolSize>;
 pub type TokenList = BoundedVec<PriceToken, MaximumPoolSize>;
 
-// warp NumberValue
+// A wrapper structure for NumberValue that handles the conversion of precision to u64
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct JsonNumberValue {
 	pub integer: u64,
@@ -45,8 +45,26 @@ pub struct JsonNumberValue {
 	pub exponent: u32,
 }
 
-//
+/// Convert `NumberValue` to `JsonNumberValue`
+///
+/// # Examples
+/// ```
+/// let number1 = JsonNumberValue {
+///  	integer: 8,
+///  	fraction: 87654,
+///  	fraction_length: 5,
+///  	exponent: 0,
+/// };
+/// assert_eq!(8876540, number1.to_price(6));
+/// assert_eq!(887654, number1.to_price(5));
+/// assert_eq!(88765, number1.to_price(4));
+/// assert_eq!(8876, number1.to_price(3));
+/// assert_eq!(887, number1.to_price(2));
+/// assert_eq!(88, number1.to_price(1));
+/// assert_eq!(8, number1.to_price(0));
+/// ```
 impl JsonNumberValue {
+	/// Input `NumberValue` to create a `JsonNumberValue`
 	pub fn new(number_value: NumberValue) -> Self {
 		if number_value.integer < 0 || number_value.exponent != 0 {
 			panic!("⛔ Error source NumberValue integer or exponent.");
@@ -59,6 +77,7 @@ impl JsonNumberValue {
 		}
 	}
 
+	/// Formats a u64 integer given a fractional length
 	pub fn to_price(&self, fraction_number: FractionLength) -> u64 {
 		let mut price_fraction = self.fraction;
 		if price_fraction < 10u64.pow(fraction_number) {
@@ -89,12 +108,15 @@ pub struct PreCheckStruct {
 	pub timestamp: u64,
 }
 
-// The following code for `per check` functionable
-//
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PreCheckStatus {
+	/// Review status, waiting for validators to submit `price` data.
 	Review,
+	/// The validator has submitted the price data,
+	/// but the deviation is too large after comparing with the data on the chain,
+	/// and the review fails
 	Prohibit,
+	/// Review passed
 	Pass,
 }
 
@@ -104,12 +126,14 @@ impl Default for PreCheckStatus {
 	}
 }
 
+/// Pre-checked state configuration data, which is saved on-chain
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug,  TypeInfo)]
 pub struct PreCheckTaskConfig {
+	/// List of `Trading pairs` to check.
 	pub check_token_list: TokenList,
+	/// The maximum allowable offset percentage when compared
+	/// to the on-chain average price
 	pub allowable_offset: Percent,
-	/* pub max_repeat_times: u8, // The current version is forbidden first.
-	 * pub pass_percent: Percent, // The current version is forbidden first. */
 }
 
 impl Default for PreCheckTaskConfig {
@@ -123,7 +147,7 @@ impl Default for PreCheckTaskConfig {
 	}
 }
 
-/// `Pre-Check trait`
+/// `Pre-Check`trait
 pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 
 	/// Determine whether there is a pre-check task for the `validator` through a stash account.
@@ -135,22 +159,23 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	/// Precheck tasks that only match the first `ares-authority`
 	fn get_pre_task_by_authority_set(auth_list: Vec<AuthorityId>) -> Option<(AccountId, AuthorityId, BlockNumber)>;
 
-	//
+	/// Trigger this method on a specific cycle to clean up too old and passed tasks
 	fn check_and_clean_obsolete_task(maximum_due: BlockNumber) -> Weight;
 
-	/// Obtain a set of price data according to the task configuration structure.
+	/// Obtain `PreCheckList` result data according to `Trading pairs` specified by `check_config`
 	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList;
 
-	/// Record the per check results and add them to the storage structure.
+	/// Will verify the data on-chain based on the result of `PreCheckList` and return `PreCheckStatus` as the result
 	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus;
 
-	//
+	/// Get the pre-check status that a validator has stored,
+	/// this status will affect whether it will be added to the validator list.
 	fn get_pre_check_status(stash: AccountId) -> Option<(BlockNumber, PreCheckStatus)>;
 
-	//
+	/// Remove pre-check status stored by a validator
 	fn clean_pre_check_status(stash: AccountId);
 
-	//
+	/// Create a pre-check task, return true if the creation is successful else return false
 	fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> bool;
 }
 
