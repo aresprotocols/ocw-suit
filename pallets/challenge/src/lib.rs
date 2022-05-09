@@ -84,6 +84,9 @@ pub mod pallet {
 		type MinimumDeposit: Get<BalanceOf<Self, I>>;
 
 		#[pallet::constant]
+		type MinimumThreshold: Get<u32>;
+
+		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
 		// Handler for the unbalanced reduction when the
@@ -132,6 +135,8 @@ pub mod pallet {
 		DepositLow,
 		/// Free balance too low
 		FreeBalanceLow,
+		/// Threshold too low
+		ThresholdTooLow,
 		/// Proposal already noted
 		DuplicateProposal,
 		/// Proposal is missing
@@ -201,7 +206,7 @@ pub mod pallet {
 				!Proposals::<T, I>::contains_key(&challenge_validator_hash),
 				Error::<T, I>::DuplicateProposal
 			);
-			let proposal = Self::create_proposal(members.len() as u32, challenge_validator_hash.clone());
+			let proposal = Self::create_proposal(T::MinimumThreshold::get(), challenge_validator_hash.clone());
 
 			if let Ok((proposal, proposal_hash)) = proposal {
 				let real: <T as frame_system::Config>::Origin = frame_system::RawOrigin::Signed(delegatee).into();
@@ -297,7 +302,7 @@ where
 	T: frame_system::Config,
 {
 	fn create_proposal(
-		members_count: u32,
+		threshold: u32,
 		challenge_validator_hash: T::Hash,
 	) -> Result<(<T as crate::Config<I>>::Proposal, T::Hash), ()> {
 		let proposal: <T as crate::Config<I>>::Proposal = crate::Call::challenge_success {
@@ -308,10 +313,10 @@ where
 		let data = proposal.encode();
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_hash: T::Hash = <T as frame_system::Config>::Hashing::hash_of(&proposal);
-		let mut threshold = members_count;
-		if members_count > 3 {
-			threshold = members_count / 3 * 2;
-		}
+		// let mut threshold = members_count;
+		// if members_count > 3 {
+		// 	threshold = members_count / 3 * 2;
+		// }
 		if let Ok(proposal) = <T as pallet_collective::Config<I>>::Proposal::decode(&mut &data[..]) {
 			let call: pallet_collective::Call<T, I> = pallet_collective::Call::propose {
 				threshold,

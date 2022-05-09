@@ -141,6 +141,7 @@ pub mod tests {
 	parameter_types! {
 		pub const MinimumDeposit: Balance = 1;
 		pub const ChallengePalletId: PalletId = PalletId(*b"py/ardem");
+		pub const MinimumThreshold: u32 = 2;
 	}
 
 	impl sp_runtime::traits::IsMember<pallet_babe::AuthorityId> for Runtime {
@@ -162,6 +163,7 @@ pub mod tests {
 		type SlashProposer = AresChallenge;
 		type IsAuthority = Self;
 		type AuthorityId = pallet_babe::AuthorityId;
+		type MinimumThreshold = MinimumThreshold;
 	}
 
 	pub struct RuntimeVersion;
