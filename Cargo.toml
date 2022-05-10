@@ -5,10 +5,10 @@ members = [
     "pallets/ares-oracle",
     "pallets/oracle-finance",
     "pallets/staking-extend",
-#    "pallets/member-extend",
     "pallets/challenge",
     "pallets/price-estimates",
     "pallets/ares-oracle-provider-support",
     "rpc/ares-rpc",
+    "tools/seed-reader",
 ]
 
