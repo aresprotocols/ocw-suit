@@ -1,3 +1,5 @@
+//! A module for controlling the oracle down payment model
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use crate::traits::*;
@@ -22,10 +24,12 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 
+/// Modules that provide interface definitions.
 pub mod traits;
+/// Defines the underlying data types required by the Pallet but does not include storage.
 pub mod types;
 
 #[frame_support::pallet]
@@ -75,12 +79,6 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type HistoryDepth: Get<u32>;
-
-		// #[pallet::constant]
-		// type RewardEraCycle: Get<EraIndex>;
-		//
-		// #[pallet::constant]
-		// type RewardSlot: Get<EraIndex>;
 
 		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 	}
@@ -177,8 +175,6 @@ pub mod pallet {
 			if T::Currency::total_balance(&finance_account).is_zero() {
 				log::info!("oracle-finance deposit creating, {:?}", T::Currency::minimum_balance());
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
-				// Self::deposit_event(Event::<T>::OracleFinanceDepositCreating(T::Currency::
-				// minimum_balance()));
 			}
 		}
 	}
@@ -261,6 +257,16 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Validators get rewards corresponding to eras.
+		///
+		/// _Note_: An ear cannot be the current unfinished era, and rewards are not permanently stored.
+		/// If the reward exceeds the depth defined by T::HistoryDepth, you will not be able to claim it.
+		///
+		/// The dispatch origin for this call must be _Signed_
+		///
+		/// Earliest reward Era = Current-Era - T::HistoryDepth
+		///
+		/// - ask_era: Era number is a u32
 		#[pallet::weight(1000)]
 		pub fn take_purchase_reward(origin: OriginFor<T>, ask_era: EraIndex) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
@@ -285,6 +291,14 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Validators get rewards, it will help validators get all available rewards
+		///
+		/// _Note_: An ear cannot be the current unfinished era, and rewards are not permanently stored.
+		/// If the reward exceeds the depth defined by T::HistoryDepth, you will not be able to claim it.
+		///
+		/// The dispatch origin for this call must be _Signed_
+		///
+		/// Earliest reward Era = Current-Era - T::HistoryDepth
 		#[pallet::weight(1000)]
 		pub fn take_all_purchase_reward(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
@@ -335,6 +349,7 @@ pub mod pallet {
 }
 
 impl<T: Config> IForPrice<T> for Pallet<T> {
+
 	fn calculate_fee_of_ask_quantity(price_count: u32) -> BalanceOf<T> {
 		T::BasicDollars::get().saturating_mul(price_count.into())
 	}

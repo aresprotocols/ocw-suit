@@ -1,5 +1,5 @@
 
-## Methods 
+## Methods
 
 ### has_pre_check_task
 
@@ -64,7 +64,7 @@ fn create_pre_check_task(
 ```
 Create a pre-check task, return true if the creation is successful else return false
 
-## Workflow 
+## Workflow
 
 ### KeyTypeId of Ares
 1. Configure the definition of the `sr25519 AuthorityId` provided by the `scrypto` module into `ares-oracle::AuthorityAres`.
@@ -73,6 +73,6 @@ Create a pre-check task, return true if the creation is successful else return f
 ### Pre-review task flow
 1. Use `has_pre_check_task` to determine whether a validator has a pre-check task.
 2. If there is a pre-review task, get the corresponding price response through `take_price_for_pre_check`.
-3. Check and save the result data through `save_pre_check_result`, 
+3. Check and save the result data through `save_pre_check_result`,
    the returned results include `PreCheckStatus::Prohibit` and `PreCheckStatus::Pass`.
 4. Pass the block height to the `check_and_clean_obsolete_task` function to remove obsolete pre-review tasks and pre-check result to prevent overbloating.

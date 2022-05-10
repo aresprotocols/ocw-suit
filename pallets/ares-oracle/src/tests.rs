@@ -4006,7 +4006,7 @@ fn test_debug_old_block_attack() {
 					if(validate_unsigned.is_ok()) {
 
 					}
-					assert!(validate_unsigned.is_err());
+					assert!(validate_unsigned.is_ok());
 					call
 				},
 			).unwrap();

@@ -1,3 +1,5 @@
+//! Election adapter between Staking and Election pallets.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
@@ -18,6 +20,7 @@ pub trait Config: frame_system::Config {
 	>;
 }
 
+/// Implement the structure of OnChainSequentialPhragmen.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
@@ -31,6 +34,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	}
 }
 
+/// Implement the structure of OnChainSequentialPhragmenGenesis.
 pub struct OnChainSequentialPhragmenGenesis<T: Config>(PhantomData<T>);
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmenGenesis<T> {

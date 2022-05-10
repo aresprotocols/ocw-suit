@@ -1,3 +1,5 @@
+//! The module that implements the `ElectionDataProvider` trait is the adapter between election and Staking data.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
@@ -25,6 +27,7 @@ pub trait Config: frame_system::Config {
 	type AresOraclePreCheck: IAresOraclePreCheck<Self::AccountId, Self::AuthorityId, Self::BlockNumber>;
 }
 
+/// Implement the structure of ElectionDataProvider.
 pub struct DataProvider<T: Config>(PhantomData<T>);
 impl<T: Config> ElectionDataProvider for DataProvider<T>
 where

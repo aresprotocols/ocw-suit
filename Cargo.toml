@@ -5,13 +5,10 @@ members = [
     "pallets/ares-oracle",
     "pallets/oracle-finance",
     "pallets/staking-extend",
-    "pallets/member-extend",
+#    "pallets/member-extend",
     "pallets/challenge",
     "pallets/price-estimates",
     "pallets/ares-oracle-provider-support",
     "rpc/ares-rpc",
 ]
 
-#[patch."https://github.com/paritytech/substrate"]
-#pallet-session ={path = "./pallets/session" }
-#pallet-session-benchmarking ={path = "./pallets/session/benchmarking" }

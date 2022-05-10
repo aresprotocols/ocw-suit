@@ -2,9 +2,6 @@ use crate::mock::*;
 use crate::IStakingNpos;
 
 use frame_support::assert_ok;
-// use crate::traits::*;
-// use crate::types::*;
-// use frame_support::traits::OnInitialize;
 
 use sp_runtime::{
 	impl_opaque_keys,
