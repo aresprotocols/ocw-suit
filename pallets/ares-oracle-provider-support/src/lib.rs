@@ -166,7 +166,7 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	fn take_price_for_pre_check(check_config: PreCheckTaskConfig) -> PreCheckList;
 
 	/// Will verify the data on-chain based on the result of `PreCheckList` and return `PreCheckStatus` as the result
-	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus;
+	fn save_pre_check_result(stash: AccountId, bn: BlockNumber, pre_check_list: PreCheckList, auth: AuthorityId) -> PreCheckStatus;
 
 	/// Get the pre-check status that a validator has stored,
 	/// this status will affect whether it will be added to the validator list.
@@ -193,7 +193,7 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> PreCheckList {
 		Default::default()
 	}
-	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList) -> PreCheckStatus { PreCheckStatus::Review }
+	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList, auth: AU) -> PreCheckStatus { PreCheckStatus::Review }
 	fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
 		None
 	}

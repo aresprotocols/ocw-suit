@@ -26,7 +26,7 @@ fn test_create_pre_check_task() {
 		// println!("1111{:?}", <FinalPerCheckResult<Test>>::get(stash_1.clone()));
 		assert_eq!(
 			<FinalPerCheckResult<Test>>::get(stash_1.clone()).unwrap(),
-			Some((1, PreCheckStatus::Review, None))
+			Some((1, PreCheckStatus::Review, None, auth_1.clone()))
 		);
 
 		assert_eq!(
@@ -225,7 +225,8 @@ fn save_pre_check_result_for_success() {
 		assert_eq!(get_status, None);
 
 		// Check price
-		AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list);
+		let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101; 32]);
+		AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list, auth_1);
 
 		//
 		let get_status: Option<(BlockNumber, PreCheckStatus)> = AresOcw::get_pre_check_status(candidate_account);
@@ -305,7 +306,8 @@ fn save_pre_check_result_for_prohibit() {
 		assert_eq!(get_status, None);
 
 		// Check price
-		AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list);
+		let auth_1 = <Test as crate::Config>::AuthorityAres::unchecked_from([101; 32]);
+		AresOcw::save_pre_check_result(candidate_account, current_bn, take_price_list, auth_1);
 
 		//
 		let get_status: Option<(BlockNumber, PreCheckStatus)> = AresOcw::get_pre_check_status(candidate_account);

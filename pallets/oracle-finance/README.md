@@ -176,7 +176,7 @@ Earliest reward Era = Current-Era - T::HistoryDepth
 ## Workflow
 
 
-### Reward Deposit
+### Reward Generation
 
 1. Payment is through the `Trait` provided by `IForPrice`. It is necessary to call `reserve_for_ask_quantity`
    to reserve the part balance of asker and associate it with the order-id.

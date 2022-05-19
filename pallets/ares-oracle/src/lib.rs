@@ -770,6 +770,7 @@ pub mod pallet {
 				preresult_payload.pre_check_stash.clone(),
 				preresult_payload.block_number,
 				preresult_payload.pre_check_list.clone(),
+				preresult_payload.pre_check_auth.clone()
 			);
 			Self::deposit_event(Event::NewPreCheckResult {
 				who: preresult_payload.pre_check_stash,
@@ -1608,7 +1609,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>)>,
+		Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>, T::AuthorityAres)>,
 	>;
 
 	/// Stores a list of pre-check tasks.
@@ -2243,7 +2244,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 
 		// let mut old_final_check_list = <FinalPerCheckResult<T>>::;
 		for (key, val) in <FinalPerCheckResult<T>>::iter() {
-			if let Some((bn, _per_status, _)) = val {
+			if let Some((bn, _per_status, _, _)) = val {
 				// if per_status == PreCheckStatus::Pass {
 				//     let duration_bn = current_block_num.saturating_sub(bn);
 				//     if duration_bn > maximum_due {
@@ -2324,7 +2325,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 	}
 
 	// Record the per check results and add them to the storage structure.
-	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: PreCheckList) -> PreCheckStatus {
+	fn save_pre_check_result(stash: T::AccountId, bn: T::BlockNumber, pre_check_list: PreCheckList, pre_check_auth: T::AuthorityAres) -> PreCheckStatus {
 		assert!(pre_check_list.len() > 0, "⛔️ Do not receive empty result check.");
 		// get avg price.
 		// let mut chain_avg_price_list = BoundedBTreeMap::<PriceKey, (u64, FractionLength),
@@ -2367,7 +2368,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 			validator_up_price_list,
 			raw_precheck_list: pre_check_list.clone(),
 		};
-		<FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus.clone(), Some(pre_check_log))));
+		<FinalPerCheckResult<T>>::insert(stash.clone(), Some((bn, per_checkstatus.clone(), Some(pre_check_log), pre_check_auth.clone())));
 		let mut task_list = <PreCheckTaskList<T>>::get().unwrap_or(Default::default());
 		task_list.retain(|(old_acc, _, _)| &stash != old_acc);
 		<PreCheckTaskList<T>>::put(task_list);
@@ -2377,7 +2378,7 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 
 	//
 	fn get_pre_check_status(stash: T::AccountId) -> Option<(T::BlockNumber, PreCheckStatus)> {
-		if let Some((bn, check_status, _)) = <FinalPerCheckResult<T>>::get(stash).unwrap_or(None) {
+		if let Some((bn, check_status, _, _)) = <FinalPerCheckResult<T>>::get(stash).unwrap_or(None) {
 			return Some((bn, check_status));
 		}
 		None
@@ -2405,11 +2406,11 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 			return false;
 		}
 
-		task_list.try_push((stash.clone(), auth, bn));
+		task_list.try_push((stash.clone(), auth.clone(), bn));
 		<PreCheckTaskList<T>>::put(task_list);
 		<FinalPerCheckResult<T>>::insert(
 			stash.clone(),
-			Some((bn, PreCheckStatus::Review, Option::<PreCheckCompareLog>::None)),
+			Some((bn, PreCheckStatus::Review, Option::<PreCheckCompareLog>::None,auth.clone(), )),
 		);
 		true
 	}
