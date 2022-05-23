@@ -83,6 +83,8 @@ pub mod pricer_helper;
 /// Check offchain unsigned call.
 pub mod validate_unsigned;
 
+pub mod migrations;
+
 
 /// Compute price using `Average` on price pool.
 pub const CALCULATION_KIND_AVERAGE: u8 = 1;

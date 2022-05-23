@@ -2,7 +2,6 @@
 <module type="CPP_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/ares-oracle/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/staking-extend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/challenge/src" isTestSource="false" />
@@ -14,6 +13,9 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/session-old/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/session/benchmarking/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rpc/ares-rpc/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend-will-del/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/seed-reader/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

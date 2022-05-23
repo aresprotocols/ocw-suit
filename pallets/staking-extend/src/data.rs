@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::num::FpCategory::Zero;
 use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 use codec::Encode;
 use frame_election_provider_support::{data_provider, ElectionDataProvider, VoterOf};
@@ -33,7 +34,7 @@ impl<T: Config> ElectionDataProvider for DataProvider<T>
 where
 	<<T as Config>::ValidatorSet as ValidatorSet<<T as Config>::ValidatorId>>::ValidatorId:
 		PartialEq<<<T as Config>::DataProvider as ElectionDataProvider>::AccountId>,
-	<<T as Config>::DataProvider as ElectionDataProvider>::AccountId: Clone,
+	<<T as Config>::DataProvider as ElectionDataProvider>::AccountId: Clone + PartialEq,
 	<T as frame_system::Config>::AccountId: From<<<T as Config>::DataProvider as ElectionDataProvider>::AccountId>,
 {
 	type AccountId = <<T as Config>::DataProvider as ElectionDataProvider>::AccountId; // T::AccountId;
@@ -88,17 +89,42 @@ where
 	}
 
 	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		T::DataProvider::voters(maybe_max_len)
+		let voters = T::DataProvider::voters(maybe_max_len);
+		if let Ok(voter_list) = voters {
+			// Get new target
+			let new_target = Self::targets(maybe_max_len);
+			let mut filter_list = Vec::<VoterOf<Self>>::new();
+			voter_list.into_iter().for_each(|x|{
+				if let Ok(target_list) = new_target.clone() {
+					let is_exists = target_list.iter().any(|t|{
+						if t == &x.0 {
+							return true;
+						}
+						false
+					});
+					if is_exists {
+						filter_list.push(x);
+					}
+				}
+			});
+			return Ok(filter_list);
+		}
+		return voters
 	}
 
-	// fn voters(
-	// 	maybe_max_len: Option<usize>,
-	// ) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-	// 	T::DataProvider::voters(maybe_max_len)
-	// }
-
 	fn desired_targets() -> data_provider::Result<u32> {
-		T::DataProvider::desired_targets()
+
+		let staking_desired_target = T::DataProvider::desired_targets();
+		if let Ok(staking_desired_target) = staking_desired_target {
+			let desired_targets = Self::targets(None).ok().map_or(0usize, |v| { v.len() }) as u32;
+			if desired_targets > staking_desired_target {
+				return data_provider::Result::<u32>::Ok(staking_desired_target)
+			}
+			return data_provider::Result::<u32>::Ok(desired_targets);
+		}
+		staking_desired_target
+
+		// T::DataProvider::desired_targets()
 	}
 
 	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber {

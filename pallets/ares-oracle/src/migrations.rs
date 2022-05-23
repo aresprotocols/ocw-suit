@@ -1,5 +1,34 @@
 use super::*;
-use oracle_finance::types::PurchaseId;
+use frame_support::traits::OnRuntimeUpgrade;
+pub struct UpgradeStorage<T: crate::Config>(sp_std::marker::PhantomData<T>);
+impl<T: crate::Config> OnRuntimeUpgrade for UpgradeStorage<T> {
+
+    fn on_runtime_upgrade() -> frame_support::weights::Weight {
+
+        log::info!(
+		    target: "runtime::ares-oracle",
+			"update FinalPerCheckResult",
+		);
+
+        let mut write_count: Weight = 1;
+        let mut read_count: Weight = 0;
+
+        // Translate NextKeys, and key ownership relations at the same time.
+        // <FinalPerCheckResult<T>>::translate::<Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>)>, _>(|stash, old_value| {
+        //     None
+        // });
+
+        <FinalPerCheckResult<T>>::remove_all(None);
+        T::DbWeight::get().writes(write_count + read_count)
+    }
+
+    #[cfg(feature = "try-runtime")]
+    fn pre_upgrade() -> Result<(), &'static str> {
+        Ok(())
+    }
+}
+
+// use oracle_finance::types::PurchaseId;
 // PurchasedDefaultSetting
 // pub mod v1_2_0 {
 // 	use super::*;
