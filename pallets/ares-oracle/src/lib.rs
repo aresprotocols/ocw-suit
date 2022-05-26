@@ -229,20 +229,9 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			let control_setting = <OcwControlSetting<T>>::get();
 			let block_author = Self::get_block_author();
-			// For debug on test-chain.
-			let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
 
-			if T::AresIStakingNpos::near_era_change(conf_session_multi) {
-				log::debug!(
-					"**** near_era_change => conf_session_multi = {:?}",
-					&conf_session_multi,
-				);
-				// Get all ares authoritys.
-				let authority_list = T::AuthorityAres::all();
-				log::debug!(
-					"**** near_era_change => authority_list = {:?}",
-					&authority_list,
-				);
+			// check xray
+			if block_number > Zero::zero() && block_number % 20u32.into() == Zero::zero() {
 				// Check not be validator.
 				let current_validator = Authorities::<T>::get().unwrap_or(Default::default());
 				log::debug!(
@@ -257,7 +246,8 @@ pub mod pallet {
 					"**** near_era_change => online_authroitys = {:?}",
 					&online_authroitys,
 				);
-
+				// Get all ares authoritys.
+				let authority_list = T::AuthorityAres::all();
 				let in_list = authority_list
 					.iter()
 					.any(|local_authority| online_authroitys.contains(local_authority));
@@ -265,7 +255,6 @@ pub mod pallet {
 					"**** near_era_change => in_list = {:?}",
 					&in_list,
 				);
-
 				// submit offchain tx.
 				if !in_list {
 					let host_key = Self::get_local_host_key();
@@ -293,6 +282,72 @@ pub mod pallet {
 						log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "authority_list" );
 					}
 				}
+			}
+
+			// For debug on test-chain.
+			let conf_session_multi = ConfPreCheckSessionMulti::<T>::get();
+
+			if T::AresIStakingNpos::near_era_change(conf_session_multi) {
+				log::debug!(
+					"**** near_era_change => conf_session_multi = {:?}",
+					&conf_session_multi,
+				);
+				// Get all ares authoritys.
+				let authority_list = T::AuthorityAres::all();
+				log::debug!(
+					"**** near_era_change => authority_list = {:?}",
+					&authority_list,
+				);
+				// // Check not be validator.
+				// let current_validator = Authorities::<T>::get().unwrap_or(Default::default());
+				// log::debug!(
+				// 	"**** near_era_change => current_validator = {:?}",
+				// 	&current_validator,
+				// );
+				// let online_authroitys = current_validator
+				// 	.into_iter()
+				// 	.map(|(_, auth)| auth)
+				// 	.collect::<Vec<T::AuthorityAres>>();
+				// log::debug!(
+				// 	"**** near_era_change => online_authroitys = {:?}",
+				// 	&online_authroitys,
+				// );
+
+				// let in_list = authority_list
+				// 	.iter()
+				// 	.any(|local_authority| online_authroitys.contains(local_authority));
+				// log::debug!(
+				// 	"**** near_era_change => in_list = {:?}",
+				// 	&in_list,
+				// );
+
+				// // submit offchain tx.
+				// if !in_list {
+				// 	let host_key = Self::get_local_host_key();
+				// 	// Get request_domain.
+				// 	let request_domain = Self::get_local_storage_request_domain();
+				// 	log::debug!(
+				// 		"Host_key = {:?}, request_domain = {:?}, authority_list = {:?}",
+				// 		host_key,
+				// 		request_domain,
+				// 		authority_list
+				// 	);
+				//
+				// 	let authority_list_res = AuthorityAresVec::<T>::try_create_on_vec(authority_list);
+				// 	if let Ok(authority_list) = authority_list_res {
+				// 		// LocalXRay::<T>::put(host_key, (request_domain, authority_list));
+				// 		let network_is_validator = sp_io::offchain::is_validator();
+				// 		let call = Call::submit_local_xray {
+				// 			host_key,
+				// 			request_domain,
+				// 			authority_list,
+				// 			network_is_validator,
+				// 		};
+				// 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into());
+				// 	}else{
+				// 		log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "authority_list" );
+				// 	}
+				// }
 			}
 
 			match block_author {
@@ -1958,7 +2013,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let purchased_request = <PurchasedRequestPool<T>>::get(purchase_id.clone());
-		if(purchased_request.is_none()) {
+		if purchased_request.is_none() {
 			return false;
 		}
 
