@@ -90,26 +90,26 @@ where
 
 	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		let voters = T::DataProvider::voters(maybe_max_len);
-		if let Ok(voter_list) = voters {
-			// Get new target
-			let new_target = Self::targets(maybe_max_len);
-			let mut filter_list = Vec::<VoterOf<Self>>::new();
-			voter_list.into_iter().for_each(|x|{
-				if let Ok(target_list) = new_target.clone() {
-					let is_exists = target_list.iter().any(|t|{
-						if t == &x.0 {
-							return true;
-						}
-						false
-					});
-					if is_exists {
-						filter_list.push(x);
-					}
-				}
-			});
-			return Ok(filter_list);
-		}
-		return voters
+		// if let Ok(voter_list) = voters {
+		// 	// Get new target
+		// 	let new_target = Self::targets(maybe_max_len);
+		// 	let mut filter_list = Vec::<VoterOf<Self>>::new();
+		// 	voter_list.into_iter().for_each(|x|{
+		// 		if let Ok(target_list) = new_target.clone() {
+		// 			let is_exists = target_list.iter().any(|t|{
+		// 				if t == &x.0 {
+		// 					return true;
+		// 				}
+		// 				false
+		// 			});
+		// 			if is_exists {
+		// 				filter_list.push(x);
+		// 			}
+		// 		}
+		// 	});
+		// 	return Ok(filter_list);
+		// }
+		voters
 	}
 
 	fn desired_targets() -> data_provider::Result<u32> {
