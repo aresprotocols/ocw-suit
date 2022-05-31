@@ -7,7 +7,7 @@ name = 'staking-extend'
 publish = false
 homepage = "https://github.com/aresprotocols"
 repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.0.4'
+version = '3.0.5'
 readme = 'README.md'
 
 [package.metadata.docs.rs]
