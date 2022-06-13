@@ -26,6 +26,7 @@ use frame_support::{
 		BalanceStatus, ChangeMembers, Currency, ExistenceRequirement, FindAuthor, Imbalance, IsSubType, LockIdentifier,
 		LockableCurrency, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, WithdrawReasons,
 	},
+	transactional,
 	weights::{DispatchClass, Weight},
 	PalletId, StorageHasher,
 };
@@ -98,16 +99,19 @@ pub mod pallet {
 		u64,                         //id
 	>;
 
-	#[pallet::storage]
-	pub type SymbolRewardPool<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Identity,
-		BoundedVec<u8, StringLimit>, //symbol
-		BalanceOf<T, I>,             //id
-	>;
+	// #[pallet::storage]
+	// pub type SymbolRewardPool<T: Config<I>, I: 'static = ()> = StorageMap<
+	// 	_,
+	// 	Identity,
+	// 	BoundedVec<u8, StringLimit>, //symbol
+	// 	BalanceOf<T, I>,             //id
+	// >;
 
 	#[pallet::storage]
 	pub type LockedEstimates<T: Config<I>, I: 'static = ()> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	#[pallet::storage]
+	pub type MinimumInitReward<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumTicketPrice<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
@@ -199,6 +203,10 @@ pub mod pallet {
 			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
 			who: T::AccountId,
 		},
+
+		ParticipateEstimates{
+			who: T::AccountId,
+		}
 	}
 
 	#[pallet::error]
@@ -239,6 +247,8 @@ pub mod pallet {
 		TooManyEstimates,
 
 		NotMember,
+
+		MultiplierNotExist,
 	}
 
 	// #[pallet::genesis_config]
@@ -397,6 +407,8 @@ pub mod pallet {
 			estimates_type: EstimatesType,
 			deviation: Option<Permill>,
 			range: Option<Vec<u64>>,
+			multiplier: Vec<MultiplierOption>,
+			#[pallet::compact] init_reward: BalanceOf<T, I>,
 			#[pallet::compact] price: BalanceOf<T, I>,
 		) -> DispatchResult {
 			ensure!(Self::is_active(), Error::<T, I>::PalletInactive);
@@ -421,6 +433,14 @@ pub mod pallet {
 				Error::<T, I>::EstimatesConfigInvalid
 			);
 
+			ensure!(
+				price >= MinimumTicketPrice::<T, I>::get() && init_reward >= MinimumInitReward::<T, I>::get(),
+				Error::<T, I>::EstimatesConfigInvalid
+			);
+
+			let multiplier: BoundedVec<MultiplierOption, MaximumOptions> =
+				multiplier.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+
 			let symbol: BoundedVec<u8, StringLimit> =
 				symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
@@ -441,6 +461,13 @@ pub mod pallet {
 				Error::<T, I>::PreparedEstimatesExist
 			);
 
+			T::Currency::transfer(
+				&caller,
+				&Self::account_id(symbol.to_vec()),
+				init_reward,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
 			// let _0 = BalanceOf::<T, I>::from(0u32);
 			let mut estimates_config = SymbolEstimatesConfig {
 				symbol: symbol.clone(),
@@ -451,9 +478,10 @@ pub mod pallet {
 				start,
 				end,
 				distribute,
+				multiplier,
 				deviation,
 				symbol_fraction: fraction.unwrap(),
-				total_reward: BalanceOf::<T, I>::from(0u32),
+				total_reward: init_reward,
 				state: EstimatesState::InActive,
 				range,
 			};
@@ -468,6 +496,16 @@ pub mod pallet {
 			SymbolEstimatesId::<T, I>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
 			PreparedEstimates::<T, I>::insert(symbol.clone(), &estimates_config);
 			Self::hex_display_estimates_config(&estimates_config);
+
+			// update symbol reward
+			// let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
+			// if let Some(reward) = reward {
+			// 	let reward = reward + init_reward;
+			// 	SymbolRewardPool::<T, I>::insert(&symbol, reward);
+			// } else {
+			// 	SymbolRewardPool::<T, I>::insert(&symbol, init_reward);
+			// }
+
 			if !CompletedEstimates::<T, I>::contains_key(&symbol) {
 				let val = BoundedVec::<
                     SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
@@ -535,16 +573,15 @@ pub mod pallet {
 				start <= current && current + LockedEstimates::<T, I>::get() < end,
 				Error::<T, I>::EstimatesStateError
 			);
+			ensure!(
+				config.multiplier.contains(&multiplier),
+				Error::<T, I>::MultiplierNotExist
+			);
 
 			match multiplier {
-				MultiplierOption::Base1 => {}
-				MultiplierOption::Base2 => {
-					let _2 = BalanceOf::<T, I>::from(2u32);
-					ticket_price = ticket_price * _2;
-				}
-				MultiplierOption::Base5 => {
-					let _5 = BalanceOf::<T, I>::from(5u32);
-					ticket_price = ticket_price * _5;
+				MultiplierOption::Base(b) => {
+					let _base = BalanceOf::<T, I>::from(b);
+					ticket_price = ticket_price * _base;
 				}
 			}
 
@@ -587,21 +624,21 @@ pub mod pallet {
 				};
 				T::Currency::transfer(
 					&caller,
-					&Self::account_id(),
+					&Self::account_id(symbol.to_vec()),
 					ticket_price,
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				accounts.try_push(estimates).map_err(|_| Error::<T, I>::TooMany)?;
+				accounts.try_push(estimates.clone()).map_err(|_| Error::<T, I>::TooMany)?;
 
 				//symbol reward pool
-				let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
-				if let Some(reward) = reward {
-					let reward = reward + ticket_price;
-					SymbolRewardPool::<T, I>::insert(&symbol, reward);
-				} else {
-					SymbolRewardPool::<T, I>::insert(&symbol, ticket_price);
-				}
+				// let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
+				// if let Some(reward) = reward {
+				// 	let reward = reward + ticket_price;
+				// 	SymbolRewardPool::<T, I>::insert(&symbol, reward);
+				// } else {
+				// 	SymbolRewardPool::<T, I>::insert(&symbol, ticket_price);
+				// }
 
 				//user information
 				if AccountInfo::<T, I>::contains_key(&caller) {
@@ -616,16 +653,23 @@ pub mod pallet {
 						vec![(symbol.clone(), estimates_id)].try_into().unwrap();
 					AccountInfo::<T, I>::insert(&caller, list);
 				}
+				Self::deposit_event(Event::ParticipateEstimates {
+					estimate: estimates,
+					who: caller,
+				});
 				Ok(())
 			})
 		}
 
 		#[pallet::weight(0)]
+		// #[transactional]
+		//TODO remove unsigned
 		pub fn choose_winner_with_signed_payload(
 			origin: OriginFor<T>,
 			winner_payload: ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>,
 			_signature: T::Signature,
 		) -> DispatchResult {
+			//TODO 不用unsigned
 			ensure!(Self::is_active(), Error::<T, I>::PalletInactive);
 			ensure_none(origin)?;
 			let now = frame_system::Pallet::<T>::block_number();
@@ -641,26 +685,34 @@ pub mod pallet {
 				let end = config.end;
 				let state = config.state.clone();
 				if now > end && state == EstimatesState::Active {
+					let symbol_account = Self::account_id(symbol.to_vec());
 					Winners::<T, I>::insert(&symbol, id, winners.clone());
 					ActiveEstimates::<T, I>::remove(&symbol);
+					for winner in winners.clone() {
+						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
+						total_reward = total_reward + reward;
+					}
+					ensure!(
+						T::Currency::free_balance(&symbol_account) > total_reward,
+						Error::<T, I>::FreeBalanceTooLow
+					);
 					for winner in winners {
 						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
 						//TODO ？？是否需要在这里发放奖励 reserve reward
-						// account id: 4SEv6hkVfPYpAEfhkbX2H72ft968HPnmMCjUGdDoQn1QyPiK
 						T::Currency::transfer(
-							&Self::account_id(),
+							&Self::account_id(symbol.to_vec()),
 							&winner.account,
 							reward,
 							ExistenceRequirement::AllowDeath,
 						)?;
-						total_reward = total_reward + reward;
 						let id = T::PalletId::get().0;
 						T::Currency::reserve_named(&id, &winner.account, reward)?;
 					}
-					let reward = SymbolRewardPool::<T, I>::get(&symbol);
-					if let Some(reward) = reward {
-						SymbolRewardPool::<T, I>::insert(&symbol, reward - total_reward);
-					}
+
+					// let reward = SymbolRewardPool::<T, I>::get(&symbol);
+					// if let Some(reward) = reward {
+					// 	SymbolRewardPool::<T, I>::insert(&symbol, reward - total_reward);
+					// }
 					CompletedEstimates::<T, I>::mutate(&symbol, |configs| {
 						config.state = EstimatesState::Completed;
 						config.symbol_completed_price = price;
@@ -695,6 +747,7 @@ pub mod pallet {
 			unsigned_members: Option<Vec<T::AccountId>>,
 			locked_estimates: Option<T::BlockNumber>,
 			minimum_ticket_price: Option<BalanceOf<T, I>>,
+			minimum_init_reward: Option<BalanceOf<T, I>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			if let Some(new_members) = new_members {
@@ -715,6 +768,9 @@ pub mod pallet {
 			if let Some(minimum_ticket_price) = minimum_ticket_price {
 				MinimumTicketPrice::<T, I>::put(minimum_ticket_price);
 			}
+			if let Some(minimum_init_reward) = minimum_init_reward {
+				MinimumInitReward::<T, I>::put(minimum_init_reward);
+			}
 			Ok(())
 		}
 
@@ -733,8 +789,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		return if active.is_err() { true } else { active.unwrap() };
 	}
 
-	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+	pub fn account_id(symbol: Vec<u8>) -> T::AccountId {
+		T::PalletId::get().into_sub_account(symbol)
 	}
 
 	pub fn can_submit_unsigned() -> bool {
@@ -780,11 +836,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} else {
 					let price: Result<(u64, FractionLength), ()> = T::PriceProvider::price(&symbol);
 					log::info!(target: TARGET, "accounts: {:?}, price: {:?}", accounts, price);
-					let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
-					let mut total_reward = BalanceOf::<T, I>::from(0u32);
-					if _total_reward.is_some() {
-						total_reward = _total_reward.unwrap()
-					}
+					// let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
+					let mut total_reward=T::Currency::free_balance(&Self::account_id(symbol.to_vec()));
+					// if _total_reward.is_some() {
+					// 	total_reward = _total_reward.unwrap()
+					// }
 					if price.is_ok() {
 						let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> =
 							Self::choose_winner(
@@ -822,9 +878,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			|winners: &mut Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 			 winner: AccountParticipateEstimates<T::AccountId, T::BlockNumber>| {
 				match winner.multiplier {
-					MultiplierOption::Base1 => count += 1,
-					MultiplierOption::Base2 => count += 2,
-					MultiplierOption::Base5 => count += 5,
+					MultiplierOption::Base(b) => count += b as u32
 				}
 				winners.push(winner);
 			};
@@ -837,16 +891,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 			winners.into_iter().try_for_each(|winner| {
 				match winner.multiplier {
-					MultiplierOption::Base1 => {
-						winner.reward = TryInto::<u128>::try_into(avg_reward).ok().unwrap();
-					}
-					MultiplierOption::Base2 => {
-						let _2 = BalanceOf::<T, I>::from(2u32);
-						winner.reward = TryInto::<u128>::try_into(avg_reward * _2).ok().unwrap();
-					}
-					MultiplierOption::Base5 => {
-						let _5 = BalanceOf::<T, I>::from(5u32);
-						winner.reward = TryInto::<u128>::try_into(avg_reward * _5).ok().unwrap();
+					MultiplierOption::Base(b) => {
+						let _b = BalanceOf::<T, I>::from(b);
+						winner.reward = TryInto::<u128>::try_into(avg_reward * _b ).ok().unwrap();
 					}
 				};
 				Some(())

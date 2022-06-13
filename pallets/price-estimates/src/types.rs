@@ -29,14 +29,12 @@ pub type MaximumUnsignedMembers = ConstU32<100>;
 
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum MultiplierOption {
-	Base1,
-	Base2,
-	Base5,
+	Base(u8),
 }
 
 impl Default for MultiplierOption {
 	fn default() -> Self {
-		MultiplierOption::Base1
+		MultiplierOption::Base(1)
 	}
 }
 
@@ -92,6 +90,8 @@ pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
 	pub end: BlockNumber,
 	/// Delay for payout the winner of the estimates. (start + length + delay = payout).
 	pub distribute: BlockNumber,
+
+	pub multiplier: BoundedVec<MultiplierOption, MaximumOptions>,
 
 	pub deviation: Option<Permill>,
 
