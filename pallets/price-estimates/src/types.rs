@@ -23,9 +23,9 @@ pub type MaximumEstimatesPerSymbol = ConstU32<10000>;
 
 pub type MaximumEstimatesPerAccount = ConstU32<10000>;
 
-pub type MaximumAdminMembers = ConstU32<100>;
+pub type MaximumAdmins = ConstU32<100>;
 
-pub type MaximumUnsignedMembers = ConstU32<100>;
+pub type MaximumWhitelist = ConstU32<100>;
 
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum MultiplierOption {
