@@ -1,0 +1,43 @@
+[package]
+name = "manual-bridge"
+version = "1.0.0"
+description = "Used to record user data to be cross-chain>"
+authors = ["Substrate DevHub <https://github.com/aresprotocols>"]
+homepage = "https://github.com/aresprotocols"
+repository = "https://github.com/aresprotocols/ocw-suit"
+edition = "2021"
+license = "Unlicense"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
+rustc-hex = { version = "2.1.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17", optional = true }
+
+[dev-dependencies]
+pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"pallet-balances/std",
+	"scale-info/std",
+	"rustc-hex/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
+]
+
+try-runtime = ["frame-support/try-runtime"]

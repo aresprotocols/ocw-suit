@@ -16,6 +16,7 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend-will-del/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/seed-reader/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/manual-bridge/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
