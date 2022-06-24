@@ -3,11 +3,12 @@ resolver = "2"
 
 members = [
     "pallets/ares-oracle",
+    "pallets/ares-oracle-provider-support",
     "pallets/oracle-finance",
     "pallets/staking-extend",
     "pallets/challenge",
     "pallets/price-estimates",
-    "pallets/ares-oracle-provider-support",
+    "pallets/manual-bridge",
     "rpc/ares-rpc",
     "tools/seed-reader",
 ]

@@ -33,7 +33,7 @@ impl<T: Config> Pallet<T> {
         let request_url = sp_std::str::from_utf8(&request_url_vu8).unwrap();
         // request and return http body.
         if "" == request_url {
-            log::warn!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ Ares http requests cannot be empty.");
+            log::info!(target: "pallet::ocw::fetch_bulk_price_with_http", "❗ No requests to process.");
             return Ok(Vec::new());
         }
         log::debug!("🚅 Batch price request address: {:?}", request_url);
