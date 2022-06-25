@@ -187,9 +187,22 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let delegatee = T::Lookup::lookup(delegatee)?;
 			let validator = T::Lookup::lookup(validator)?;
+
+			// TODO if validator don't have enough free balance.. how to do ?
+			// TODO in past the account is validator, but he is not a validator now.. how to do ?
+			let mut _validator_lock: u128 = TryInto::<u128>::try_into(deposit).ok().unwrap();
+			// TODO the multiple(7) is hardcode. it should be config by runtime.
+			_validator_lock = _validator_lock * 7;
+			let _validator_lock: BalanceOf<T, I> = _validator_lock.saturated_into();
+
 			ensure!(deposit >= T::MinimumDeposit::get(), Error::<T, I>::DepositLow);
 			ensure!(
 				deposit <= T::Currency::free_balance(&who),
+				Error::<T, I>::FreeBalanceLow
+			);
+			// TODO ensure validator balance is enough && lock the free balance
+			ensure!(
+				_validator_lock <= T::Currency::free_balance(&validator),
 				Error::<T, I>::FreeBalanceLow
 			);
 			let members = pallet_collective::Members::<T, I>::get();
@@ -224,6 +237,7 @@ pub mod pallet {
 				};
 				<Proposals<T, I>>::insert(challenge_validator_hash, info);
 				T::Currency::reserve_named(&id, &who, deposit)?;
+				T::Currency::reserve_named(&id, &validator, _validator_lock)?;
 				Self::deposit_event(Event::Reserved {
 					id,
 					who: who.clone(),
