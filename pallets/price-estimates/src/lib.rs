@@ -563,7 +563,6 @@ pub mod pallet {
 			let estimates_type = &config.estimates_type;
 			let current = frame_system::Pallet::<T>::block_number();
 
-			//TODO 价格竞猜如果快要结束，暂停继续参与 lock
 			ensure!(
 				start <= current && current + LockedEstimates::<T, I>::get() < end,
 				Error::<T, I>::EstimatesStateError
@@ -655,7 +654,6 @@ pub mod pallet {
 			let mut total_reward = BalanceOf::<T, I>::from(0u32);
 			let price = winner_payload.price.0;
 			if config.is_some() {
-				//TODO check BoundedVec
 				let mut config = config.unwrap();
 				let end = config.end;
 				let state = config.state.clone();
@@ -673,7 +671,7 @@ pub mod pallet {
 					ActiveEstimates::<T, I>::remove(&symbol);
 					for winner in winners {
 						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
-						//TODO ？？是否需要在这里发放奖励 reserve reward
+						//TODO currently reward is reserved and administrator can cl  only
 						T::Currency::transfer(
 							&Self::account_id(symbol.to_vec()),
 							&winner.account,
