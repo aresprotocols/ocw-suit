@@ -1,23 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// mod tests;
-pub mod types;
-
-use frame_system::{
-	offchain::{AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer, SigningTypes},
-	pallet_prelude::*,
-};
-
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
-
-use types::{
-	is_hex_address, AccountParticipateEstimates, ChooseWinnersPayload, EstimatesState, EstimatesType,
-	MaximumAdminMembers, MaximumEstimatesPerAccount, MaximumEstimatesPerSymbol, MaximumOptions, MaximumParticipants,
-	MaximumUnsignedMembers, MaximumWinners, MultiplierOption, StringLimit, SymbolEstimatesConfig,
-};
-
-use ares_oracle::traits::SymbolInfo;
 use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
@@ -26,25 +10,39 @@ use frame_support::{
 		BalanceStatus, ChangeMembers, Currency, ExistenceRequirement, FindAuthor, Imbalance, IsSubType, LockIdentifier,
 		LockableCurrency, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, WithdrawReasons,
 	},
+	transactional,
 	weights::{DispatchClass, Weight},
 	PalletId, StorageHasher,
 };
+use frame_system::offchain::SendSignedTransaction;
+use frame_system::{
+	offchain::{AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer, SigningTypes},
+	pallet_prelude::*,
+};
 use log;
-pub use pallet::*;
 use sp_core::hexdisplay::HexDisplay;
-use sp_std::str;
-use sp_std::vec;
-use sp_std::vec::Vec;
-
+// use ares_oracle::{traits::SymbolInfo, types::FractionLength};
+use sp_core::sp_std::convert::TryInto;
 use sp_runtime::{
 	offchain::{http, Duration},
 	traits::{AccountIdConversion, IdentifyAccount, SaturatedConversion, StaticLookup},
 	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
 	AccountId32, FixedU128, Perbill, Permill, Rational128, RuntimeAppPublic, RuntimeDebug,
 };
+use sp_std::str;
+use sp_std::vec;
+use sp_std::vec::Vec;
 
-// use ares_oracle::{traits::SymbolInfo, types::FractionLength};
-use sp_core::sp_std::convert::TryInto;
+use ares_oracle::traits::SymbolInfo;
+pub use pallet::*;
+use types::{
+	is_hex_address, AccountParticipateEstimates, ChooseWinnersPayload, EstimatesState, EstimatesType, MaximumAdmins,
+	MaximumEstimatesPerAccount, MaximumEstimatesPerSymbol, MaximumOptions, MaximumParticipants, MaximumWhitelist,
+	MaximumWinners, MultiplierOption, StringLimit, SymbolEstimatesConfig,
+};
+
+// mod tests;
+pub mod types;
 
 pub type FractionLength = u32;
 
@@ -77,8 +75,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxEstimatesPerSymbol: Get<u32>;
 
-		#[pallet::constant]
-		type UnsignedPriority: Get<TransactionPriority>;
+		// #[pallet::constant]
+		// type UnsignedPriority: Get<TransactionPriority>;
 
 		type Currency: Currency<Self::AccountId> + NamedReservableCurrency<Self::AccountId, ReserveIdentifier = [u8; 8]>;
 
@@ -98,16 +96,19 @@ pub mod pallet {
 		u64,                         //id
 	>;
 
-	#[pallet::storage]
-	pub type SymbolRewardPool<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Identity,
-		BoundedVec<u8, StringLimit>, //symbol
-		BalanceOf<T, I>,             //id
-	>;
+	// #[pallet::storage]
+	// pub type SymbolRewardPool<T: Config<I>, I: 'static = ()> = StorageMap<
+	// 	_,
+	// 	Identity,
+	// 	BoundedVec<u8, StringLimit>, //symbol
+	// 	BalanceOf<T, I>,             //id
+	// >;
 
 	#[pallet::storage]
 	pub type LockedEstimates<T: Config<I>, I: 'static = ()> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	#[pallet::storage]
+	pub type MinimumInitReward<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumTicketPrice<T: Config<I>, I: 'static = ()> = StorageValue<_, BalanceOf<T, I>, ValueQuery>;
@@ -115,15 +116,17 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ActivePallet<T: Config<I>, I: 'static = ()> = StorageValue<_, bool, ValueQuery>;
 
+	/// admin account
 	#[pallet::storage]
-	#[pallet::getter(fn admin_members)]
-	pub type AdminMembers<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<T::AccountId, MaximumAdminMembers>, ValueQuery>;
+	#[pallet::getter(fn admins)]
+	pub type Admins<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<T::AccountId, MaximumAdmins>, ValueQuery>;
 
+	/// whitelist account
 	#[pallet::storage]
-	#[pallet::getter(fn unsigned_members)]
-	pub type UnsignedMembers<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<T::AccountId, MaximumUnsignedMembers>, ValueQuery>;
+	#[pallet::getter(fn whitelist)]
+	pub type Whitelist<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<T::AccountId, MaximumWhitelist>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type PreparedEstimates<T: Config<I>, I: 'static = ()> = StorageMap<
@@ -151,6 +154,7 @@ pub mod pallet {
 	>;
 
 	// Map<SymbolEstimatesConfig, Vec<AccountSymbolEstimates>>
+	// TODO the storage(Participants) should be cleared after estimates done.
 	#[pallet::storage]
 	pub type Participants<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -162,6 +166,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	// TODO the storage(Winners) should be cleared after estimates done. (Equivalent to above)
 	#[pallet::storage]
 	pub type Winners<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -170,15 +175,6 @@ pub mod pallet {
 		Identity,
 		u64, // id
 		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>,
-	>;
-
-	#[pallet::storage]
-	pub type AccountInfo<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Identity,
-		T::AccountId,                                                               // user
-		BoundedVec<(BoundedVec<u8, StringLimit>, u64), MaximumEstimatesPerAccount>, // vec<symbol+id>
-		ValueQuery,
 	>;
 
 	#[pallet::event]
@@ -197,6 +193,13 @@ pub mod pallet {
 
 		NewEstimates {
 			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
+			who: T::AccountId,
+		},
+
+		ParticipateEstimates {
+			symbol: BoundedVec<u8, StringLimit>,
+			id: u64,
+			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
 			who: T::AccountId,
 		},
 	}
@@ -239,6 +242,8 @@ pub mod pallet {
 		TooManyEstimates,
 
 		NotMember,
+
+		MultiplierNotExist,
 	}
 
 	// #[pallet::genesis_config]
@@ -302,7 +307,7 @@ pub mod pallet {
 			if !Self::is_active() {
 				return;
 			}
-			if !Self::can_submit_unsigned() {
+			if !Self::can_send_signed() {
 				log::debug!(target: TARGET, "can not run offchian worker(ares:price-estimates)...");
 				return;
 			}
@@ -327,63 +332,63 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::validate_unsigned]
-	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {
-		type Call = Call<T, I>;
-
-		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if !Self::is_active() {
-				return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
-			}
-			if let Call::choose_winner_with_signed_payload {
-				winner_payload: ref payload,
-				signature: ref _signature,
-			} = call
-			{
-				let symbol = &payload.symbol;
-				let round_id = *(&payload.estimates_id.clone());
-				log::info!(
-					target: TARGET,
-					"validate_unsigned-->estimates_price, on block: {:?}, symbol: {:?}, round_id: {:?} ",
-					frame_system::Pallet::<T>::block_number(),
-					sp_std::str::from_utf8(symbol).unwrap(),
-					&round_id
-				);
-
-				let config = ActiveEstimates::<T, I>::get(&symbol);
-				if config.is_none() {
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
-				}
-				let config = config.unwrap();
-				if round_id != config.id {
-					log::warn!(target: TARGET, "round id is not equal");
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
-				}
-
-				let members = UnsignedMembers::<T, I>::try_get();
-				if members.is_err() {
-					log::warn!(target: TARGET, "can not found any unsigned members");
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
-				}
-				let members = members.unwrap();
-				let signed_account: T::AccountId = payload.public.clone().into_account();
-				if !members.contains(&signed_account) {
-					log::warn!(target: TARGET, "signed_account is not  member");
-					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
-				}
-				ValidTransaction::with_tag_prefix("ares-estimates")
-					.priority(T::UnsignedPriority::get())
-					// .and_provides(payload.public.clone())
-					.and_provides(symbol)
-					.longevity(5)
-					.propagate(true)
-					.build()
-			} else {
-				// InvalidTransaction::Call.into()
-				Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
-			}
-		}
-	}
+	// #[pallet::validate_unsigned]
+	// impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {
+	// 	type Call = Call<T, I>;
+	//
+	// 	fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+	// 		if !Self::is_active() {
+	// 			return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
+	// 		}
+	// 		if let Call::choose_winner {
+	// 			winner_payload: ref payload,
+	// 			signature: ref _signature,
+	// 		} = call
+	// 		{
+	// 			let symbol = &payload.symbol;
+	// 			let round_id = *(&payload.estimates_id.clone());
+	// 			log::info!(
+	// 				target: TARGET,
+	// 				"validate_unsigned-->estimates_price, on block: {:?}, symbol: {:?}, round_id: {:?} ",
+	// 				frame_system::Pallet::<T>::block_number(),
+	// 				sp_std::str::from_utf8(symbol).unwrap(),
+	// 				&round_id
+	// 			);
+	//
+	// 			let config = ActiveEstimates::<T, I>::get(&symbol);
+	// 			if config.is_none() {
+	// 				return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
+	// 			}
+	// 			let config = config.unwrap();
+	// 			if round_id != config.id {
+	// 				log::warn!(target: TARGET, "round id is not equal");
+	// 				return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
+	// 			}
+	//
+	// 			let members = UnsignedMembers::<T, I>::try_get();
+	// 			if members.is_err() {
+	// 				log::warn!(target: TARGET, "can not found any unsigned members");
+	// 				return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
+	// 			}
+	// 			let members = members.unwrap();
+	// 			let signed_account: T::AccountId = payload.public.clone().into_account();
+	// 			if !members.contains(&signed_account) {
+	// 				log::warn!(target: TARGET, "signed_account is not  member");
+	// 				return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
+	// 			}
+	// 			ValidTransaction::with_tag_prefix("ares-estimates")
+	// 				.priority(T::UnsignedPriority::get())
+	// 				// .and_provides(payload.public.clone())
+	// 				.and_provides(symbol)
+	// 				.longevity(5)
+	// 				.propagate(true)
+	// 				.build()
+	// 		} else {
+	// 			// InvalidTransaction::Call.into()
+	// 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
+	// 		}
+	// 	}
+	// }
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -397,12 +402,14 @@ pub mod pallet {
 			estimates_type: EstimatesType,
 			deviation: Option<Permill>,
 			range: Option<Vec<u64>>,
+			multiplier: Vec<MultiplierOption>,
+			#[pallet::compact] init_reward: BalanceOf<T, I>,
 			#[pallet::compact] price: BalanceOf<T, I>,
 		) -> DispatchResult {
 			ensure!(Self::is_active(), Error::<T, I>::PalletInactive);
 
 			let caller = ensure_signed(origin.clone())?;
-			let members: BoundedVec<T::AccountId, MaximumAdminMembers> = Self::admin_members();
+			let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
 			ensure!(members.contains(&caller), Error::<T, I>::NotMember);
 
 			ensure!(
@@ -420,6 +427,14 @@ pub mod pallet {
 					|| (estimates_type == EstimatesType::RANGE && deviation.is_none() && range.is_some()),
 				Error::<T, I>::EstimatesConfigInvalid
 			);
+
+			ensure!(
+				price >= MinimumTicketPrice::<T, I>::get() && init_reward >= MinimumInitReward::<T, I>::get(),
+				Error::<T, I>::EstimatesConfigInvalid
+			);
+
+			let multiplier: BoundedVec<MultiplierOption, MaximumOptions> =
+				multiplier.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			let symbol: BoundedVec<u8, StringLimit> =
 				symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
@@ -441,6 +456,13 @@ pub mod pallet {
 				Error::<T, I>::PreparedEstimatesExist
 			);
 
+			T::Currency::transfer(
+				&caller,
+				&Self::account_id(symbol.to_vec()),
+				init_reward,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
 			// let _0 = BalanceOf::<T, I>::from(0u32);
 			let mut estimates_config = SymbolEstimatesConfig {
 				symbol: symbol.clone(),
@@ -451,9 +473,10 @@ pub mod pallet {
 				start,
 				end,
 				distribute,
+				multiplier,
 				deviation,
 				symbol_fraction: fraction.unwrap(),
-				total_reward: BalanceOf::<T, I>::from(0u32),
+				total_reward: init_reward,
 				state: EstimatesState::InActive,
 				range,
 			};
@@ -468,6 +491,16 @@ pub mod pallet {
 			SymbolEstimatesId::<T, I>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
 			PreparedEstimates::<T, I>::insert(symbol.clone(), &estimates_config);
 			Self::hex_display_estimates_config(&estimates_config);
+
+			// update symbol reward
+			// let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
+			// if let Some(reward) = reward {
+			// 	let reward = reward + init_reward;
+			// 	SymbolRewardPool::<T, I>::insert(&symbol, reward);
+			// } else {
+			// 	SymbolRewardPool::<T, I>::insert(&symbol, init_reward);
+			// }
+
 			if !CompletedEstimates::<T, I>::contains_key(&symbol) {
 				let val = BoundedVec::<
                     SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
@@ -530,21 +563,19 @@ pub mod pallet {
 			let estimates_type = &config.estimates_type;
 			let current = frame_system::Pallet::<T>::block_number();
 
-			//TODO 价格竞猜如果快要结束，暂停继续参与 lock
 			ensure!(
 				start <= current && current + LockedEstimates::<T, I>::get() < end,
 				Error::<T, I>::EstimatesStateError
 			);
+			ensure!(
+				config.multiplier.contains(&multiplier),
+				Error::<T, I>::MultiplierNotExist
+			);
 
 			match multiplier {
-				MultiplierOption::Base1 => {}
-				MultiplierOption::Base2 => {
-					let _2 = BalanceOf::<T, I>::from(2u32);
-					ticket_price = ticket_price * _2;
-				}
-				MultiplierOption::Base5 => {
-					let _5 = BalanceOf::<T, I>::from(5u32);
-					ticket_price = ticket_price * _5;
+				MultiplierOption::Base(b) => {
+					let _base = BalanceOf::<T, I>::from(b);
+					ticket_price = ticket_price * _base;
 				}
 			}
 
@@ -587,47 +618,34 @@ pub mod pallet {
 				};
 				T::Currency::transfer(
 					&caller,
-					&Self::account_id(),
+					&Self::account_id(symbol.to_vec()),
 					ticket_price,
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				accounts.try_push(estimates).map_err(|_| Error::<T, I>::TooMany)?;
+				accounts
+					.try_push(estimates.clone())
+					.map_err(|_| Error::<T, I>::TooMany)?;
 
-				//symbol reward pool
-				let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
-				if let Some(reward) = reward {
-					let reward = reward + ticket_price;
-					SymbolRewardPool::<T, I>::insert(&symbol, reward);
-				} else {
-					SymbolRewardPool::<T, I>::insert(&symbol, ticket_price);
-				}
-
-				//user information
-				if AccountInfo::<T, I>::contains_key(&caller) {
-					return AccountInfo::<T, I>::try_mutate(&caller, |estimates| {
-						estimates
-							.try_push((symbol.clone(), estimates_id))
-							.map_err(|_| Error::<T, I>::TooMany)?;
-						Ok(())
-					});
-				} else {
-					let list: BoundedVec<(BoundedVec<u8, StringLimit>, u64), MaximumEstimatesPerAccount> =
-						vec![(symbol.clone(), estimates_id)].try_into().unwrap();
-					AccountInfo::<T, I>::insert(&caller, list);
-				}
+				Self::deposit_event(Event::ParticipateEstimates {
+					symbol: symbol.clone(),
+					id: estimates_id,
+					estimate: estimates,
+					who: caller,
+				});
 				Ok(())
 			})
 		}
 
 		#[pallet::weight(0)]
-		pub fn choose_winner_with_signed_payload(
+		// #[transactional]
+		pub fn choose_winner(
 			origin: OriginFor<T>,
 			winner_payload: ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>,
-			_signature: T::Signature,
 		) -> DispatchResult {
 			ensure!(Self::is_active(), Error::<T, I>::PalletInactive);
-			ensure_none(origin)?;
+			let caller = ensure_signed(origin.clone())?;
+			ensure!(Whitelist::<T, I>::get().contains(&caller), Error::<T, I>::BadMetadata);
 			let now = frame_system::Pallet::<T>::block_number();
 			let winners = winner_payload.winners;
 			let symbol = winner_payload.symbol;
@@ -636,37 +654,40 @@ pub mod pallet {
 			let mut total_reward = BalanceOf::<T, I>::from(0u32);
 			let price = winner_payload.price.0;
 			if config.is_some() {
-				//TODO check BoundedVec
 				let mut config = config.unwrap();
 				let end = config.end;
 				let state = config.state.clone();
 				if now > end && state == EstimatesState::Active {
+					let symbol_account = Self::account_id(symbol.to_vec());
+					for winner in winners.clone() {
+						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
+						total_reward = total_reward + reward;
+					}
+					ensure!(
+						T::Currency::free_balance(&symbol_account) >= total_reward,
+						Error::<T, I>::FreeBalanceTooLow
+					);
 					Winners::<T, I>::insert(&symbol, id, winners.clone());
 					ActiveEstimates::<T, I>::remove(&symbol);
 					for winner in winners {
 						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
-						//TODO ？？是否需要在这里发放奖励 reserve reward
-						// account id: 4SEv6hkVfPYpAEfhkbX2H72ft968HPnmMCjUGdDoQn1QyPiK
+						//TODO currently reward is reserved and administrator can cl  only
 						T::Currency::transfer(
-							&Self::account_id(),
+							&Self::account_id(symbol.to_vec()),
 							&winner.account,
 							reward,
 							ExistenceRequirement::AllowDeath,
 						)?;
-						total_reward = total_reward + reward;
 						let id = T::PalletId::get().0;
 						T::Currency::reserve_named(&id, &winner.account, reward)?;
 					}
-					let reward = SymbolRewardPool::<T, I>::get(&symbol);
-					if let Some(reward) = reward {
-						SymbolRewardPool::<T, I>::insert(&symbol, reward - total_reward);
-					}
-					CompletedEstimates::<T, I>::mutate(&symbol, |configs| {
+
+					CompletedEstimates::<T, I>::try_mutate(&symbol, |configs| {
 						config.state = EstimatesState::Completed;
 						config.symbol_completed_price = price;
 						config.total_reward = total_reward;
-						configs.try_push(config);
-					});
+						configs.try_push(config).map_err(|_|Error::<T,I>::TooMany)
+					})?
 				}
 			}
 			Ok(())
@@ -679,7 +700,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin.clone())?;
-			let members: BoundedVec<T::AccountId, MaximumAdminMembers> = Self::admin_members();
+			let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
 			ensure!(members.contains(&caller), Error::<T, I>::NotMember);
 
 			let dest = T::Lookup::lookup(dest)?;
@@ -691,29 +712,31 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn preference(
 			origin: OriginFor<T>,
-			new_members: Option<Vec<T::AccountId>>,
-			unsigned_members: Option<Vec<T::AccountId>>,
+			admins: Option<Vec<T::AccountId>>,
+			whitelist: Option<Vec<T::AccountId>>,
 			locked_estimates: Option<T::BlockNumber>,
 			minimum_ticket_price: Option<BalanceOf<T, I>>,
+			minimum_init_reward: Option<BalanceOf<T, I>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			if let Some(new_members) = new_members {
-				let members: BoundedVec<T::AccountId, MaximumAdminMembers> =
-					new_members.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
-				AdminMembers::<T, I>::put(members);
+			if let Some(admins) = admins {
+				let members: BoundedVec<T::AccountId, MaximumAdmins> =
+					admins.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+				Admins::<T, I>::put(members);
 			}
-			if let Some(unsigned_members) = unsigned_members {
-				let members: BoundedVec<T::AccountId, MaximumUnsignedMembers> = unsigned_members
-					.clone()
-					.try_into()
-					.map_err(|_| Error::<T, I>::BadMetadata)?;
-				UnsignedMembers::<T, I>::put(members);
+			if let Some(whitelist) = whitelist {
+				let members: BoundedVec<T::AccountId, MaximumWhitelist> =
+					whitelist.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+				Whitelist::<T, I>::put(members);
 			}
 			if let Some(locked_estimates) = locked_estimates {
 				LockedEstimates::<T, I>::put(locked_estimates);
 			}
 			if let Some(minimum_ticket_price) = minimum_ticket_price {
 				MinimumTicketPrice::<T, I>::put(minimum_ticket_price);
+			}
+			if let Some(minimum_init_reward) = minimum_init_reward {
+				MinimumInitReward::<T, I>::put(minimum_init_reward);
 			}
 			Ok(())
 		}
@@ -733,20 +756,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		return if active.is_err() { true } else { active.unwrap() };
 	}
 
-	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+	pub fn account_id(symbol: Vec<u8>) -> T::AccountId {
+		T::PalletId::get().into_sub_account(symbol)
 	}
 
-	pub fn can_submit_unsigned() -> bool {
-		return if Self::find_unsigned_account().is_some() {
+	pub fn can_send_signed() -> bool {
+		return if Self::find_whitelist_account().is_some() {
 			true
 		} else {
 			false
 		};
 	}
 
-	pub fn find_unsigned_account() -> Option<T::Public> {
-		let members = UnsignedMembers::<T, I>::try_get();
+	pub fn find_whitelist_account() -> Option<T::Public> {
+		let members = Whitelist::<T, I>::try_get();
 		if members.is_err() {
 			return None;
 		}
@@ -776,28 +799,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if now > end {
 				let accounts = Participants::<T, I>::get(&symbol, id);
 				if accounts.len() == 0 {
-					Self::send_unsigned(now, vec![], &config, (0, 0));
+					Self::send_signed(now, vec![], &config, (0, 0));
 				} else {
 					let price: Result<(u64, FractionLength), ()> = T::PriceProvider::price(&symbol);
 					log::info!(target: TARGET, "accounts: {:?}, price: {:?}", accounts, price);
-					let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
-					let mut total_reward = BalanceOf::<T, I>::from(0u32);
-					if _total_reward.is_some() {
-						total_reward = _total_reward.unwrap()
-					}
+					// let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
+					let total_reward = T::Currency::free_balance(&Self::account_id(symbol.to_vec()));
+					// if _total_reward.is_some() {
+					// 	total_reward = _total_reward.unwrap()
+					// }
 					if price.is_ok() {
-						let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> =
-							Self::choose_winner(
-								estimates_type,
-								&symbol,
-								total_reward,
-								deviation,
-								range,
-								accounts,
-								price.unwrap(),
-							);
+						let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::cal_winners(
+							estimates_type,
+							&symbol,
+							total_reward,
+							deviation,
+							range,
+							accounts,
+							price.unwrap(),
+						);
 						log::info!(target: TARGET, "winners: {:?}", winners);
-						Self::send_unsigned(now, winners, &config, price.unwrap())
+						Self::send_signed(now, winners, &config, price.unwrap())
 					}
 				}
 			}
@@ -807,7 +829,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// fn get_price(symbol: Vec<u8>) -> Result<u64, ()> {
 	//     Ok(123)
 	// }
-	pub fn choose_winner(
+	pub fn cal_winners(
 		estimates_type: EstimatesType,
 		_symbol: &Vec<u8>,
 		total_reward: BalanceOf<T, I>,
@@ -822,9 +844,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			|winners: &mut Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 			 winner: AccountParticipateEstimates<T::AccountId, T::BlockNumber>| {
 				match winner.multiplier {
-					MultiplierOption::Base1 => count += 1,
-					MultiplierOption::Base2 => count += 2,
-					MultiplierOption::Base5 => count += 5,
+					MultiplierOption::Base(b) => count += b as u32,
 				}
 				winners.push(winner);
 			};
@@ -837,16 +857,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 			winners.into_iter().try_for_each(|winner| {
 				match winner.multiplier {
-					MultiplierOption::Base1 => {
-						winner.reward = TryInto::<u128>::try_into(avg_reward).ok().unwrap();
-					}
-					MultiplierOption::Base2 => {
-						let _2 = BalanceOf::<T, I>::from(2u32);
-						winner.reward = TryInto::<u128>::try_into(avg_reward * _2).ok().unwrap();
-					}
-					MultiplierOption::Base5 => {
-						let _5 = BalanceOf::<T, I>::from(5u32);
-						winner.reward = TryInto::<u128>::try_into(avg_reward * _5).ok().unwrap();
+					MultiplierOption::Base(b) => {
+						let _b = BalanceOf::<T, I>::from(b);
+						winner.reward = TryInto::<u128>::try_into(avg_reward * _b).ok().unwrap();
 					}
 				};
 				Some(())
@@ -908,13 +921,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		winners
 	}
 
-	pub fn send_unsigned(
+	pub fn send_signed(
 		block_number: T::BlockNumber,
 		winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 		estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
 		price: (u64, FractionLength),
 	) {
-		let unsigned_account = Self::find_unsigned_account();
+		let whitelist = Self::find_whitelist_account();
 		let winners: Result<BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>, ()> =
 			winners.clone().try_into();
 		if winners.is_err() {
@@ -922,28 +935,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return;
 		}
 		let winners = winners.unwrap();
-		if let Some(unsigned_account) = unsigned_account {
-			let a = Signer::<T, T::AuthorityId>::any_account()
-				.with_filter(vec![unsigned_account])
-				.send_unsigned_transaction(
-					|account| ChooseWinnersPayload {
+		if let Some(whitelist) = whitelist {
+			let results = Signer::<T, T::AuthorityId>::any_account()
+				.with_filter(vec![whitelist])
+				.send_signed_transaction(|account| {
+					let payload = ChooseWinnersPayload {
 						block_number,
 						winners: winners.clone(),
 						public: account.public.clone(),
 						symbol: estimates_config.symbol.clone(),
 						estimates_id: estimates_config.id,
 						price,
-					},
-					|payload, signature| Call::choose_winner_with_signed_payload {
+					};
+					Call::choose_winner {
 						winner_payload: payload,
-						signature,
-					},
-				);
-			if let Some((who, result)) = a {
-				if result.is_err() {
-					log::warn!(target: TARGET, "send_unsigned_transaction error: {:?}", result.err());
+					}
+				});
+			for (acc, res) in &results {
+				match res {
+					Ok(()) => log::info!(target: TARGET, "[{:?}]: submit transaction success.", acc.id),
+					Err(e) => log::error!(
+						target: TARGET,
+						"[{:?}]: submit transaction failure. Reason: {:?}",
+						acc.id,
+						e
+					),
 				}
 			}
+		// if let Some((who, result)) = results {
+		// 	if result.is_err() {
+		// 		log::warn!(target: TARGET, "send_signed_transaction error: {:?}", result.err());
+		// 	}
+		// }
 		// .ok_or("❗ No local accounts accounts available, `aura` StoreKey needs to be set.");
 		} else {
 			log::warn!(target: TARGET, "can not found any account")
