@@ -74,15 +74,15 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const MinimumBalanceThreshold: Balance = 5000;
-}
+// parameter_types! {
+// 	pub const MinimumBalanceThreshold: Balance = 5000;
+// }
 
 impl manual_bridge::Config for Test {
 	type Currency = pallet_balances::Pallet<Self>;
 	type Event = Event;
 	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
-	type MinimumBalanceThreshold = MinimumBalanceThreshold;
+	// type MinimumBalanceThreshold = MinimumBalanceThreshold;
 }
 
 // Build genesis storage according to the mock runtime.

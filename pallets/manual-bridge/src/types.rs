@@ -1,21 +1,32 @@
 use super::*;
 use frame_support::BoundedVec;
-use frame_support::traits::{ConstU32, Currency};
-use sp_runtime::{RuntimeDebug, serde};
+use frame_support::traits::{ConstU32, Currency, Get};
+use sp_runtime::{RuntimeDebug};
 use scale_info::TypeInfo;
+use sp_std::fmt::Debug;
+use sp_std::vec::Vec;
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
-use sp_runtime::serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+#[cfg(feature = "std")]
+use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+
+#[cfg(feature = "std")]
+use sp_runtime::traits::Zero;
 
 pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+// Ident vec.
+pub type MaxIdenSize = ConstU32<20>;
+pub type Ident = BoundedVec<u8, MaxIdenSize>;
+
 // for cross-chain pending list
-pub type MaximumPendingList = ConstU32<2000>;
-pub type CrossChainInfoList<T: Config> = BoundedVec<CrossChainInfo<T::AccountId, CrossChainKind, BalanceOf<T>>, MaximumPendingList>;
+pub type MaximumPendingList = ConstU32<127>;
+pub type CrossChainInfoList<T: Config> = BoundedVec<CrossChainInfo<Ident, CrossChainKind, BalanceOf<T>>, MaximumPendingList>;
 
 //
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct CrossChainInfo<Account, Type, Balance> {
-    pub acc: Account,
+pub struct CrossChainInfo<Iden, Type, Balance> {
+    pub iden: Iden,
     pub kind: Type,
     pub amount: Balance
 }
@@ -28,7 +39,18 @@ pub enum CrossChainKind {
 
 impl CrossChainKind {
     pub fn verification_addr (&self) -> bool {
-        true
+        let verify_eth = |addr| {
+            addr != &EthereumAddress::default()
+        };
+        match self {
+            CrossChainKind::ETH(addr) => {
+                return verify_eth(addr);
+            },
+            CrossChainKind::BSC(addr) => {
+                return verify_eth(addr);
+            }
+        }
+        false
     }
 }
 
@@ -74,5 +96,32 @@ impl<'de> Deserialize<'de> for EthereumAddress {
         let mut r = Self::default();
         r.0.copy_from_slice(&raw);
         Ok(r)
+    }
+}
+
+
+pub trait BoundVecHelper<T, S> {
+    type Error;
+    fn create_on_vec(v: Vec<T>) -> Self;
+    fn check_push(&mut self, v: T) ;
+    fn try_create_on_vec(v: Vec<T>) -> Result<Self, Self::Error> where Self: Sized;
+}
+
+impl <T, S> BoundVecHelper<T, S> for BoundedVec<T, S>
+    where
+        S: Get<u32>,
+        BoundedVec<T, S>: Debug,
+        BoundedVec<T, S>: TryFrom<Vec<T>> + Default,
+        <BoundedVec<T, S> as TryFrom<Vec<T>>>::Error: Debug,
+{
+    type Error = <Self as TryFrom<Vec<T>>>::Error;
+    fn create_on_vec(v: Vec<T>) -> Self {
+        Self::try_from(v).expect("`BoundedVec` MaxEncodedLen Err")
+    }
+    fn try_create_on_vec(v: Vec<T>) -> Result<Self, Self::Error> where Self: Sized {
+        Self::try_from(v)
+    }
+    fn check_push(&mut self, v: T) {
+        self.try_push(v).expect("`BoundedVec` try push err.");
     }
 }

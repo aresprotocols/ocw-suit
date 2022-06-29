@@ -18,12 +18,13 @@ mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-
+	use codec::KeyedVec;
 	use frame_support::pallet_prelude::*;
 	use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Zero;
-	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, MaximumPendingList};
+	use crate::types::BoundVecHelper;
+	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, Ident, MaximumPendingList};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -37,7 +38,7 @@ pub mod pallet {
 
 		type RequestOrigin: EnsureOrigin<Self::Origin>;
 
-		type MinimumBalanceThreshold: Get<BalanceOf<Self>>;
+		// type MinimumBalanceThreshold: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -49,8 +50,17 @@ pub mod pallet {
 	pub type WaiterAccout<T> = StorageValue<_, <T as frame_system::Config>::AccountId>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn stash_acc)]
+	pub type StashAccout<T> = StorageValue<_, <T as frame_system::Config>::AccountId>;
+
+
+	#[pallet::storage]
 	#[pallet::getter(fn pending_list)]
-	pub type PendingList<T> = StorageValue<_, CrossChainInfoList<T>>;
+	pub type PendingList<T> = StorageMap<_, Twox64Concat, <T as frame_system::Config>::AccountId, CrossChainInfoList<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_balance_threshold)]
+	pub type MinimumBalanceThreshold<T> =  StorageValue<_, BalanceOf<T>>;
 
 
 	// Pallets use events to inform users when important changes are made.
@@ -62,9 +72,16 @@ pub mod pallet {
 		/// When the waiter account is updated
 		WaiterUpdated { acc: T::AccountId },
 
+		/// When the waiter account is updated
+		StashUpdated { acc: T::AccountId },
+
+		/// When the MinimumBalanceThreshold is updated
+		MinimumBalanceThresholdUpdated { amount: BalanceOf<T> },
+
 		/// Generate cross-connection requests
 		CrossChainRequest {
 			acc: T::AccountId,
+			ident: Ident,
 			kind: CrossChainKind,
 			amount: BalanceOf<T>
 		},
@@ -79,6 +96,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Waiter does not exist, module has not completed initialization.
 		WaiterDoesNotExists,
+		/// Stash does not exist, module has not completed initialization.
+		StashDoesNotExists,
+		/// You need to set the MinimumBalanceThreshold parameter through sudo or committee.
+		MinimumBalanceThresholdNotSet,
 		/// The transfer amount must be greater than the threshold requirement.
 		TransferAmountIsTooSmall,
 		/// No permission
@@ -99,7 +120,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(1_000)]
 		pub fn update_waiter(origin: OriginFor<T>, waiter: T::AccountId) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			WaiterAccout::<T>::set(Some(waiter.clone()));
@@ -108,8 +129,29 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000)]
-		pub fn set_up_completed_list(origin: OriginFor<T>, list: CrossChainInfoList<T>) -> DispatchResult {
+		#[pallet::weight(1_000)]
+		pub fn update_stash(origin: OriginFor<T>, stash: T::AccountId) -> DispatchResult {
+			T::RequestOrigin::ensure_origin(origin)?;
+			StashAccout::<T>::set(Some(stash.clone()));
+			// Emit an event.
+			Self::deposit_event(Event::StashUpdated { acc: stash });
+			Ok(())
+		}
+
+		#[pallet::weight(1_000)]
+		pub fn update_minimum_balance_threshold(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+		) -> DispatchResult {
+			T::RequestOrigin::ensure_origin(origin)?;
+			MinimumBalanceThreshold::<T>::set(Some(amount));
+			// Emit an event.
+			Self::deposit_event(Event::MinimumBalanceThresholdUpdated { amount });
+			Ok(())
+		}
+
+		#[pallet::weight(1_000)]
+		pub fn set_up_completed_list(origin: OriginFor<T>, sender: T::AccountId ,  list: CrossChainInfoList<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// Get waiter
@@ -119,7 +161,7 @@ pub mod pallet {
 			ensure!(waiter == Some(who), Error::<T>::NoPermission);
 
 			// Check that all data in the list match
-			let pending_list = PendingList::<T>::get();
+			let pending_list = PendingList::<T>::get(sender.clone());
 			ensure!(pending_list.is_some(), Error::<T>::NoPendingList);
 
 			let mut pending_list = pending_list.unwrap();
@@ -131,6 +173,8 @@ pub mod pallet {
 			// Delete pending exists.
 			pending_list.retain(|pending_data|{
 				let is_exists = tmp_list.iter().enumerate().any(|(idx, completed_data)|{
+					// println!("pending_data = {:?}", &pending_data);
+					// println!("completed_data = {:?}", &completed_data);
 					let is_match = pending_data == completed_data;
 					if is_match {
 						search_list.remove(idx);
@@ -147,7 +191,7 @@ pub mod pallet {
 			ensure!(search_list.len() == 0 as usize, Error::<T>::CompletedListDataCannotAllMatch);
 
 			// Rewrite data to storage.
-			PendingList::<T>::set(Some(pending_list));
+			PendingList::<T>::insert(sender, pending_list);
 
 			// Emit an event.
 			Self::deposit_event(Event::CompletedList(list));
@@ -155,7 +199,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(1_000)]
 		pub fn transfer_to(
 			origin: OriginFor<T>,
 			chain_kind: CrossChainKind,
@@ -164,38 +208,56 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// Get waiter
-			let waiter = WaiterAccout::<T>::get();
-			ensure!(waiter.is_some(), Error::<T>::WaiterDoesNotExists);
+			let stash = StashAccout::<T>::get();
+			ensure!(stash.is_some(), Error::<T>::StashDoesNotExists);
+
+			//
+			let min_balance_threshold = MinimumBalanceThreshold::<T>::get();
+			ensure!(min_balance_threshold.is_some(), Error::<T>::MinimumBalanceThresholdNotSet);
+			let min_balance_threshold = min_balance_threshold.unwrap();
 
 			// Check that the fund must be greater than the minimum threshold
-			ensure!(amount >= T::MinimumBalanceThreshold::get(),Error::<T>::TransferAmountIsTooSmall );
+			ensure!(amount >= min_balance_threshold, Error::<T>::TransferAmountIsTooSmall );
 
 			// Check address is available
 			ensure!(chain_kind.verification_addr(), Error::<T>::IllegalAddress );
 
-			let pending_list = PendingList::<T>::get();
+			let pending_list = PendingList::<T>::get(who.clone());
 			let mut pending_list = pending_list.unwrap_or(CrossChainInfoList::<T>::default());
 
+			// TODO:: Change max count to ::bound()
 			let max_count: u32 = MaximumPendingList::get();
 			ensure!((pending_list.len() as u32) < max_count, Error::<T>::StorageOverflow );
 
-			T::Currency::transfer(&who, &waiter.unwrap(), amount, ExistenceRequirement::KeepAlive)?;
+			T::Currency::transfer(&who, &stash.unwrap(), amount, ExistenceRequirement::KeepAlive)?;
+
+			// Get current blocknumber
+			let current_bn: T::BlockNumber = <frame_system::Pallet<T>>::block_number();
+
+			// let current_bn = 1u8;
+			let ident: Option<Ident> = Ident::try_create_on_vec(current_bn.encode()).ok();
+			ensure!(ident.is_some(), Error::<T>::StorageOverflow);
+
+			let mut ident = ident.unwrap();
+
+			let list_count = pending_list.len() as u32;
+			ident.try_push(list_count as u8);
 
 			pending_list.try_push(CrossChainInfo{
-				acc: who.clone(),
+				iden: ident.clone(),
 				kind: chain_kind.clone(),
 				amount: amount,
 			});
 
-			PendingList::<T>::put(pending_list);
+			PendingList::<T>::insert(who.clone(), pending_list);
 
 			// Emit an event.
 			Self::deposit_event(Event::CrossChainRequest {
 				acc: who,
+				ident: ident,
 				kind: chain_kind,
 				amount
 			});
-
 			Ok(())
 		}
 
