@@ -1,6 +1,6 @@
 [package]
 name = "manual-bridge"
-version = "1.0.0"
+version = "1.0.1"
 description = "Used to record user data to be cross-chain>"
 authors = ["Substrate DevHub <https://github.com/aresprotocols>"]
 homepage = "https://github.com/aresprotocols"
