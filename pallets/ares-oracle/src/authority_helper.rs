@@ -48,7 +48,10 @@ impl<T: Config> Pallet<T> {
             return true;
         }
         let worker_ownerid_list = Self::get_ares_authority_list();
-        worker_ownerid_list.iter().any(|local_auth| local_auth == block_author)
+        worker_ownerid_list.iter().any(|local_auth| {
+            log::debug!("check_block_author_and_sotre_key_the_same . Local: {:?}, BlockAuthor: {:?}", &local_auth, &block_author);
+            local_auth == block_author
+        })
     }
 
 }
