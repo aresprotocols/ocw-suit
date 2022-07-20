@@ -41,7 +41,13 @@ use types::{
 	MaximumWinners, MultiplierOption, StringLimit, SymbolEstimatesConfig,
 };
 
-// mod tests;
+
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 pub mod types;
 
 pub type FractionLength = u32;
@@ -244,6 +250,8 @@ pub mod pallet {
 		NotMember,
 
 		MultiplierNotExist,
+
+		SubAccountGenerateFailed,
 	}
 
 	// #[pallet::genesis_config]
@@ -290,6 +298,7 @@ pub mod pallet {
 					to_active_symbol.push(_symbol);
 				}
 			});
+			// -
 			to_active_symbol.iter().for_each(|_symbol| {
 				if !ActiveEstimates::<T, I>::contains_key(&_symbol) {
 					let mut config = PreparedEstimates::<T, I>::get(&_symbol);
@@ -456,12 +465,20 @@ pub mod pallet {
 				Error::<T, I>::PreparedEstimatesExist
 			);
 
+			// Get and check subaccount.
+			let source_acc = Self::account_id(symbol.to_vec());
+			ensure!(source_acc.is_some(), Error::<T, I>::SubAccountGenerateFailed);
+			let source_acc = source_acc.unwrap();
+
+			// log::debug!(target: TARGET, "RUN 1 symbol {:?}", &symbol);
 			T::Currency::transfer(
 				&caller,
-				&Self::account_id(symbol.to_vec()),
+				&source_acc,
 				init_reward,
 				ExistenceRequirement::KeepAlive,
 			)?;
+
+			// log::debug!(target: TARGET, "RUN 2 to_account = {:?}", &to_account);
 
 			// let _0 = BalanceOf::<T, I>::from(0u32);
 			let mut estimates_config = SymbolEstimatesConfig {
@@ -480,6 +497,7 @@ pub mod pallet {
 				state: EstimatesState::InActive,
 				range,
 			};
+
 			let id = SymbolEstimatesId::<T, I>::get(&symbol);
 			let accounts =
 				BoundedVec::<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>::default();
@@ -491,6 +509,8 @@ pub mod pallet {
 			SymbolEstimatesId::<T, I>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
 			PreparedEstimates::<T, I>::insert(symbol.clone(), &estimates_config);
 			Self::hex_display_estimates_config(&estimates_config);
+
+			// log::debug!(target: TARGET, "RUN 3 symbol : current_id={:?}", &current_id);
 
 			// update symbol reward
 			// let reward: Option<BalanceOf<T, I>> = SymbolRewardPool::<T, I>::get(&symbol);
@@ -506,13 +526,18 @@ pub mod pallet {
                     SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
                     MaximumEstimatesPerSymbol,
                 >::default();
+				//
 				CompletedEstimates::<T, I>::insert(symbol.clone(), val);
 			}
+
+			// log::debug!(target: TARGET, "RUN 4 symbol ");
+
 			Participants::<T, I>::insert(symbol, current_id, accounts);
 			Self::deposit_event(Event::NewEstimates {
 				estimate: estimates_config,
 				who: caller,
 			});
+
 			Ok(())
 		}
 
@@ -563,7 +588,6 @@ pub mod pallet {
 			let estimates_type = &config.estimates_type;
 			let current = frame_system::Pallet::<T>::block_number();
 
-			//TODO 价格竞猜如果快要结束，暂停继续参与 lock
 			ensure!(
 				start <= current && current + LockedEstimates::<T, I>::get() < end,
 				Error::<T, I>::EstimatesStateError
@@ -617,9 +641,15 @@ pub mod pallet {
 					multiplier,
 					reward: 0,
 				};
+
+				// Get and check subaccount.
+				let source_acc = Self::account_id(symbol.to_vec());
+				ensure!(source_acc.is_some(), Error::<T, I>::SubAccountGenerateFailed);
+				let source_acc = source_acc.unwrap();
+
 				T::Currency::transfer(
 					&caller,
-					&Self::account_id(symbol.to_vec()),
+					&source_acc,
 					ticket_price,
 					ExistenceRequirement::KeepAlive,
 				)?;
@@ -660,7 +690,13 @@ pub mod pallet {
 				let end = config.end;
 				let state = config.state.clone();
 				if now > end && state == EstimatesState::Active {
-					let symbol_account = Self::account_id(symbol.to_vec());
+
+					// Get and check subaccount.
+					let source_acc = Self::account_id(symbol.to_vec());
+					ensure!(source_acc.is_some(), Error::<T, I>::SubAccountGenerateFailed);
+					let source_acc = source_acc.unwrap();
+
+					let symbol_account = source_acc.clone();
 					for winner in winners.clone() {
 						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
 						total_reward = total_reward + reward;
@@ -669,13 +705,15 @@ pub mod pallet {
 						T::Currency::free_balance(&symbol_account) >= total_reward,
 						Error::<T, I>::FreeBalanceTooLow
 					);
+
 					Winners::<T, I>::insert(&symbol, id, winners.clone());
 					ActiveEstimates::<T, I>::remove(&symbol);
+
 					for winner in winners {
 						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
-						//TODO ？？是否需要在这里发放奖励 reserve reward
+
 						T::Currency::transfer(
-							&Self::account_id(symbol.to_vec()),
+							&source_acc,
 							&winner.account,
 							reward,
 							ExistenceRequirement::AllowDeath,
@@ -758,8 +796,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		return if active.is_err() { true } else { active.unwrap() };
 	}
 
-	pub fn account_id(symbol: Vec<u8>) -> T::AccountId {
-		T::PalletId::get().into_sub_account(symbol)
+	pub fn account_id(symbol: Vec<u8>) -> Option<T::AccountId> {
+		if symbol.len() > 20usize {
+			return None;
+		}
+		let mut u8list: [u8; 20] = [0; 20];
+		u8list[..symbol.len()].copy_from_slice(symbol.as_slice());
+		Some(T::PalletId::get().into_sub_account(u8list))
 	}
 
 	pub fn can_send_signed() -> bool {
@@ -798,15 +841,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let range = config.range.clone();
 			let estimates_type = config.estimates_type.clone();
 			let id = config.id;
-			if now > end {
+
+			// Get and check subaccount.
+			let source_acc = Self::account_id(symbol.to_vec());
+			if now > end && source_acc.is_some(){
 				let accounts = Participants::<T, I>::get(&symbol, id);
 				if accounts.len() == 0 {
 					Self::send_signed(now, vec![], &config, (0, 0));
 				} else {
 					let price: Result<(u64, FractionLength), ()> = T::PriceProvider::price(&symbol);
 					log::info!(target: TARGET, "accounts: {:?}, price: {:?}", accounts, price);
-					// let _total_reward = SymbolRewardPool::<T, I>::get(&symbol);
-					let total_reward = T::Currency::free_balance(&Self::account_id(symbol.to_vec()));
+
+					let source_acc = source_acc.unwrap();
+					let total_reward = T::Currency::free_balance(&source_acc);
 					// if _total_reward.is_some() {
 					// 	total_reward = _total_reward.unwrap()
 					// }
@@ -823,6 +870,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						log::info!(target: TARGET, "winners: {:?}", winners);
 						Self::send_signed(now, winners, &config, price.unwrap())
 					}
+				}
+			}else{
+				if source_acc.is_none() {
+					log::warn!(target: TARGET, "Sub account generation failed");
 				}
 			}
 		});
