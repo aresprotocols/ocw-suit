@@ -126,7 +126,7 @@ pub struct ChooseWinnersPayload<Public, AccountId, BlockNumber> {
 	pub public: Public,
 	pub estimates_id: u64,
 	pub symbol: BoundedVec<u8, StringLimit>,
-	pub price: (u64, FractionLength),
+	pub price: Option<(u64, FractionLength, BlockNumber)>,
 }
 
 impl<T: SigningTypes> SignedPayload<T> for ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber> {

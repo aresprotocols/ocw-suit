@@ -2402,7 +2402,7 @@ fn addprice_of_ares() {
 		);
 
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, ((8888 + 9999) / 2, 4), "Only test ares_avg_prices ");
+		assert_eq!( bet_avg_price, Some(((8888 + 9999) / 2, 4, System::block_number())), "Only test ares_avg_prices ");
 
 		// Add a new value beyond the array boundary.
 		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 3333, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
@@ -2426,7 +2426,7 @@ fn addprice_of_ares() {
 		);
 
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec()).clone());
-		assert_eq!(bet_avg_price, ((8888 + 9999) / 2, 4));
+		assert_eq!(bet_avg_price, Some(((8888 + 9999) / 2, 4, System::block_number())));
 
 		// when
 		let price_key = "eth_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsETH ;
@@ -2456,14 +2456,14 @@ fn addprice_of_ares() {
 		);
 
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (0, 0), "Price pool is not full.");
+		assert_eq!(bet_avg_price, None, "Price pool is not full.");
 
 		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 6666, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
 		assert_eq!(0, btc_price_list.len());
 
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, ((7777 + 6666) / 2, 4));
+		assert_eq!(bet_avg_price, Some(((7777 + 6666) / 2, 4, System::block_number())));
 
 		//
 		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 1111, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
@@ -2485,7 +2485,144 @@ fn addprice_of_ares() {
 		);
 
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, ((7777 + 6666) / 2, 4));
+		assert_eq!(bet_avg_price, Some(((7777 + 6666) / 2, 4, System::block_number())));
+	});
+}
+
+#[test]
+fn test_addprice_of_exceeded_the_maximum_interval() {
+	let (offchain, _state) = testing::TestOffchainExt::new();
+	// let mut t = sp_io::TestExternalities::default();
+	let mut t = new_test_ext();
+	t.register_extension(OffchainWorkerExt::new(offchain));
+
+	t.execute_with(|| {
+		// The request key must be configured, otherwise you cannot submit the price. so you need =>
+		// new_test_ext()
+
+		System::set_block_number(1);
+		// when
+		// let price_key = "btc_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsBTC ;
+		let price_key = to_test_vec("btc_price");
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 8888, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
+
+		let pool = AresPrice::<Test>::get(PriceKey::create_on_vec(price_key.clone()));
+		assert!(pool.is_some());
+		assert_eq!(pool.unwrap().len(), 1);
+
+		System::set_block_number(102);
+		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 9999, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
+		let pool = AresPrice::<Test>::get(PriceKey::create_on_vec(price_key.clone()));
+		assert!(pool.is_some());
+		assert_eq!(pool.unwrap().len(), 1);
+
+		//
+		// println!("------1 :{:?}", AresOcw::ares_prices(PriceKey::create_on_vec(price_key.clone())));
+		// AresPrice::<Test>::iter_keys().into_iter().any(|x|{
+		// 	println!("------2 {:?}", x);
+		// 	false
+		// });
+		//
+		// // Check price poll depth.
+		// assert!(AresPrice::<Test>::contains_key(PriceKey::create_on_vec(price_key.clone()) ));
+		// let pool = AresPrice::<Test>::get(PriceKey::create_on_vec(price_key.clone()));
+		// println!("----- ===== {:?}", pool);
+
+
+
+
+		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
+		// assert_eq!(
+		// 	0,
+		// 	btc_price_list.len(),
+		// 	"Price list will be empty when the average calculation."
+		// );
+		//
+		// let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
+		// assert_eq!( bet_avg_price, Some(((8888 + 9999) / 2, 4, System::block_number())), "Only test ares_avg_prices ");
+		//
+		// // Add a new value beyond the array boundary.
+		// AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 3333, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
+		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
+		//
+		// // (price_val, accountid, block_num, fraction_num)
+		// assert_eq!(
+		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 		// (3333, Default::default(), 1, 4, Default::default())
+		// 		AresPriceData {
+		// 			price: 3333,
+		// 			account_id: AccountId::from_raw([0;32]),
+		// 			create_bn: 1,
+		// 			fraction_len: 4,
+		// 			raw_number: Default::default(),
+		// 			timestamp: 0,
+		// 			update_bn: 1
+		// 		}
+		// 	]),
+		// 	btc_price_list
+		// );
+		//
+		// let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec()).clone());
+		// assert_eq!(bet_avg_price, Some(((8888 + 9999) / 2, 4, System::block_number())));
+		//
+		// // when
+		// let price_key = "eth_price".as_bytes().to_vec(); // PriceKey::PriceKeyIsETH ;
+		// AresOcw::add_price_and_try_to_agg(
+		// 	AccountId::from_raw([0;32]),
+		// 	7777,
+		// 	PriceKey::create_on_vec(price_key.clone()),
+		// 	4,
+		// 	Default::default(),
+		// 	2, 0, 1);
+		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
+		// // (price_val, accountid, block_num, fraction_num)
+		// assert_eq!(
+		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 		// (7777, Default::default(), 1, 4, Default::default())
+		// 		AresPriceData {
+		// 			price: 7777,
+		// 			account_id: AccountId::from_raw([0;32]),
+		// 			create_bn: 1,
+		// 			fraction_len: 4,
+		// 			raw_number: Default::default(),
+		// 			timestamp: 0,
+		// 			update_bn: 1
+		// 		}
+		// 	]),
+		// 	btc_price_list
+		// );
+		//
+		// let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
+		// assert_eq!(bet_avg_price, None, "Price pool is not full.");
+		//
+		// AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 6666, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
+		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
+		// assert_eq!(0, btc_price_list.len());
+		//
+		// let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
+		// assert_eq!(bet_avg_price, Some(((7777 + 6666) / 2, 4, System::block_number())));
+		//
+		// //
+		// AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 1111, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
+		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
+		// assert_eq!(
+		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 		// (1111, Default::default(), 1, 4, Default::default())
+		// 		AresPriceData {
+		// 			price: 1111,
+		// 			account_id: AccountId::from_raw([0;32]),
+		// 			create_bn: 1,
+		// 			fraction_len: 4,
+		// 			raw_number: Default::default(),
+		// 			timestamp: 0,
+		// 			update_bn: 1,
+		// 		}
+		// 	]),
+		// 	btc_price_list
+		// );
+		//
+		// let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone()));
+		// assert_eq!(bet_avg_price, Some(((7777 + 6666) / 2, 4, System::block_number())));
 	});
 }
 
@@ -2543,7 +2680,7 @@ fn test_abnormal_price_despose() {
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
-		assert_eq!(bet_avg_price, (1010, 4));
+		assert_eq!(bet_avg_price, Some((1010, 4, System::block_number())));
 
 		// Test normal price list, Round 2
 		AresOcw::add_price_and_try_to_agg(
@@ -2571,7 +2708,7 @@ fn test_abnormal_price_despose() {
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		assert_eq!(
 			bet_avg_price,
-			(1010, 4),
+			Some((1010, 4, System::block_number())),
 			"If the price pool not full, the average price is old value."
 		);
 		// Add a new one price pool is full, the average price will be update.
@@ -2592,7 +2729,7 @@ fn test_abnormal_price_despose() {
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
-		assert_eq!(bet_avg_price, (1030, 4));
+		assert_eq!(bet_avg_price, Some((1030, 4, System::block_number())));
 
 		// Test abnormal price list, Round 3
 		AresOcw::add_price_and_try_to_agg(
@@ -2620,7 +2757,7 @@ fn test_abnormal_price_despose() {
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		assert_eq!(
 			bet_avg_price,
-			(1030, 4),
+			Some((1030, 4, System::block_number())),
 			"If the price pool not full, the average price is old value."
 		);
 		// Add a new one price pool is full, the average price will be update.
@@ -2641,7 +2778,7 @@ fn test_abnormal_price_despose() {
 			"The price pool is cleared after full."
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
-		assert_eq!(bet_avg_price, ((1030 + 1020) / 2, 4));
+		assert_eq!(bet_avg_price, Some(((1030 + 1020) / 2, 4, System::block_number())));
 
 		// Check abnormal price list.
 		assert_eq!(1 as usize, AresOcw::ares_abnormal_prices(price_key.clone()).unwrap_or(Default::default()).len());
@@ -2675,12 +2812,13 @@ fn test_get_price_pool_depth() {
 	t.execute_with(|| {
 		// let BN:u64 = 2;
 		// System::set_block_number(BN);
-
+		println!("RUN AA0 ");
 		// In the genesis config default pool depth is 3.
 		assert_eq!(3, AresOcw::get_price_pool_depth());
-
+		println!("RUN AA1 ");
 		// Test input some price
 		let price_key = PriceKey::create_on_vec("btc_price".as_bytes().to_vec());
+		println!("RUN AA2 ");
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
 			6660,
@@ -2691,6 +2829,7 @@ fn test_get_price_pool_depth() {
 			0,
 			1,
 		);
+		println!("RUN AA3 ");
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
 			8880,
@@ -2701,8 +2840,10 @@ fn test_get_price_pool_depth() {
 			0,
 			1,
 		);
+		println!("RUN AA4 ");
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (0, 0));
+		println!("RUN AA5 ");
+		assert_eq!(bet_avg_price, None);
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
 			7770,
@@ -2713,6 +2854,7 @@ fn test_get_price_pool_depth() {
 			0,
 			1,
 		);
+		println!("RUN AA6 ");
 		assert_eq!(
 			0 as usize,
 			AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default()).len()
@@ -2722,7 +2864,7 @@ fn test_get_price_pool_depth() {
 		// and (7770 - 6660) * 100 / 7770 = 14 , pick out 6660
 		// and (8880 - 7770) * 100 / 7770 = 14 , pick out 8880
 		// and (7770 - 7770) * 100 / 7770 = 0
-		assert_eq!(bet_avg_price, (7770, 4));
+		assert_eq!(bet_avg_price, Some((7770, 4, System::block_number())));
 		assert_eq!(
 			2 as usize,
 			AresOcw::ares_abnormal_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec())).unwrap_or(Default::default()).len()
@@ -2733,7 +2875,7 @@ fn test_get_price_pool_depth() {
 		assert_ok!(AresOcw::update_pool_depth_propose(Origin::root(), 5));
 		assert_eq!(5, AresOcw::get_price_pool_depth());
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (7770, 4), " Pool expansion, but average has not effect.");
+		assert_eq!(bet_avg_price, Some((7770, 4, System::block_number())), " Pool expansion, but average has not effect.");
 
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
@@ -2760,7 +2902,7 @@ fn test_get_price_pool_depth() {
 			AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (7770, 4), "Old value yet.");
+		assert_eq!(bet_avg_price, Some((7770, 4, System::block_number())), "Old value yet.");
 
 		// fill price list.
 		AresOcw::add_price_and_try_to_agg(
@@ -2798,7 +2940,7 @@ fn test_get_price_pool_depth() {
 			AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, ((5550 + 5350 + 5500 + 5400) / 4, 4), "Average update.");
+		assert_eq!(bet_avg_price, Some(((5550 + 5350 + 5500 + 5400) / 4, 4, System::block_number())), "Average update.");
 
 		// Fall back depth to 3
 		assert_ok!(AresOcw::update_pool_depth_propose(Origin::root(), 3));
@@ -2842,7 +2984,7 @@ fn test_get_price_pool_depth() {
 			AresOcw::ares_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone())).unwrap_or(Default::default()).len()
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (4430, 4));
+		assert_eq!(bet_avg_price, Some((4430, 4, System::block_number())));
 		//
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
@@ -2880,7 +3022,7 @@ fn test_get_price_pool_depth() {
 			1,
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(PriceKey::create_on_vec("btc_price".as_bytes().to_vec().clone()));
-		assert_eq!(bet_avg_price, (4440, 4));
+		assert_eq!(bet_avg_price, Some((4440, 4, System::block_number())));
 	});
 }
 
@@ -2914,6 +3056,23 @@ fn test_json_number_value_to_price() {
 	assert_eq!(665, number3.to_price(2));
 	assert_eq!(66, number3.to_price(1));
 	assert_eq!(6, number3.to_price(0));
+
+
+	let number4 = JsonNumberValue {
+		integer: 8,
+		fraction: 934,
+		fraction_length: 3,
+		exponent: -7,
+	};
+	// 00000008934
+	// 00000008934
+	assert_eq!(00000008934, number4.to_price(10));
+	assert_eq!(0000000893, number4.to_price(9));
+	assert_eq!(000000089, number4.to_price(8));
+	assert_eq!(00000008, number4.to_price(7));
+	assert_eq!(0000000, number4.to_price(6));
+	assert_eq!(000000, number4.to_price(5));
+	assert_eq!(00000, number4.to_price(4));
 }
 
 #[test]
@@ -2973,7 +3132,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 			btc_price_list
 		);
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
-		assert_eq!(bet_avg_price, (0, 0));
+		assert_eq!(bet_avg_price, None);
 
 		AresOcw::add_price_and_try_to_agg(
 			AccountId::from_raw([0;32]),
@@ -3030,7 +3189,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 
 		let bet_avg_price = AresOcw::ares_avg_prices(price_key.clone());
 		// assert_eq!(bet_avg_price, (0, 0));
-		assert_eq!(bet_avg_price, ((number1.to_price(5) + number2.to_price(5)) / 2, 5));
+		assert_eq!(bet_avg_price, Some(((number1.to_price(5) + number2.to_price(5)) / 2, 5, System::block_number())));
 
 		// let bet_avg_price = AresOcw::ares_avg_prices("btc_price".as_bytes().to_vec().clone());
 		// assert_eq!(bet_avg_price, ((number1.to_price(4) + number2.to_price(4)) / 2, 4));
@@ -4426,11 +4585,8 @@ fn test_boundvec_q1 () {
 	assert_eq!(a.len(), 3);
 }
 
-
-
 #[test]
 fn test_ToBoundVec () {
-
 	type TipLength = ConstU32<3>;
 	type TestBoundVec = BoundedVec<u8, TipLength> ;
 
@@ -4443,6 +4599,77 @@ fn test_ToBoundVec () {
 	assert_eq!(origin_b[0], b'A');
 	assert_eq!(origin_b[1], b'B');
 	assert_eq!(origin_b[2], b'C');
+}
+
+#[test]
+fn test_debug_20220721_JsonNumberValue_new () {
+
+	let FRACTION_NUM_4: u32 = 4;
+
+	// ftt_xlm_vet_icp_theta_algo_xmr_xtz_egld_axs_iota_ftm_ksm_hbar_neo_waves_mkr_near_btt_chz_stx_dcr_xem_omg_zec_sushi_enj_mana_yfi_iost_qtum_bat_zil_icx_grt_celo_zen_ren_sc_zrx_ont_nano_crv_bnt_fet_uma_iotx_lrc_sand_srm_kava_knc
+	let mut coin_keys = Vec::new();
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("ftt")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("xlm")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("vet")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("icp")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("theta")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("algo")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("xmr")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("xtz")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("egld")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("axs")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("iota")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("ftm")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("ksm")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("hbar")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("neo")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("waves")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("mkr")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("near")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("btt")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("chz")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("stx")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("dcr")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("xem")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("omg")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("zec")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("sushi")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("enj")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("mana")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("yfi")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("iost")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("qtum")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("bat")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("zil")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("icx")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("grt")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("celo")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("zen")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("ren")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("sc")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("zrx")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("ont")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("nano")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("crv")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("bnt")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("fet")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("uma")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("iotx")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("lrc")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("sand")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("srm")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("kava")));
+	coin_keys.push(PriceKey::create_on_vec(to_test_vec("knc")));
+
+	// defined parse format
+	let mut format = RawSourceKeys::default();
+	for coin_key in coin_keys {
+		format.try_push((coin_key.clone(), coin_key.clone(), FRACTION_NUM_4));
+	}
+
+	let result_bulk_parse = AresOcw::bulk_parse_price_of_ares(get_bug_json_of_20220721(), to_test_vec("usdt"), format);
+	// println!("=={:?}", result_bulk_parse);
+	assert_eq!(result_bulk_parse.len(), 51)
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -4478,6 +4705,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (AccountId::from_raw([3;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter3").into()),
             (AccountId::from_raw([4;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter4").into()),
         ],
+		data_submission_interval: 100u32,
     }
 	.assimilate_storage(&mut t)
 	.unwrap();
@@ -4533,6 +4761,10 @@ pub fn to_test_bounded_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, Max
 	to_str.as_bytes().to_vec().try_into().unwrap()
 }
 
+fn get_bug_json_of_20220721() -> &'static str {
+	"{\"code\":0,\"message\":\"OK\",\"data\":{\"algousdt\":{\"price\":0.3395,\"timestamp\":1658390392,\"infos\":[{\"price\":0.3395,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"axsusdt\":{\"price\":15.294,\"timestamp\":1658390345,\"infos\":[{\"price\":15.302,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":15.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":15.28,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"batusdt\":{\"price\":0.38925,\"timestamp\":1658390376,\"infos\":[{\"price\":0.3894,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.3891,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bntusdt\":{\"price\":0.5016,\"timestamp\":1658390339,\"infos\":[{\"price\":0.502,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.5012,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bttusdt\":{\"price\":8.934e-7,\"timestamp\":1658390367,\"infos\":[{\"price\":8.94e-7,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":8.928e-7,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"celousdt\":{\"price\":0.9415,\"timestamp\":1658390392,\"infos\":[{\"price\":0.9415,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"chzusdt\":{\"price\":0.107811,\"timestamp\":1658390370,\"infos\":[{\"price\":0.107893,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.1078,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.10774,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"crvusdt\":{\"price\":1.163,\"timestamp\":1658390393,\"infos\":[{\"price\":1.163,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.163,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"dcrusdt\":{\"price\":24.2783,\"timestamp\":1658390358,\"infos\":[{\"price\":24.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":24.2566,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"egldusdt\":{\"price\":54.79,\"timestamp\":1658390393,\"infos\":[{\"price\":54.79,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"enjusdt\":{\"price\":0.590397,\"timestamp\":1658390371,\"infos\":[{\"price\":0.5907,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.5903,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.59019,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"fetusdt\":{\"price\":0.0818,\"timestamp\":1658390345,\"infos\":[{\"price\":0.0818,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"ftmusdt\":{\"price\":0.30523,\"timestamp\":1658390364,\"infos\":[{\"price\":0.30526,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.3052,\"weight\":1,\"exchangeName\":\"binance\"}]},\"fttusdt\":{\"price\":28.2704,\"timestamp\":1658390364,\"infos\":[{\"price\":28.2808,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":28.26,\"weight\":1,\"exchangeName\":\"binance\"}]},\"grtusdt\":{\"price\":0.104105,\"timestamp\":1658390356,\"infos\":[{\"price\":0.104179,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.10403,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"hbarusdt\":{\"price\":0.0698,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0698,\"weight\":1,\"exchangeName\":\"binance\"}]},\"icpusdt\":{\"price\":6.7438,\"timestamp\":1658390338,\"infos\":[{\"price\":6.75,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6.7414,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":6.74,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"icxusdt\":{\"price\":0.28865,\"timestamp\":1658390360,\"infos\":[{\"price\":0.289,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.2883,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iostusdt\":{\"price\":0.013583,\"timestamp\":1658390393,\"infos\":[{\"price\":0.013583,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iotausdt\":{\"price\":0.2901,\"timestamp\":1658390391,\"infos\":[{\"price\":0.2901,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"iotxusdt\":{\"price\":0.03337,\"timestamp\":1658390344,\"infos\":[{\"price\":0.03337,\"weight\":1,\"exchangeName\":\"binance\"}]},\"kavausdt\":{\"price\":1.7587,\"timestamp\":1658390392,\"infos\":[{\"price\":1.7587,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"kncusdt\":{\"price\":1.40765,\"timestamp\":1658390348,\"infos\":[{\"price\":1.4083,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1.407,\"weight\":1,\"exchangeName\":\"binance\"}]},\"ksmusdt\":{\"price\":59.3564,\"timestamp\":1658390365,\"infos\":[{\"price\":59.4047,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":59.3081,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"lrcusdt\":{\"price\":0.417533,\"timestamp\":1658390357,\"infos\":[{\"price\":0.4177,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.4176,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.4173,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"manausdt\":{\"price\":0.90396,\"timestamp\":1658390392,\"infos\":[{\"price\":0.90396,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"mkrusdt\":{\"price\":962.05,\"timestamp\":1658390377,\"infos\":[{\"price\":962.1,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":962,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nanousdt\":{\"price\":2.224,\"timestamp\":1658390393,\"infos\":[{\"price\":2.224,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nearusdt\":{\"price\":4.174,\"timestamp\":1658390391,\"infos\":[{\"price\":4.174,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"neousdt\":{\"price\":9.56265,\"timestamp\":1658390345,\"infos\":[{\"price\":9.5653,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":9.56,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"omgusdt\":{\"price\":1.87565,\"timestamp\":1658390354,\"infos\":[{\"price\":1.876,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.8753,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"ontusdt\":{\"price\":0.2452,\"timestamp\":1658390392,\"infos\":[{\"price\":0.2452,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"qtumusdt\":{\"price\":3.0403,\"timestamp\":1658390358,\"infos\":[{\"price\":3.0406,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":3.04,\"weight\":1,\"exchangeName\":\"binance\"}]},\"renusdt\":{\"price\":0.146223,\"timestamp\":1658390392,\"infos\":[{\"price\":0.146223,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"sandusdt\":{\"price\":1.32313,\"timestamp\":1658390389,\"infos\":[{\"price\":1.32316,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.3231,\"weight\":1,\"exchangeName\":\"binance\"}]},\"scusdt\":{\"price\":0.004251,\"timestamp\":1658390359,\"infos\":[{\"price\":0.004252,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.00425,\"weight\":1,\"exchangeName\":\"binance\"}]},\"srmusdt\":{\"price\":0.9985,\"timestamp\":1658390391,\"infos\":[{\"price\":0.999,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.998,\"weight\":1,\"exchangeName\":\"binance\"}]},\"stxusdt\":{\"price\":0.423,\"timestamp\":1658390345,\"infos\":[{\"price\":0.423,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"sushiusdt\":{\"price\":1.3205,\"timestamp\":1658390385,\"infos\":[{\"price\":1.3205,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"thetausdt\":{\"price\":1.2205,\"timestamp\":1658390392,\"infos\":[{\"price\":1.2205,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"umausdt\":{\"price\":2.6182,\"timestamp\":1658390392,\"infos\":[{\"price\":2.6182,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"vetusdt\":{\"price\":0.024886,\"timestamp\":1658390343,\"infos\":[{\"price\":0.02489,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.024882,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"wavesusdt\":{\"price\":5.537,\"timestamp\":1658390392,\"infos\":[{\"price\":5.537,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xemusdt\":{\"price\":0.0472,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0472,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"xlmusdt\":{\"price\":0.111627,\"timestamp\":1658390355,\"infos\":[{\"price\":0.11166,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":0.11162,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.1116,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xmrusdt\":{\"price\":151.605,\"timestamp\":1658390364,\"infos\":[{\"price\":151.61,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":151.6,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xtzusdt\":{\"price\":1.604765,\"timestamp\":1658390345,\"infos\":[{\"price\":1.60553,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.604,\"weight\":1,\"exchangeName\":\"binance\"}]},\"yfiusdt\":{\"price\":6385.405,\"timestamp\":1658390392,\"infos\":[{\"price\":6387.18,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6383.63,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"zecusdt\":{\"price\":60.97,\"timestamp\":1658390394,\"infos\":[{\"price\":61,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":60.94,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"zenusdt\":{\"price\":16.6615,\"timestamp\":1658390343,\"infos\":[{\"price\":16.663,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":16.66,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zilusdt\":{\"price\":0.040255,\"timestamp\":1658390374,\"infos\":[{\"price\":0.04026,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.04025,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zrxusdt\":{\"price\":0.3115,\"timestamp\":1658390356,\"infos\":[{\"price\":0.3115,\"weight\":1,\"exchangeName\":\"binance\"}]}}}"
+}
+
 fn get_are_json_of_btc() -> &'static str {
 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":50261.372,\"timestamp\":1629699168,\"infos\":[{\"price\":50244.79,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":50243.16,\"weight\":1,\"exchangeName\":\"cryptocompare\"},{\"price\":50274,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":50301.59,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":50243.32,\"weight\":1,\"exchangeName\":\"huobi\"}]}}"
 }
@@ -4554,6 +4786,10 @@ fn get_are_json_of_xrp() -> &'static str {
 // xrpusdt":{"price":1.09272,"timestamp":1631497987}}}
 fn get_are_json_of_bulk() -> &'static str {
 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":50261.372,\"timestamp\":1629699168},\"ethusdt\":{\"price\":3107.71,\"timestamp\":1630055777},\"dotusdt\":{\"price\":35.9921,\"timestamp\":1631497660},\"xrpusdt\":{\"price\":1.09272,\"timestamp\":1631497987}}}"
+}
+
+fn get_are_dot_eth_btc() -> &'static str {
+	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":23286.141429,\"timestamp\":1658479119,\"infos\":[{\"price\":23289.23,\"weight\":2,\"exchangeName\":\"huobi\"},{\"price\":23287.4,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":23285.01,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":23284.04,\"weight\":3,\"exchangeName\":\"coinbase\"}]},\"dotusdt\":{\"price\":7.741333,\"timestamp\":1658479124,\"infos\":[{\"price\":7.7443,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":7.7417,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":7.738,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"ethusdt\":{\"price\":1609.2625,\"timestamp\":1658479144,\"infos\":[{\"price\":1609.45,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1609.38,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1609.18,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":1609.04,\"weight\":1,\"exchangeName\":\"coinbase\"}]}}}"
 }
 
 // {"code":0,"message":"OK","data":{"btcusdt":{"price":50261.372,"timestamp":1629699168},"ethusdt":
