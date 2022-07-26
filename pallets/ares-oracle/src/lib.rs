@@ -703,12 +703,12 @@ pub mod pallet {
 
 			log::debug!("🚅 Submit price list on chain, count = {:?}", price_key_list.len());
 
-			// update last author
-			Self::update_last_price_list_for_author (
-				price_key_list,
-				Self::get_stash_id(&price_payload.auth).unwrap(),
-				price_payload.block_number.clone(),
-			);
+			// // update last author
+			// Self::update_last_price_list_for_author (
+			// 	price_key_list,
+			// 	Self::get_stash_id(&price_payload.auth).unwrap(),
+			// 	price_payload.block_number.clone(),
+			// );
 
 			// Set jump block
 			let jump_block = price_payload.jump_block;
@@ -835,6 +835,23 @@ pub mod pallet {
 			let setting_data = PurchasedDefaultData::new(submit_threshold, max_duration, avg_keep_duration);
 			<PurchasedDefaultSetting<T>>::put(setting_data.clone());
 			Self::deposit_event(Event::UpdatePurchasedDefaultSetting { setting: setting_data });
+			Ok(().into())
+		}
+
+		/// Updating the ConfDataSubmissionInterval parameter settings requires the `Technical-Committee` signature to execute.
+		///
+		/// The dispatch origin for this call must be _Signed_ of Technical-Committee.
+		///
+		/// - interval: Maximum allowed interval
+		#[pallet::weight(0)]
+		pub fn update_config_of_data_submission_interval(
+			origin: OriginFor<T>,
+			interval: T::BlockNumber
+		) -> DispatchResult {
+			T::RequestOrigin::ensure_origin(origin)?;
+
+			<ConfDataSubmissionInterval<T>>::put(interval.clone());
+			Self::deposit_event(Event::UpdateDataSubmissionInterval { interval });
 			Ok(().into())
 		}
 
@@ -1099,6 +1116,9 @@ pub mod pallet {
 		},
 		UpdatePurchasedDefaultSetting {
 			setting: PurchasedDefaultData,
+		},
+		UpdateDataSubmissionInterval {
+			interval: T::BlockNumber,
 		},
 		UpdateOcwControlSetting {
 			setting: OcwControlData,
@@ -1561,7 +1581,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn ares_avg_prices)]
 	pub(super) type AresAvgPrice<T: Config> =
-		StorageMap<_, Blake2_128Concat, PriceKey, (u64, FractionLength), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, PriceKey, (u64, FractionLength, T::BlockNumber), OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn price_pool_depth)]
@@ -1585,13 +1605,6 @@ pub mod pallet {
 	#[pallet::getter(fn prices_requests)]
 	pub(super) type PricesRequests<T: Config> = StorageValue<
 		_,
-		// Vec<(
-		// 	PriceKey,   // price key
-		// 	PriceToken, // price token
-		// 	u32,        // parse version number.
-		// 	FractionLength,
-		// 	RequestInterval,
-		// )>,
 		PricesRequestsVec,
 		ValueQuery,
 	>;
@@ -1661,6 +1674,15 @@ pub mod pallet {
 	pub(super) type ConfPreCheckAllowableOffset<T: Config> = StorageValue<
 		_,
 		Percent, //
+		ValueQuery,
+	>;
+
+
+	#[pallet::storage]
+	#[pallet::getter(fn conf_data_submission_interval)]
+	pub(super) type ConfDataSubmissionInterval<T: Config> = StorageValue<
+		_,
+		T::BlockNumber, //
 		ValueQuery,
 	>;
 
@@ -1736,6 +1758,7 @@ pub mod pallet {
 		pub price_pool_depth: u32,
 		pub price_requests: Vec<(Vec<u8>, Vec<u8>, u32, FractionLength, RequestInterval)>,
 		pub authorities: Vec<(T::AccountId, T::AuthorityAres)>,
+		pub data_submission_interval: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -1748,6 +1771,7 @@ pub mod pallet {
 				price_pool_depth: 10u32,
 				price_requests: Default::default(),
 				authorities: Default::default(),
+				data_submission_interval: 100u32.into()
 			}
 		}
 	}
@@ -1791,6 +1815,9 @@ pub mod pallet {
 			ConfPreCheckTokenList::<T>::put(token_list);
 			// V1_2_0
 			StorageVersion::<T>::put(Releases::V1_2_0);
+			// submission_interval
+			let submission_interval: T::BlockNumber = self.data_submission_interval.clone().into();
+			ConfDataSubmissionInterval::<T>::put(submission_interval);
 		}
 	}
 }
@@ -1798,16 +1825,6 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 
 	pub fn remove_block_author_on_trace(del_stash: &T::AccountId, del_bn: &T::BlockNumber) -> bool {
-		// <BlockAuthorTrace<T>>::mutate(|(stash, bn)| {
-		// 	for (index, (old_price_key, _, _, _, _)) in prices_request.clone().into_iter().enumerate() {
-		// 		if &price_key == &old_price_key {
-		// 			// remove old one
-		// 			prices_request.remove(index);
-		// 			Self::clear_price_storage_data(price_key.clone());
-		// 			break;
-		// 		}
-		// 	}
-		// });
 
 		let old_trace = <BlockAuthorTrace<T>>::take();
 		if let Some(trace_data) = old_trace.clone() {
@@ -2168,8 +2185,8 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
 	fn on_disabled(_i: u32) {}
 }
 
-impl<T: Config> SymbolInfo for Pallet<T> {
-	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()> {
+impl<T: Config> SymbolInfo<T::BlockNumber> for Pallet<T> {
+	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength, T::BlockNumber), ()> {
 		let symbol_res = PriceKey::try_create_on_vec(symbol.clone());
 		if let Ok(symbol) = symbol_res {
 			return AresAvgPrice::<T>::try_get(symbol);
@@ -2297,28 +2314,35 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 			})
 			.collect();
 		//
-		// let format_data: RawSourceKeys = format_data.clone().try_into().expect("format_data is too long");
 		let format_data_res = RawSourceKeys::try_create_on_vec(format_data_source_list);
-		// if format_data.is_err() {
-		// 	log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "authority_list" );
-		// }
-
 		if let Ok(format_data) = format_data_res {
 			// check_config
 			let response_result = Self::fetch_bulk_price_with_http(format_data);
 			let response_result = response_result.unwrap_or(Vec::new());
-			let response_result: Vec<PreCheckStruct> = response_result
+			let mut response_result: Vec<Option<PreCheckStruct>> = response_result
 				.into_iter()
 				.map(|(price_key, _parse_key, _fraction_len, number_val, timestamp)| {
-					let number_val = JsonNumberValue::new(number_val);
-					PreCheckStruct {
+					let number_val = JsonNumberValue::try_new(number_val);
+					if number_val.is_none() {
+						return None;
+					}
+					Some(PreCheckStruct {
 						price_key,
-						number_val,
+						number_val: number_val.unwrap(),
 						max_offset: check_config.allowable_offset.clone(),
 						timestamp,
-					}
+					})
 				})
 				.collect();
+
+			// Remove the None elements
+			response_result.retain(|x|{
+				x.is_some()
+			});
+
+			let response_result: Vec<PreCheckStruct> = response_result.into_iter().map(|x|{
+				x.unwrap()
+			}).collect();
 
 			let response_result: PreCheckList = response_result.try_into().expect("PreCheckList is too long");
 			return response_result;
@@ -2341,28 +2365,35 @@ impl<T: Config> IAresOraclePreCheck<T::AccountId, T::AuthorityAres, T::BlockNumb
 		let mut chain_avg_price_list =  CompareLogBTreeMap::new(); // BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
 		let mut validator_up_price_list = CompareLogBTreeMap::new(); // BTreeMap::<Vec<u8>, (u64, FractionLength)>::new();
 
-		let check_result = pre_check_list.iter().all(|checked_struct| {
+		let mut check_result = pre_check_list.iter().all(|checked_struct| {
 			// Check price key exists.
-			if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
+			// if !<AresAvgPrice<T>>::contains_key(&checked_struct.price_key) {
+			// 	return false;
+			// }
+			// Get avg price struct.
+			if let Some((avg_price_val, avg_fraction_len, _update_bn)) = <AresAvgPrice<T>>::get(&checked_struct.price_key) {
+				chain_avg_price_list.try_insert(checked_struct.price_key.clone(), (avg_price_val, avg_fraction_len));
+				validator_up_price_list.try_insert(
+					checked_struct.price_key.clone(),
+					(checked_struct.number_val.to_price(avg_fraction_len), avg_fraction_len),
+				);
+
+				let max_price = checked_struct.number_val.to_price(avg_fraction_len).max(avg_price_val);
+				let min_price = checked_struct.number_val.to_price(avg_fraction_len).min(avg_price_val);
+				let diff = max_price - min_price;
+				// checked_struct.max_offset * avg_price_val);
+				return diff <= checked_struct.max_offset * avg_price_val
+			} else {
 				return false;
 			}
-			// Get avg price struct.
-			let (avg_price_val, avg_fraction_len) = <AresAvgPrice<T>>::get(&checked_struct.price_key);
 
-			chain_avg_price_list.try_insert(checked_struct.price_key.clone(), (avg_price_val, avg_fraction_len));
-			validator_up_price_list.try_insert(
-				checked_struct.price_key.clone(),
-				(checked_struct.number_val.to_price(avg_fraction_len), avg_fraction_len),
-			);
-
-			let max_price = checked_struct.number_val.to_price(avg_fraction_len).max(avg_price_val);
-			let min_price = checked_struct.number_val.to_price(avg_fraction_len).min(avg_price_val);
-			// println!("max_price={}, min_price={}", max_price, min_price);
-			let diff = max_price - min_price;
-			// println!("diff <= checked_struct.max_offset * avg_price_val = {} <= {}", diff,
-			// checked_struct.max_offset * avg_price_val);
-			diff <= checked_struct.max_offset * avg_price_val
 		});
+
+		// Check whether it is consistent with the number of the count.
+		let token_list = ConfPreCheckTokenList::<T>::get();
+		if pre_check_list.len() as u32 == 0 || pre_check_list.len() != token_list.len() {
+			check_result = false;
+		}
 
 		let mut per_checkstatus = PreCheckStatus::Prohibit;
 		if check_result {

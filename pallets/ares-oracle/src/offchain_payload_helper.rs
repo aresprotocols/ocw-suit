@@ -100,13 +100,15 @@ impl<T: Config> Pallet<T> {
         for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result.unwrap() {
             if price_option.is_some() {
                 // record price to vec!
-                price_list.push(PricePayloadSubPrice(
-                    price_key,
-                    price_option.unwrap(),
-                    fraction_length,
-                    JsonNumberValue::new(json_number_value),
-                    timestamp,
-                ));
+                if let Some(number_value) =  JsonNumberValue::try_new(json_number_value) {
+                    price_list.push(PricePayloadSubPrice(
+                        price_key,
+                        price_option.unwrap(),
+                        fraction_length,
+                        number_value,
+                        timestamp,
+                    ));
+                }
             }
         }
         let price_list: PricePayloadSubPriceList = price_list.try_into().expect("price list is too long");
@@ -278,14 +280,16 @@ impl<T: Config> Pallet<T> {
         let price_result = price_result.unwrap();
         for (price_key, price_option, fraction_length, json_number_value, timestamp) in price_result {
             if price_option.is_some() {
-                // record price to vec!
-                price_list.push(PricePayloadSubPrice(
-                    price_key,
-                    price_option.unwrap(),
-                    fraction_length,
-                    JsonNumberValue::new(json_number_value),
-                    timestamp,
-                ));
+                if let Some(number_value) = JsonNumberValue::try_new(json_number_value) {
+                    // record price to vec!
+                    price_list.push(PricePayloadSubPrice(
+                        price_key,
+                        price_option.unwrap(),
+                        fraction_length,
+                        number_value,
+                        timestamp,
+                    ));
+                }
             }
         }
         log::debug!(

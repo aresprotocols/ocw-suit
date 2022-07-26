@@ -88,9 +88,12 @@ pub mod pallet {
 
 		type Call: From<Call<Self, I>>;
 
-		type PriceProvider: SymbolInfo;
+		type PriceProvider: SymbolInfo<Self::BlockNumber>;
 
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+
+		#[pallet::constant]
+		type MaxQuotationDelay: Get<Self::BlockNumber>;
 	}
 
 	// Map<Symbol, Index> Manager Symbol Estimates Id
@@ -252,6 +255,8 @@ pub mod pallet {
 		MultiplierNotExist,
 
 		SubAccountGenerateFailed,
+
+		UnableToGetPrice,
 	}
 
 	// #[pallet::genesis_config]
@@ -420,6 +425,9 @@ pub mod pallet {
 			let caller = ensure_signed(origin.clone())?;
 			let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
 			ensure!(members.contains(&caller), Error::<T, I>::NotMember);
+
+			let check_price: Result<(u64, FractionLength, T::BlockNumber), ()> = T::PriceProvider::price(&symbol);
+			ensure!(check_price.is_ok(), Error::<T, I>::UnableToGetPrice);
 
 			ensure!(
 				start >= frame_system::Pallet::<T>::block_number(),
@@ -683,51 +691,48 @@ pub mod pallet {
 			let id = winner_payload.estimates_id;
 			let config = ActiveEstimates::<T, I>::get(&symbol);
 			let mut total_reward = BalanceOf::<T, I>::from(0u32);
-			let price = winner_payload.price.0;
+			// let price = winner_payload.price.0;
 			if config.is_some() {
-				//TODO check BoundedVec
-				let mut config = config.unwrap();
-				let end = config.end;
-				let state = config.state.clone();
-				if now > end && state == EstimatesState::Active {
+				if let Some((price, _, _)) = winner_payload.price {
+					//TODO check BoundedVec
+					let mut config = config.unwrap();
+					let end = config.end;
+					let state = config.state.clone();
+					if now > end && state == EstimatesState::Active {
+						// Get and check subaccount.
+						let source_acc = Self::account_id(symbol.to_vec());
+						ensure!(source_acc.is_some(), Error::<T, I>::SubAccountGenerateFailed);
+						let source_acc = source_acc.unwrap();
 
-					// Get and check subaccount.
-					let source_acc = Self::account_id(symbol.to_vec());
-					ensure!(source_acc.is_some(), Error::<T, I>::SubAccountGenerateFailed);
-					let source_acc = source_acc.unwrap();
+						let symbol_account = source_acc.clone();
+						for winner in winners.clone() {
+							let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
+							total_reward = total_reward + reward;
+						}
+						ensure!(
+							T::Currency::free_balance(&symbol_account) >= total_reward,
+							Error::<T, I>::FreeBalanceTooLow
+						);
+						Winners::<T, I>::insert(&symbol, id, winners.clone());
+						ActiveEstimates::<T, I>::remove(&symbol);
 
-					let symbol_account = source_acc.clone();
-					for winner in winners.clone() {
-						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
-						total_reward = total_reward + reward;
+						for winner in winners {
+							let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
+							T::Currency::transfer(
+								&source_acc,
+								&winner.account,
+								reward,
+								ExistenceRequirement::AllowDeath,
+							)?;
+						}
+
+						CompletedEstimates::<T, I>::try_mutate(&symbol, |configs| {
+							config.state = EstimatesState::Completed;
+							config.symbol_completed_price = price;
+							config.total_reward = total_reward;
+							configs.try_push(config).map_err(|_|Error::<T,I>::TooMany)
+						})?
 					}
-					ensure!(
-						T::Currency::free_balance(&symbol_account) >= total_reward,
-						Error::<T, I>::FreeBalanceTooLow
-					);
-
-					Winners::<T, I>::insert(&symbol, id, winners.clone());
-					ActiveEstimates::<T, I>::remove(&symbol);
-
-					for winner in winners {
-						let reward: BalanceOf<T, I> = (winner.reward).saturated_into();
-
-						T::Currency::transfer(
-							&source_acc,
-							&winner.account,
-							reward,
-							ExistenceRequirement::AllowDeath,
-						)?;
-						let id = T::PalletId::get().0;
-						T::Currency::reserve_named(&id, &winner.account, reward)?;
-					}
-
-					CompletedEstimates::<T, I>::try_mutate(&symbol, |configs| {
-						config.state = EstimatesState::Completed;
-						config.symbol_completed_price = price;
-						config.total_reward = total_reward;
-						configs.try_push(config).map_err(|_|Error::<T,I>::TooMany)
-					})?
 				}
 			}
 			Ok(())
@@ -745,7 +750,7 @@ pub mod pallet {
 
 			let dest = T::Lookup::lookup(dest)?;
 			let id = T::PalletId::get().0;
-			T::Currency::unreserve_named(&id, &dest, value);
+			// T::Currency::unreserve_named(&id, &dest, value);
 			Ok(())
 		}
 
@@ -847,9 +852,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if now > end && source_acc.is_some(){
 				let accounts = Participants::<T, I>::get(&symbol, id);
 				if accounts.len() == 0 {
-					Self::send_signed(now, vec![], &config, (0, 0));
+					Self::send_signed(now, vec![], &config, None);
 				} else {
-					let price: Result<(u64, FractionLength), ()> = T::PriceProvider::price(&symbol);
+					let price: Result<(u64, FractionLength, T::BlockNumber), ()> = T::PriceProvider::price(&symbol);
 					log::info!(target: TARGET, "accounts: {:?}, price: {:?}", accounts, price);
 
 					let source_acc = source_acc.unwrap();
@@ -857,18 +862,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// if _total_reward.is_some() {
 					// 	total_reward = _total_reward.unwrap()
 					// }
-					if price.is_ok() {
-						let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::cal_winners(
-							estimates_type,
-							&symbol,
-							total_reward,
-							deviation,
-							range,
-							accounts,
-							price.unwrap(),
-						);
-						log::info!(target: TARGET, "winners: {:?}", winners);
-						Self::send_signed(now, winners, &config, price.unwrap())
+					if let Ok(price) = price {
+						if price.2 <= T::MaxQuotationDelay::get() {
+							let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::cal_winners(
+								estimates_type,
+								&symbol,
+								total_reward,
+								deviation,
+								range,
+								accounts,
+								price,
+							);
+							log::info!(target: TARGET, "winners: {:?}", winners);
+							Self::send_signed(now, winners, &config, Some(price))
+						}
 					}
 				}
 			}else{
@@ -889,7 +896,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deviation: Option<Permill>,
 		range: Option<BoundedVec<u64, MaximumOptions>>,
 		accounts: BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>,
-		price: (u64, FractionLength),
+		price: (u64, FractionLength, T::BlockNumber),
 	) -> Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> {
 		let mut count: u32 = 0;
 
@@ -978,7 +985,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_number: T::BlockNumber,
 		winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 		estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T, I>>,
-		price: (u64, FractionLength),
+		price: Option<(u64, FractionLength, T::BlockNumber)>,
 	) {
 		let whitelist = Self::find_whitelist_account();
 		let winners: Result<BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>, ()> =

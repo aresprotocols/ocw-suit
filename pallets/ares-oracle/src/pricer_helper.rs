@@ -326,7 +326,7 @@ impl<T: Config> Pallet<T> {
                 // let new_value = old_value;
                 new_price.push(old_value);
             }
-            new_price.push(AresPriceData {
+            let new_ares_price_data = AresPriceData {
                 price: price.clone(),
                 account_id: who.clone(),
                 create_bn,
@@ -334,13 +334,39 @@ impl<T: Config> Pallet<T> {
                 raw_number: json_number_value,
                 timestamp,
                 update_bn: current_block,
-            });
+            };
+            new_price.push(new_ares_price_data.clone());
 
             let new_price_res = AresPriceDataVecOf::<T>::try_create_on_vec(new_price);
-            if let Ok(new_price) = new_price_res {
-                <AresPrice<T>>::insert(key_str.clone(), new_price);
+            // Get the last price.
+            if let Some((_, last_update_bn)) = Self::get_last_price_author(key_str.clone()) {
+                // Compare with the current price.
+                if current_block.saturating_sub(last_update_bn) <= ConfDataSubmissionInterval::<T>::get() {
+                    // Within the threshold range.
+                    if let Ok(new_price) = new_price_res {
+
+                        <AresPrice<T>>::insert(key_str.clone(), new_price);
+                        <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
+                    }else{
+                        log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "new_price" );
+                    }
+                }else{
+                    log::error!(
+                        target: "pallet::ocw::ares_price_worker",
+                        "⛔ The data submission interval is too long and data pool will be reset. price_key = {:?}, last = {:?}, current = {:?}",
+                        key_str, last_update_bn, current_block
+                    );
+                    let mut new_price = AresPriceDataVecOf::<T>::default();
+                    new_price.try_push(new_ares_price_data);
+                    <AresPrice<T>>::insert(key_str.clone(), new_price);
+                }
             }else{
-                log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "new_price" );
+                log::error!(
+                    target: "pallet::ocw::ares_price_worker",
+                    "⛔ No last update was found for the corresponding price and data pool will be reset. price_key = {:?}",
+                    key_str
+                );
+                <AresPrice<T>>::insert(key_str.clone(), AresPriceDataVecOf::<T>::default());
             }
         } else {
             // push a new value.
@@ -355,6 +381,7 @@ impl<T: Config> Pallet<T> {
                 update_bn: current_block,
             });
             <AresPrice<T>>::insert(key_str.clone(), new_price);
+            <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
         }
 
         let avg_check_result = Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
@@ -387,11 +414,6 @@ impl<T: Config> Pallet<T> {
             // Pick abnormal price.
             if 0 < price_list_of_pool.len() {
                 for (index, check_price) in price_list_of_pool.iter().enumerate() {
-                    // let offset_percent = match check_price.price {
-                    // 	x if &x > &average => ((x - average) * 100) / average,
-                    // 	x if &x < &average => ((average - x) * 100) / average,
-                    // 	_ => 0,
-                    // };
 
                     let offset_percent = match check_price.price {
                         x if &x > &average => Percent::from_rational((x - average), average),
@@ -429,9 +451,10 @@ impl<T: Config> Pallet<T> {
                     <AresPrice<T>>::insert(key_str.clone(), price_list_of_pool);
                     return Self::update_avg_price_storage(key_str.clone());
                 }
-
+                // Get current bn
+                let current_bn = <system::Pallet<T>>::block_number();
                 // Update avg price
-                <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length));
+                <AresAvgPrice<T>>::insert(key_str.clone(), (average, fraction_length, current_bn));
                 // Clear price pool.
                 <AresPrice<T>>::remove(key_str.clone());
                 //
@@ -657,7 +680,12 @@ impl<T: Config> Pallet<T> {
         let price_value = price_value.unwrap();
 
         // Make u64 with fraction length
-        let result_price = JsonNumberValue::new(price_value.0.clone()).to_price(param_length);
+        let result_opt = JsonNumberValue::try_new(price_value.0.clone());
+        if result_opt.is_none() {
+            return None;
+        }
+        let result_numer = result_opt.unwrap();
+        let result_price= result_numer.to_price(param_length);
 
         // A price of 0 means that the correct result of the data is not obtained.
         if result_price == 0 {
@@ -712,9 +740,10 @@ impl<T: Config> Pallet<T> {
                         for (price_key, extract_key, fraction_length) in format {
                             let new_extract_key = [extract_key.to_vec(), base_coin.clone()].concat();
                             let extract_key = sp_std::str::from_utf8(&new_extract_key).unwrap();
+                            // println!("str::extract_key = {:?}", str::from_utf8(&price_key.clone().to_vec()));
+                            // println!("str::extract_key = {:?}", extract_key);
                             let extract_price_grp =
                                 Self::extract_bulk_price_by_json_value(v_data.clone(), extract_key, fraction_length);
-
                             if extract_price_grp.is_some() {
                                 let (extract_price, json_number_value, timestamp) = extract_price_grp.unwrap();
                                 // TODO::need recheck why use Some(extract_price)

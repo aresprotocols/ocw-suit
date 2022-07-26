@@ -7,8 +7,8 @@ pub trait ValidatorCount {
 	fn get_validators_count() -> u64;
 }
 
-pub trait SymbolInfo {
-	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength), ()>;
+pub trait SymbolInfo<BlockNumber> {
+	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength, BlockNumber), ()>;
 
 	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength>;
 }

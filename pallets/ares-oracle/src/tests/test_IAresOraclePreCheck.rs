@@ -187,8 +187,8 @@ fn save_pre_check_result_for_success() {
 
 	let padding_request = testing::PendingRequest {
 		method: "GET".into(),
-		uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth".into(),
-		response: Some(get_are_json_of_bulk().as_bytes().to_vec()),
+		uri: "http://127.0.0.1:5566/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth_dot".into(),
+		response: Some(get_are_dot_eth_btc().as_bytes().to_vec()),
 		sent: true,
 		..Default::default()
 	};
@@ -202,7 +202,11 @@ fn save_pre_check_result_for_success() {
 		// get check result
 		// create check config
 		let check_config = PreCheckTaskConfig {
-			check_token_list: TokenList::create_on_vec(vec![ PriceToken::create_on_vec(to_test_vec("eth_price")), PriceToken::create_on_vec(to_test_vec("btc_price"))]),
+			check_token_list: TokenList::create_on_vec(vec![
+				PriceToken::create_on_vec(to_test_vec("eth_price")),
+				PriceToken::create_on_vec(to_test_vec("btc_price")),
+				PriceToken::create_on_vec(to_test_vec("dot_price")),
+			]),
 			allowable_offset: Percent::from_percent(10),
 		};
 
@@ -213,11 +217,15 @@ fn save_pre_check_result_for_success() {
 		// let btc_avg_price =
 		<AresAvgPrice<Test>>::insert(
 			PriceKey::create_on_vec(to_test_vec("btc_price")),
-			(502613720 - Percent::from_percent(9) * 502613720, 4),
+			(232861414 - Percent::from_percent(9) * 232861414, 4, System::block_number()),
 		);
 		<AresAvgPrice<Test>>::insert(
 			PriceKey::create_on_vec(to_test_vec("eth_price")),
-			(31077100 + Percent::from_percent(9) * 31077100, 4),
+			(16092625 + Percent::from_percent(9) * 16092625, 4, System::block_number()),
+		);
+		<AresAvgPrice<Test>>::insert(
+			PriceKey::create_on_vec(to_test_vec("dot_price")),
+			(77413 + Percent::from_percent(9) * 77413, 4, System::block_number()),
 		);
 
 		// check before status
@@ -233,7 +241,6 @@ fn save_pre_check_result_for_success() {
 		assert_eq!(get_status, Some((current_bn, PreCheckStatus::Pass)));
 
 		let final_check_result = <FinalPerCheckResult<Test>>::get(candidate_account);
-		println!("final_check_result = {:?}", final_check_result);
 
 		AresOcw::clean_pre_check_status(candidate_account);
 		let get_status: Option<(BlockNumber, PreCheckStatus)> = AresOcw::get_pre_check_status(candidate_account);
@@ -294,11 +301,11 @@ fn save_pre_check_result_for_prohibit() {
 		// Create avg price
 		<AresAvgPrice<Test>>::insert(
 			PriceKey::create_on_vec( to_test_vec("btc_price")),
-			(502613720 - Percent::from_percent(11) * 502613720, 4),
+			(502613720 - Percent::from_percent(11) * 502613720, 4, System::block_number()),
 		);
 		<AresAvgPrice<Test>>::insert(
 			PriceKey::create_on_vec(to_test_vec("eth_price")),
-			(31077100 + Percent::from_percent(11) * 31077100, 4),
+			(31077100 + Percent::from_percent(11) * 31077100, 4, System::block_number()),
 		);
 
 		// check before status

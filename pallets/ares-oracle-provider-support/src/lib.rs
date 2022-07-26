@@ -42,7 +42,7 @@ pub struct JsonNumberValue {
 	pub integer: u64,
 	pub fraction: u64,
 	pub fraction_length: u32,
-	pub exponent: u32,
+	pub exponent: i32,
 }
 
 /// Convert `NumberValue` to `JsonNumberValue`
@@ -66,20 +66,33 @@ pub struct JsonNumberValue {
 impl JsonNumberValue {
 	/// Input `NumberValue` to create a `JsonNumberValue`
 	pub fn new(number_value: NumberValue) -> Self {
-		if number_value.integer < 0 || number_value.exponent != 0 {
-			panic!("⛔ Error source NumberValue integer or exponent.");
+		let res = Self::try_new(number_value);
+		if res.is_some() {
+			return res.unwrap();
 		}
-		Self {
+		panic!("⛔ Error source NumberValue integer");
+	}
+
+	pub fn try_new(number_value: NumberValue) -> Option<Self> {
+		if number_value.integer < 0 {
+			return None;
+		}
+		Some(Self {
 			fraction_length: number_value.fraction_length,
 			fraction: number_value.fraction,
-			exponent: number_value.exponent as u32,
+			exponent: number_value.exponent,
 			integer: number_value.integer as u64,
-		}
+		})
 	}
 
 	/// Formats a u64 integer given a fractional length
 	pub fn to_price(&self, fraction_number: FractionLength) -> u64 {
 		let mut price_fraction = self.fraction;
+		let fraction_number = fraction_number as i32 + self.exponent;
+		if fraction_number<0 {
+			return 0
+		}
+		let fraction_number = fraction_number as FractionLength;
 		if price_fraction < 10u64.pow(fraction_number) {
 			price_fraction *= 10u64.pow(fraction_number.checked_sub(self.fraction_length).unwrap_or(0));
 		}
