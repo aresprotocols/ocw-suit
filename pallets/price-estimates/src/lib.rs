@@ -29,6 +29,7 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
 	AccountId32, FixedU128, Perbill, Permill, Rational128, RuntimeAppPublic, RuntimeDebug,
 };
+use sp_runtime::traits::Saturating;
 use sp_std::str;
 use sp_std::vec;
 use sp_std::vec::Vec;
@@ -862,8 +863,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// if _total_reward.is_some() {
 					// 	total_reward = _total_reward.unwrap()
 					// }
+
 					if let Ok(price) = price {
-						if price.2 <= T::MaxQuotationDelay::get() {
+						if price.2 >= now.saturating_sub(T::MaxQuotationDelay::get()) {
 							let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::cal_winners(
 								estimates_type,
 								&symbol,
