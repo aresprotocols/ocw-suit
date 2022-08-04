@@ -13,6 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
 	"derive",
 ] }
@@ -33,6 +34,7 @@ sp-io = { git = "https://github.com/paritytech/substrate", default-features = fa
 [features]
 default = ["std"]
 std = [
+	"bound-vec-helper/std",
 	"codec/std",
 	"sp-std/std",
 	"pallet-balances/std",

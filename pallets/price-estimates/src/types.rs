@@ -1,15 +1,19 @@
+use sp_std::fmt::Debug;
 use super::*;
 use frame_system::offchain::{SignedPayload, SigningTypes};
 use hex::ToHex;
 
 // use ares_oracle::types::FractionLength;
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::traits::tokens::Balance;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	Permill,
 };
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::str;
+use ares_oracle_provider_support::JsonNumberValue;
 
 pub type StringLimit = ConstU32<50>;
 
@@ -41,12 +45,10 @@ impl Default for MultiplierOption {
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum EstimatesState {
 	InActive,
-
 	Active,
-
 	WaitingPayout,
-
 	Completed,
+	Unresolved,
 }
 
 impl Default for EstimatesState {
@@ -58,7 +60,6 @@ impl Default for EstimatesState {
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum EstimatesType {
 	DEVIATION,
-
 	RANGE,
 }
 
@@ -68,9 +69,12 @@ impl Default for EstimatesType {
 	}
 }
 
+pub(crate) type BoundedVecOfMultiplierOption = BoundedVec<MultiplierOption, MaximumOptions>;
+pub(crate) type BoundedVecOfConfigRange = BoundedVec<u64, MaximumOptions>;
+
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
-	pub symbol: BoundedVec<u8, StringLimit>,
+	pub symbol: BoundedVecOfPreparedEstimates,
 
 	pub estimates_type: EstimatesType,
 
@@ -91,7 +95,8 @@ pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
 	/// Delay for payout the winner of the estimates. (start + length + delay = payout).
 	pub distribute: BlockNumber,
 
-	pub multiplier: BoundedVec<MultiplierOption, MaximumOptions>,
+	// pub multiplier: BoundedVec<MultiplierOption, MaximumOptions>,
+	pub multiplier: BoundedVecOfMultiplierOption,
 
 	pub deviation: Option<Permill>,
 
@@ -101,6 +106,8 @@ pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
 
 	pub state: EstimatesState,
 }
+
+pub(crate) type BoundedVecOfBscAddress = BoundedVec<u8, StringLimit>;
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AccountParticipateEstimates<Account, BlockNumber> {
@@ -112,26 +119,30 @@ pub struct AccountParticipateEstimates<Account, BlockNumber> {
 
 	pub range_index: Option<u8>,
 
-	pub bsc_address: Option<BoundedVec<u8, StringLimit>>,
+	pub bsc_address: Option<BoundedVecOfBscAddress>,
 
 	pub multiplier: MultiplierOption,
 
 	pub reward: u128,
 }
 
+pub(crate) type BoundedVecOfChooseWinnersPayload<ACC, BN> = BoundedVec<AccountParticipateEstimates<ACC, BN>, MaximumWinners>;
+pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct ChooseWinnersPayload<Public, AccountId, BlockNumber> {
 	pub block_number: BlockNumber,
-	pub winners: BoundedVec<AccountParticipateEstimates<AccountId, BlockNumber>, MaximumWinners>,
-	pub public: Public,
+	pub winners: BoundedVecOfChooseWinnersPayload<AccountId, BlockNumber>,
+	pub public: Option<Public>,
 	pub estimates_id: u64,
-	pub symbol: BoundedVec<u8, StringLimit>,
+	pub symbol: BoundedVecOfSymbol,
 	pub price: Option<(u64, FractionLength, BlockNumber)>,
 }
 
+
 impl<T: SigningTypes> SignedPayload<T> for ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber> {
 	fn public(&self) -> T::Public {
-		self.public.clone()
+		self.public.clone().unwrap()
 	}
 }
 
@@ -206,7 +217,45 @@ fn eth_checksum(address: &[u8]) -> bool {
 	// return str::from_utf8(b"aaa").unwrap();
 }
 
-// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-// pub struct A {
-//     pub aa: u64
-// }
+pub trait ConvertChainPrice<B, F> {
+	fn try_to_price(self, fraction: F) -> Option<B>;
+	fn convert_to_json_number_value(self) -> JsonNumberValue;
+}
+
+#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct ChainPrice {
+	number: u64,
+	fraction_length: u32,
+}
+
+impl ChainPrice {
+	pub fn new(info: (u64, u32)) -> Self {
+		Self {
+			number: info.0,
+			fraction_length: info.1
+		}
+	}
+}
+
+impl <B: Balance, F: AtLeast32BitUnsigned + Debug> ConvertChainPrice<B, F> for ChainPrice {
+	fn try_to_price(self, to_fraction: F) -> Option<B> {
+		let to_fraction: Option<u8> = to_fraction.try_into().ok();
+		if let Some(to_fraction) = to_fraction {
+			// let new_number = self.convert_to_json_number_value().to_price(to_fraction as u32);
+			let new_number = ConvertChainPrice::<B,F>::convert_to_json_number_value(self).to_price(to_fraction as u32);
+			return new_number.try_into().ok();
+		}
+		None
+	}
+
+	fn convert_to_json_number_value(self) -> JsonNumberValue {
+		let integer = self.number / 10u64.pow(self.fraction_length);
+		let fraction: u64 = self.number - integer.saturating_mul(10u64.pow(self.fraction_length));
+		JsonNumberValue {
+			integer: integer,
+			fraction: fraction,
+			fraction_length: self.fraction_length ,
+			exponent: 0
+		}
+	}
+}

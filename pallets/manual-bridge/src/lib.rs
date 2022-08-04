@@ -23,7 +23,7 @@ pub mod pallet {
 	use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Zero;
-	use crate::types::BoundVecHelper;
+	use bound_vec_helper::BoundVecHelper;
 	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, Ident, MaximumPendingList};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -62,6 +62,38 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_balance_threshold)]
 	pub type MinimumBalanceThreshold<T> =  StorageValue<_, BalanceOf<T>>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub waiter_acc: Option<T::AccountId>,
+		pub stash_acc: Option<T::AccountId>,
+		pub min_balance_threshold: Option<BalanceOf<T>>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			GenesisConfig {
+				waiter_acc: None,
+				stash_acc: None,
+				min_balance_threshold: None
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			if self.stash_acc.is_some() {
+				StashAccout::<T>::put(self.stash_acc.clone().unwrap());
+			}
+			if self.waiter_acc.is_some() {
+				WaiterAccout::<T>::put(self.waiter_acc.clone().unwrap());
+			}
+			if self.min_balance_threshold.is_some() {
+				MinimumBalanceThreshold::<T>::put(self.min_balance_threshold.clone().unwrap());
+			}
+		}
+	}
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors

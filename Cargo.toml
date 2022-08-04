@@ -11,5 +11,6 @@ members = [
     "pallets/manual-bridge",
     "rpc/ares-rpc",
     "tools/seed-reader",
+    "tools/bound-vec-helper",
 ]
 
