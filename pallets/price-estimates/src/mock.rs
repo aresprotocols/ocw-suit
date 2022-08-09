@@ -1,12 +1,11 @@
 use codec::Encode;
 use crate as pallet_price_estimates;
-use crate::{Admins, EstimatesType, LockedEstimates, MinimumInitReward, MinimumTicketPrice, Whitelist};
+use crate::*;
 use frame_support::traits::{ConstU32, ConstU64, Everything, ExtrinsicCall, FindAuthor, GenesisBuild, Hooks, OnInitialize};
 use frame_support::{PalletId, parameter_types};
 use frame_support::{assert_noop, assert_ok};
 use bound_vec_helper::BoundVecHelper;
 use frame_system as system;
-use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_core::sr25519::Public;
 use sp_core::{
 	offchain::{
@@ -24,8 +23,8 @@ use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
 };
-use crate::{BoundedVecOfPreparedEstimates, PreparedEstimates};
-use crate::types::{BoundedVecOfConfigRange, BoundedVecOfMultiplierOption, EstimatesState, MultiplierOption, SymbolEstimatesConfig};
+use ares_oracle::ares_crypto;
+use crate::types::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -144,14 +143,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}.assimilate_storage(&mut t)
 	.unwrap();
 
-	pallet_price_estimates::GenesisConfig::<Test> {
-		admins: vec![AccountId::from_raw([1; 32])],
-		white_list: vec![AccountId::from_raw([2; 32])],
-		locked_estimates: 2,
-		minimum_ticket_price: 100,
-		minimum_init_reward: 100,
-	}.assimilate_storage(&mut t)
-		.unwrap();
+	// pallet_price_estimates::GenesisConfig::<Test> {
+	// 	admins: vec![AccountId::from_raw([1; 32])],
+	// 	// white_list: vec![AccountId::from_raw([2; 32])],
+	// 	locked_estimates: 2,
+	// 	minimum_ticket_price: 100,
+	// 	minimum_init_reward: 100,
+	// }.assimilate_storage(&mut t)
+	// 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
@@ -164,19 +163,34 @@ parameter_types! {
 	pub const EstimatesPalletId: PalletId = PalletId(*b"py/arest");
 	pub const EstimatesPerSymbol: u32 = 1;
 	pub const MaxQuotationDelay: BlockNumber = 20;
+	pub const MaxEndDelay: BlockNumber = 10;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 pub(crate) type AresId = ares_oracle_provider_support::crypto::sr25519::AuthorityId;
 
+// impl pallet_price_estimates::Config for Test {
+// 	type Event = Event;
+// 	type PalletId = EstimatesPalletId;
+// 	type OffchainAppCrypto = ares_oracle::ares_crypto::AresCrypto<AresId>;
+// 	type MaxEstimatesPerSymbol = EstimatesPerSymbol;
+// 	type Currency = Balances;
+// 	type Call = Call;
+// 	type UnsignedPriority = UnsignedPriority;
+// 	type PriceProvider = TestSymbolInfo;
+// 	type MaxEndDelay = MaxEndDelay;
+// 	// type AuthorityId = ares_oracle::ares_crypto::AresCrypto<AresId>;
+// 	type MaxQuotationDelay = MaxQuotationDelay;
+// }
+
 impl pallet_price_estimates::Config for Test {
 	type Event = Event;
-	type PalletId = EstimatesPalletId;
-	type MaxEstimatesPerSymbol = EstimatesPerSymbol;
-	type Currency = Balances;
-	type Call = Call;
-	type PriceProvider = TestSymbolInfo;
 	type AuthorityId = ares_oracle::ares_crypto::AresCrypto<AresId>;
-	type MaxQuotationDelay = MaxQuotationDelay;
+	type Call = Call;
+	type GracePeriod = ConstU64<5>;
+	type UnsignedInterval = ConstU64<128>;
+	type UnsignedPriority = UnsignedPriority;
+	type MaxPrices = ConstU32<64>;
 }
 
 pub struct TestSymbolInfo ;
@@ -208,164 +222,146 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 	}
 }
 
-pub(crate) fn helper_create_new_estimates_with_deviation(
-	init_block: BlockNumber,
-	deviation: Permill,
-	init_reward: Balance,
-	price: Balance,
-) {
-	run_to_block(init_block);
-
-	assert!(Estimates::is_active());
-
-	// Get configuration informations form storage.
-	let admins = Admins::<Test>::get();
-	let white_list = Whitelist::<Test>::get();
-	let locked_estimates =LockedEstimates::<Test>::get();
-	let min_ticket_price = MinimumTicketPrice::<Test>::get();
-	let min_init_reward = MinimumInitReward::<Test>::get();
-
-	assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
-
-	let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
-	let start: BlockNumber = init_block+5; //     start: T::BlockNumber,
-	let end: BlockNumber = init_block+10; //     end: T::BlockNumber,
-	let distribute: BlockNumber = init_block+15; //     distribute: T::BlockNumber,
-	let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
-	let deviation = Some(deviation); // Some(Permill::from_percent(10)); //     deviation: Option<Permill>,
-	let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
-	let multiplier: Vec<MultiplierOption> = vec![
-		MultiplierOption::Base(1),
-		MultiplierOption::Base(3),
-		MultiplierOption::Base(5),
-	]; //     multiplier: Vec<MultiplierOption>,
-	// let init_reward: BalanceOf<Test,()> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T, I>,
-	// let price: BalanceOf<Test,()> = 500; //     #[pallet::compact] price: BalanceOf<T, I>,
-
-	println!("start={:?}, end={:?}, distribute={:?}, estimates_type={:?}", start, end, distribute, estimates_type);
-
-	// Create new estimate.
-	assert_ok!(Estimates::new_estimates(
-            Origin::signed(admins[0].clone()),
-            symbol.clone(),
-            start.clone(),
-            end.clone(),
-            distribute.clone(),
-            estimates_type.clone(),
-            deviation,
-            range.clone(),
-			None,
-            multiplier.clone(),
-            init_reward,
-            price.clone(),
-        ));
-
-	// Check estimate.
-	let estimate = PreparedEstimates::<Test>::get(
-		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
-	);
-	assert_eq!(estimate, Some(
-		SymbolEstimatesConfig{
-			symbol: BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()),
-			estimates_type,
-			id: 0,
-			ticket_price: price,
-			symbol_completed_price: 0,
-			symbol_fraction: TestSymbolInfo::fraction(&symbol.clone()).unwrap(),
-			start,
-			end,
-			distribute,
-			multiplier: BoundedVecOfMultiplierOption::create_on_vec(multiplier),
-			deviation,
-			range: None, //BoundedVecOfConfigRange::create_on_vec(range),
-			total_reward: init_reward,
-			state: EstimatesState::InActive,
-		}
-	));
-}
-
-pub(crate) fn helper_create_new_estimates_with_range(
-	init_block: BlockNumber,
-	// deviation: Permill,
-	range: Vec<u64>,
-	range_fraction_length: u32,
-	init_reward: Balance,
-	price: Balance,
-) {
-	run_to_block(init_block);
-
-	assert!(Estimates::is_active());
-
-	// Get configuration informations form storage.
-	let admins = Admins::<Test>::get();
-	let white_list = Whitelist::<Test>::get();
-	let locked_estimates =LockedEstimates::<Test>::get();
-	let min_ticket_price = MinimumTicketPrice::<Test>::get();
-	let min_init_reward = MinimumInitReward::<Test>::get();
-
-	assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
-
-	let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
-	let start: BlockNumber = init_block+5; //     start: T::BlockNumber,
-	let end: BlockNumber = init_block+10; //     end: T::BlockNumber,
-	let distribute: BlockNumber = init_block+15; //     distribute: T::BlockNumber,
-	let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
-	let deviation = None; // Some(Permill::from_percent(10)); //     deviation: Option<Permill>,
-	// let mut _range_vec: Vec<u64> = vec![];
-	// _range_vec.push(21481_3055u64);
-	// _range_vec.push(23481_3055u64);
-	// _range_vec.push(27481_3055u64);
-	// _range_vec.push(29481_3055u64);
-	// let range = Some(_range_vec); //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
-	// let range = Some(vec![21481_3055u64, 23481_3055u64, 27481_3055u64, 29481_3055u64]);
-	let range = Some(range);
-	let multiplier: Vec<MultiplierOption> = vec![
-		MultiplierOption::Base(1),
-		MultiplierOption::Base(3),
-		MultiplierOption::Base(5),
-	]; //     multiplier: Vec<MultiplierOption>,
-	// let init_reward: BalanceOf<Test,()> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T, I>,
-	// let price: BalanceOf<Test,()> = 500; //     #[pallet::compact] price: BalanceOf<T, I>,
-
-	println!("start={:?}, end={:?}, distribute={:?}, estimates_type={:?}, range={:?}", start, end, distribute, estimates_type, range);
-
-	// Create new estimate.
-	assert_ok!(Estimates::new_estimates(
-            Origin::signed(admins[0].clone()),
-            symbol.clone(),
-            start.clone(),
-            end.clone(),
-            distribute.clone(),
-            estimates_type.clone(),
-            deviation,
-            range.clone(),
-			Some(range_fraction_length),
-            multiplier.clone(),
-            init_reward,
-            price.clone(),
-        ));
-
-	// Check estimate.
-	let estimate = PreparedEstimates::<Test>::get(
-		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
-	);
-	// assert_eq!(estimate, Some(
-	// 	SymbolEstimatesConfig{
-	// 		symbol: BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()),
-	// 		estimates_type,
-	// 		id: 0,
-	// 		ticket_price: price,
-	// 		symbol_completed_price: 0,
-	// 		symbol_fraction: TestSymbolInfo::fraction(&symbol.clone()).unwrap(),
-	// 		start,
-	// 		end,
-	// 		distribute,
-	// 		multiplier: BoundedVecOfMultiplierOption::create_on_vec(multiplier),
-	// 		deviation,
-	// 		range: Some(BoundedVecOfConfigRange::create_on_vec(range.unwrap())),
-	// 		total_reward: init_reward,
-	// 		state: EstimatesState::InActive,
-	// 	}
-	// ));
-}
+// pub(crate) fn helper_create_new_estimates_with_deviation(
+// 	init_block: BlockNumber,
+// 	deviation: Permill,
+// 	init_reward: Balance,
+// 	price: Balance,
+// ) {
+// 	run_to_block(init_block);
+//
+// 	assert!(Estimates::is_active());
+//
+// 	// Get configuration informations form storage.
+// 	let admins = Admins::<Test>::get();
+// 	// let white_list = Whitelist::<Test>::get();
+// 	// let locked_estimates =LockedEstimates::<Test>::get();
+// 	// let min_ticket_price = MinimumTicketPrice::<Test>::get();
+// 	// let min_init_reward = MinimumInitReward::<Test>::get();
+//
+// 	assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
+//
+// 	let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
+// 	let start: BlockNumber = init_block+5; //     start: T::BlockNumber,
+// 	let end: BlockNumber = init_block+10; //     end: T::BlockNumber,
+// 	let distribute: BlockNumber = init_block+15; //     distribute: T::BlockNumber,
+// 	let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+// 	let deviation = Some(deviation); // Some(Permill::from_percent(10)); //     deviation: Option<Permill>,
+// 	let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
+// 	let multiplier: Vec<MultiplierOption> = vec![
+// 		MultiplierOption::Base(1),
+// 		MultiplierOption::Base(3),
+// 		MultiplierOption::Base(5),
+// 	]; //     multiplier: Vec<MultiplierOption>,
+// 	// let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
+// 	// let price: BalanceOf<Test> = 500; //     #[pallet::compact] price: BalanceOf<T>,
+//
+// 	println!("start={:?}, end={:?}, distribute={:?}, estimates_type={:?}", start, end, distribute, estimates_type);
+//
+// 	// Create new estimate.
+// 	assert_ok!(Estimates::new_estimates(
+//             Origin::signed(admins[0].clone()),
+//             symbol.clone(),
+//             start.clone(),
+//             end.clone(),
+//             distribute.clone(),
+//             estimates_type.clone(),
+//             deviation,
+//             range.clone(),
+// 			None,
+//             multiplier.clone(),
+//             init_reward,
+//             price.clone(),
+//         ));
+//
+// 	// Check estimate.
+// 	let estimate = PreparedEstimates::<Test>::get(
+// 		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+// 	);
+// 	assert_eq!(estimate, Some(
+// 		SymbolEstimatesConfig{
+// 			symbol: BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()),
+// 			estimates_type,
+// 			id: 0,
+// 			ticket_price: price,
+// 			symbol_completed_price: 0,
+// 			symbol_fraction: TestSymbolInfo::fraction(&symbol.clone()).unwrap(),
+// 			start,
+// 			end,
+// 			distribute,
+// 			multiplier: BoundedVecOfMultiplierOption::create_on_vec(multiplier),
+// 			deviation,
+// 			range: None, //BoundedVecOfConfigRange::create_on_vec(range),
+// 			total_reward: init_reward,
+// 			state: EstimatesState::InActive,
+// 		}
+// 	));
+// }
+//
+// pub(crate) fn helper_create_new_estimates_with_range(
+// 	init_block: BlockNumber,
+// 	// deviation: Permill,
+// 	range: Vec<u64>,
+// 	range_fraction_length: u32,
+// 	init_reward: Balance,
+// 	price: Balance,
+// ) {
+// 	run_to_block(init_block);
+//
+// 	assert!(Estimates::is_active());
+//
+// 	// Get configuration informations form storage.
+// 	let admins = Admins::<Test>::get();
+// 	// let white_list = Whitelist::<Test>::get();
+// 	// let locked_estimates =LockedEstimates::<Test>::get();
+// 	// let min_ticket_price = MinimumTicketPrice::<Test>::get();
+// 	// let min_init_reward = MinimumInitReward::<Test>::get();
+//
+// 	assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
+//
+// 	let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
+// 	let start: BlockNumber = init_block+5; //     start: T::BlockNumber,
+// 	let end: BlockNumber = init_block+10; //     end: T::BlockNumber,
+// 	let distribute: BlockNumber = init_block+15; //     distribute: T::BlockNumber,
+// 	let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
+// 	let deviation = None; // Some(Permill::from_percent(10)); //     deviation: Option<Permill>,
+// 	// let mut _range_vec: Vec<u64> = vec![];
+// 	// _range_vec.push(21481_3055u64);
+// 	// _range_vec.push(23481_3055u64);
+// 	// _range_vec.push(27481_3055u64);
+// 	// _range_vec.push(29481_3055u64);
+// 	// let range = Some(_range_vec); //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
+// 	// let range = Some(vec![21481_3055u64, 23481_3055u64, 27481_3055u64, 29481_3055u64]);
+// 	let range = Some(range);
+// 	let multiplier: Vec<MultiplierOption> = vec![
+// 		MultiplierOption::Base(1),
+// 		MultiplierOption::Base(3),
+// 		MultiplierOption::Base(5),
+// 	]; //     multiplier: Vec<MultiplierOption>,
+// 	// let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
+// 	// let price: BalanceOf<Test> = 500; //     #[pallet::compact] price: BalanceOf<T>,
+//
+// 	println!("start={:?}, end={:?}, distribute={:?}, estimates_type={:?}, range={:?}", start, end, distribute, estimates_type, range);
+//
+// 	// Create new estimate.
+// 	assert_ok!(Estimates::new_estimates(
+//             Origin::signed(admins[0].clone()),
+//             symbol.clone(),
+//             start.clone(),
+//             end.clone(),
+//             distribute.clone(),
+//             estimates_type.clone(),
+//             deviation,
+//             range.clone(),
+// 			Some(range_fraction_length),
+//             multiplier.clone(),
+//             init_reward,
+//             price.clone(),
+//         ));
+//
+// 	// Check estimate.
+// 	let estimate = PreparedEstimates::<Test>::get(
+// 		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+// 	);
+// }
 

@@ -1,56 +1,53 @@
 [package]
-authors = ['Ares Team']
-description = 'Substrate FRAME pallet template for defining custom runtime logic.'
-edition = '2018'
-license = 'Unlicense'
-name = 'pallet-price-estimates'
-publish = false
-homepage = "https://github.com/aresprotocols"
-repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.0.1'
-readme = 'README.md'
+name = "pallet-price-estimates"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Unlicense"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet for offchain worker"
+readme = "README.md"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ares-oracle = { default-features = false, path = '../ares-oracle' }
 ares-oracle-provider-support = { default-features = false, path = '../ares-oracle-provider-support' }
 bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
-hex = { version = "0.4", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17", optional = true }
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.17" }
-frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 
 [dev-dependencies]
-serde = { version = '1.0.130', default-features = false, features = ['derive'] }
-sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-sp-consensus-aura = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
-sp-keystore = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 
 [features]
-default = ['std']
-runtime-benchmarks = ['frame-benchmarking']
+default = ["std"]
 std = [
-    "ares-oracle/std",
-    "bound-vec-helper/std",
-    "hex/std",
-    "scale-info/std",
-    "sp-io/std",
-    "codec/std",
-    "frame-support/std",
-    "frame-system/std",
-    "frame-benchmarking/std",
-    "sp-runtime/std",
-    "pallet-balances/std",
+	"ares-oracle/std",
+	"ares-oracle-provider-support/std",
+	"bound-vec-helper/std",
+	"codec/std",
+	"scale-info/std",
+	"frame-support/std",
+	"frame-system/std",
+	"lite-json/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-keystore",
+	"sp-runtime/std",
+	"sp-std/std",
+	"log/std",
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = ["frame-support/try-runtime"]
