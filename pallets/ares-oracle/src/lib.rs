@@ -33,6 +33,7 @@ use sp_std::{prelude::*, str};
 use pallet_authorship;
 
 use crate::traits::*;
+use bound_vec_helper::BoundVecHelper;
 
 use ares_oracle_provider_support::{
 	IAresOraclePreCheck,
@@ -673,7 +674,7 @@ pub mod pallet {
 			// Nodes with the right to increase prices
 			let price_list = price_payload.price; // price_list: Vec<(PriceKey, u32)>,
 			let mut price_key_list = Vec::new();
-			let mut agg_result_list: Vec<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)> = Vec::new();
+			let mut agg_result_list: Vec<(PriceKey, u64, FractionLength, Vec<T::AccountId>, T::BlockNumber)> = Vec::new();
 			for PricePayloadSubPrice(price_key, price, fraction_length, json_number_value, timestamp) in
 				price_list.clone()
 			{
@@ -1089,7 +1090,8 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AggregatedPrice {
-			results: Vec<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)>,
+			// (u64, FractionLength, T::BlockNumber)
+			results: Vec<(PriceKey, u64, FractionLength, Vec<T::AccountId>, T::BlockNumber)>,
 		},
 		PurchasedRequestWorkHasEnded {
 			purchase_id: PurchaseId,

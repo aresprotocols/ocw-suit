@@ -17,6 +17,8 @@
       <sourceFolder url="file://$MODULE_DIR$/pallets/member-extend/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tools/seed-reader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pallets/manual-bridge/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/bound-vec-helper/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pallets/price-estimates3/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -8,8 +8,10 @@ members = [
     "pallets/staking-extend",
     "pallets/challenge",
     "pallets/price-estimates",
+    "pallets/price-estimates3",
     "pallets/manual-bridge",
     "rpc/ares-rpc",
     "tools/seed-reader",
+    "tools/bound-vec-helper",
 ]
 

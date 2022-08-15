@@ -1,11 +1,12 @@
 use codec::Encode;
 use crate as pallet_price_estimates;
-use crate::*;
+use crate::{Admins, EstimatesType, LockedEstimates, MinimumInitReward, MinimumTicketPrice};
 use frame_support::traits::{ConstU32, ConstU64, Everything, ExtrinsicCall, FindAuthor, GenesisBuild, Hooks, OnInitialize};
 use frame_support::{PalletId, parameter_types};
 use frame_support::{assert_noop, assert_ok};
 use bound_vec_helper::BoundVecHelper;
 use frame_system as system;
+use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_core::sr25519::Public;
 use sp_core::{
 	offchain::{
@@ -24,7 +25,8 @@ use sp_keystore::{
 	{KeystoreExt, SyncCryptoStore},
 };
 use ares_oracle::ares_crypto;
-use crate::types::*;
+use crate::{BoundedVecOfPreparedEstimates, PreparedEstimates};
+use crate::types::{BoundedVecOfConfigRange, BoundedVecOfMultiplierOption, EstimatesState, MultiplierOption, SymbolEstimatesConfig};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -165,7 +167,6 @@ parameter_types! {
 	pub const MaxQuotationDelay: BlockNumber = 20;
 	pub const MaxEndDelay: BlockNumber = 10;
 	pub const UnsignedPriority: u64 = 1 << 20;
-	pub const MaximumKeepLengthOfOldData: BlockNumber = 5;
 }
 
 pub(crate) type AresId = ares_oracle_provider_support::crypto::sr25519::AuthorityId;
@@ -182,13 +183,13 @@ impl pallet_price_estimates::Config for Test {
 	type MaxEndDelay = MaxEndDelay;
 	// type AuthorityId = ares_oracle::ares_crypto::AresCrypto<AresId>;
 	type MaxQuotationDelay = MaxQuotationDelay;
-	type MaximumKeepLengthOfOldData = MaximumKeepLengthOfOldData;
 }
 
 pub struct TestSymbolInfo ;
 
 impl SymbolInfo<BlockNumber> for TestSymbolInfo {
 	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength, BlockNumber), ()> {
+
 		Ok(
 			(23164822300, TestSymbolInfo::fraction(symbol).unwrap(), 50)
 		)
@@ -354,5 +355,23 @@ pub(crate) fn helper_create_new_estimates_with_range(
 	let estimate = PreparedEstimates::<Test>::get(
 		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
 	);
+	// assert_eq!(estimate, Some(
+	// 	SymbolEstimatesConfig{
+	// 		symbol: BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()),
+	// 		estimates_type,
+	// 		id: 0,
+	// 		ticket_price: price,
+	// 		symbol_completed_price: 0,
+	// 		symbol_fraction: TestSymbolInfo::fraction(&symbol.clone()).unwrap(),
+	// 		start,
+	// 		end,
+	// 		distribute,
+	// 		multiplier: BoundedVecOfMultiplierOption::create_on_vec(multiplier),
+	// 		deviation,
+	// 		range: Some(BoundedVecOfConfigRange::create_on_vec(range.unwrap())),
+	// 		total_reward: init_reward,
+	// 		state: EstimatesState::InActive,
+	// 	}
+	// ));
 }
 
