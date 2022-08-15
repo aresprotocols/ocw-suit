@@ -1,25 +1,51 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
-
-use codec::{Decode, Encode};
-use frame_support::traits::{Currency, ExistenceRequirement, Get};
-use frame_support::transactional;
-use frame_system::{
-	self as system,
-	offchain::{
-		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
-		SignedPayload, Signer, SigningTypes, SubmitTransaction,
+use frame_support::{
+	dispatch::DispatchResult,
+	ensure,
+	pallet_prelude::*,
+	traits::{
+		BalanceStatus, ChangeMembers, Currency, ExistenceRequirement, FindAuthor, Imbalance, IsSubType, LockIdentifier,
+		LockableCurrency, NamedReservableCurrency, OnUnbalanced, ReservableCurrency, WithdrawReasons,
 	},
+	transactional,
+	weights::{DispatchClass, Weight},
+	PalletId, StorageHasher,
 };
-use lite_json::json::JsonValue;
-use sp_core::crypto::KeyTypeId;
-use sp_runtime::{offchain::{
-	http,
-	storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
-	Duration,
-}, traits::Zero, transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction}, RuntimeDebug, DispatchResult, Permill, SaturatedConversion};
+
+use sp_runtime::traits::CheckedDiv;
+use frame_system::offchain::{SendSignedTransaction, SubmitTransaction};
+use frame_system::{
+	offchain::{AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SignedPayload, Signer, SigningTypes},
+	pallet_prelude::*,
+};
+use log;
+use sp_core::hexdisplay::HexDisplay;
+// use ares_oracle::{traits::SymbolInfo, types::FractionLength};
+use sp_core::sp_std::convert::TryInto;
+use sp_runtime::{
+	offchain::{http, Duration},
+	traits::{AccountIdConversion, IdentifyAccount, SaturatedConversion, StaticLookup},
+	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
+	AccountId32, FixedU128, Perbill, Permill, Rational128, RuntimeAppPublic, RuntimeDebug,
+};
+use sp_runtime::app_crypto::sr25519::Signature;
+use sp_runtime::traits::Saturating;
+use sp_std::str;
+use sp_std::vec;
 use sp_std::vec::Vec;
+
+use ares_oracle::traits::SymbolInfo;
+pub use pallet::*;
+use types::{
+	is_hex_address, AccountParticipateEstimates, ChooseWinnersPayload, EstimatesState, EstimatesType, MaximumAdmins,
+	MaximumEstimatesPerAccount, MaximumEstimatesPerSymbol, MaximumOptions, MaximumParticipants, MaximumWhitelist,
+	MaximumWinners, MultiplierOption, StringLimit, SymbolEstimatesConfig,
+};
+use crate::types::{ChainPrice, ChooseTrigerPayload, ConvertChainPrice};
+
 
 #[cfg(test)]
 mod mock;
@@ -29,37 +55,28 @@ mod tests;
 
 pub mod types;
 
-pub use pallet::*;
-use crate::types::{AccountParticipateEstimates, ChainPrice, ChooseTrigerPayload, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
-use frame_support::{BoundedVec, ensure};
-use ares_oracle_provider_support::FractionLength;
-use sp_runtime::traits::{AccountIdConversion, CheckedDiv};
-use sp_runtime::traits::Saturating;
-use sp_core::hexdisplay::HexDisplay;
-
-const TARGET: &str = "ares::price-estimates";
+pub type FractionLength = u32;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+/// The target used for logging.
+/// pub const LOG_TARGET: &'static str = "runtime::bags-list::remote-tests";
+const TARGET: &str = "ares::price-estimates";
+
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::dispatch::TransactionPriority;
-	use frame_support::pallet_prelude::{StorageDoubleMap, StorageMap, StorageValue, TransactionSource, ValueQuery};
-	use super::*;
-	use frame_support::{Blake2_128Concat, PalletId, StorageHasher};
-	use frame_support::traits::{Hooks, IsType, Len, NamedReservableCurrency};
-	use frame_support::weights::Weight;
-	use frame_system::pallet_prelude::*;
-	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
-	use sp_runtime::traits::{Identity, StaticLookup, ValidateUnsigned};
-	use sp_runtime::transaction_validity::TransactionValidityError;
-	use ares_oracle::traits::SymbolInfo;
+	use core::num::FpCategory::Zero;
+	use frame_system::offchain::SubmitTransaction;
+	use sp_runtime::app_crypto::ByteArray;
+	use sp_runtime::app_crypto::sr25519::Signature;
+	use sp_runtime::traits::Verify;
+	use sp_std::convert::TryFrom;
 	use ares_oracle::types::OffchainSignature;
+	use super::*;
 	use bound_vec_helper::BoundVecHelper;
+	use crate::types::{BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, ChainPrice, ConvertChainPrice};
 
-	use crate::types::{AccountParticipateEstimates, BoundedVecOfActiveEstimates, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, BoundedVecOfPreparedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig};
-
-	/// This pallet's configuration trait
+	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -90,15 +107,234 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type MaxEndDelay: Get<Self::BlockNumber>;
-
-		#[pallet::constant]
-		type MaximumKeepLengthOfOldData: Get<Self::BlockNumber>;
-
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
+	// pub struct Pallet<T>(PhantomData<T>);
+
+	// Map<Symbol, Index> Manager Symbol Estimates Id
+	#[pallet::storage]
+	pub type SymbolEstimatesId<T: Config> = StorageMap<
+		_,
+		Identity,
+		BoundedVec<u8, StringLimit>, //symbol
+		u64,                         //id
+	>;
+
+	// #[pallet::storage]
+	// pub type SymbolRewardPool<T: Config> = StorageMap<
+	// 	_,
+	// 	Identity,
+	// 	BoundedVec<u8, StringLimit>, //symbol
+	// 	BalanceOf<T>,             //id
+	// >;
+
+	#[pallet::storage]
+	pub type LockedEstimates<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	#[pallet::storage]
+	pub type MinimumInitReward<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type MinimumTicketPrice<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type ActivePallet<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	pub(crate) type BoundedVecOfAdmins<Account> = BoundedVec<Account, MaximumAdmins>;
+
+	/// admin account
+	#[pallet::storage]
+	#[pallet::getter(fn admins)]
+	pub type Admins<T: Config> =
+		StorageValue<_, BoundedVecOfAdmins<T::AccountId>, ValueQuery>;
+
+	// pub(crate) type BoundedVecOfWhitelist<Account> = BoundedVec<Account, MaximumWhitelist>;
+	//
+	// /// whitelist account
+	// #[pallet::storage]
+	// #[pallet::getter(fn whitelist)]
+	// pub type Whitelist<T: Config> =
+	// 	StorageValue<_, BoundedVecOfWhitelist<T::AccountId>, ValueQuery>;
+
+	pub(crate) type BoundedVecOfPreparedEstimates = BoundedVec<u8, StringLimit>;
+
+	#[pallet::storage]
+	pub type PreparedEstimates<T: Config> = StorageMap<
+		_,
+		Identity,
+		BoundedVecOfPreparedEstimates,
+		// BoundedVec<u8, StringLimit>,                            // symbol
+		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
+	>;
+
+	pub(crate) type BoundedVecOfActiveEstimates = BoundedVec<u8, StringLimit>;
+
+	#[pallet::storage]
+	pub type ActiveEstimates<T: Config> = StorageMap<
+		_,
+		Identity,
+		BoundedVecOfActiveEstimates,                            // symbol
+		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
+	>;
+
+	#[pallet::storage]
+	pub type UnresolvedEstimates<T: Config> = StorageMap<
+		_,
+		Identity,
+		BoundedVecOfActiveEstimates,                            // symbol
+		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
+	>;
+
+	#[pallet::storage]
+	pub type CompletedEstimates<T: Config> = StorageMap<
+		_,
+		Identity,
+		BoundedVec<u8, StringLimit>, // symbol btc-sudt => [0, 1, 3]
+		BoundedVec<SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, MaximumEstimatesPerSymbol>, // configs
+		ValueQuery,
+	>;
+
+	// Map<SymbolEstimatesConfig, Vec<AccountSymbolEstimates>>
+	// TODO the storage(Participants) should be cleared after estimates done.
+	#[pallet::storage]
+	pub type Participants<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		BoundedVec<u8, StringLimit>, // symbol
+		Identity,
+		u64, // id
+		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>,
+		ValueQuery,
+	>;
+
+	// TODO the storage(Winners) should be cleared after estimates done. (Equivalent to above)
+	#[pallet::storage]
+	pub type Winners<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		BoundedVec<u8, StringLimit>, // symbol
+		Identity,
+		u64, // id
+		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn next_unsigned_at)]
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub admins: Vec<T::AccountId>,
+		// pub white_list: Vec<T::AccountId>,
+		pub locked_estimates: T::BlockNumber,
+		pub minimum_ticket_price: BalanceOf<T>,
+		pub minimum_init_reward: BalanceOf<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			GenesisConfig {
+				admins: Vec::<T::AccountId>::new(),
+				// white_list: Vec::<T::AccountId>::new(),
+				locked_estimates: 0u32.into(),
+				minimum_ticket_price: 0u32.into(),
+				minimum_init_reward: 0u32.into(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			Admins::<T>::put(BoundedVecOfAdmins::create_on_vec(self.admins.clone()));
+			// Whitelist::<T>::put( BoundedVecOfWhitelist::create_on_vec(self.white_list.clone()));
+			LockedEstimates::<T>::put(self.locked_estimates.clone());
+			MinimumTicketPrice::<T>::put(self.minimum_ticket_price.clone());
+			MinimumInitReward::<T>::put(self.minimum_init_reward.clone());
+			ActivePallet::<T>::put(true);
+		}
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		Deposit {
+			who: T::AccountId,
+			amount: BalanceOf<T>,
+		},
+
+		Reserved {
+			id: [u8; 8],
+			who: T::AccountId,
+			amount: BalanceOf<T>,
+		},
+
+		NewEstimates {
+			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
+			who: T::AccountId,
+		},
+
+		ParticipateEstimates {
+			symbol: BoundedVec<u8, StringLimit>,
+			id: u64,
+			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
+			who: T::AccountId,
+		},
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Invalid metadata given.
+		BadMetadata,
+
+		TooMany,
+
+		PalletInactive,
+
+		AddressInvalid,
+
+		PriceInvalid,
+
+		FreeBalanceTooLow,
+
+		SymbolNotSupported,
+
+		PreparedEstimatesExist,
+
+		EstimatesStartTooEarly,
+
+		EstimatesConfigInvalid,
+
+		EstimatesStateError,
+
+		ActiveEstimatesNotExist,
+
+		AccountEstimatesExist,
+
+		AlreadyEnded,
+
+		AlreadyParticipating,
+
+		ParameterInvalid,
+
+		TooManyEstimates,
+
+		NotMember,
+
+		MultiplierNotExist,
+
+		SubAccountGenerateFailed,
+
+		UnableToGetPrice,
+
+		UnresolvedEstimatesNotExist,
+
+		IllegalCall,
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -107,7 +343,7 @@ pub mod pallet {
 			if !Self::is_active() {
 				return 0;
 			}
-			let mut to_active_symbol: Vec<BoundedVec<u8, StringLimit>> = Vec::new();
+			let mut to_active_symbol: Vec<BoundedVec<u8, StringLimit>> = vec![];
 			PreparedEstimates::<T>::iter().for_each(|(_symbol, config)| {
 				if config.start <= n {
 					log::debug!(
@@ -135,89 +371,50 @@ pub mod pallet {
 			0
 		}
 
-		/// Offchain Worker entry point.
-		fn offchain_worker(block_number: T::BlockNumber) {
-			// Self::do_submit_unsigned_test(block_number);
+		fn offchain_worker(now: T::BlockNumber) {
+			// use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
+			if !Self::is_active() {
+				return;
+			}
+
+			Self::do_submit_unsigned_test(now);
+			Self::do_synchronized_offchain_worker(now.clone());
+
+			// if !Self::can_send_signed() {
+			// 	log::debug!(target: TARGET, "can not run offchian worker(ares:price-estimates)...");
+			// 	return;
+			// }
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
 			// This should only come useful in an **abrupt** termination of execution, otherwise the
 			// guard will be dropped upon successful execution.
-			let mut lock =
-				StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(b"price-estimates", 10);
-
-			match lock.try_lock() {
-				Ok(_guard) => {
-					Self::do_synchronized_offchain_worker(block_number);
-				}
-				Err(deadline) => {
-					log::error!(
-						target: TARGET,
-						"offchain worker lock not released, deadline is {:?}",
-						deadline
-					);
-				}
-			};
-
-			if block_number % 100u32.into() == Zero::zero() {
-				Self::do_data_cleaning(block_number);
-			}
+			// let mut lock =
+			// 	StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(b"price-estimates", 10);
+			//
+			// match lock.try_lock() {
+			// 	Ok(_guard) => {
+			// 		Self::do_synchronized_offchain_worker(now);
+			// 	}
+			// 	Err(deadline) => {
+			// 		log::error!(
+			// 			target: TARGET,
+			// 			"offchain worker lock not released, deadline is {:?}",
+			// 			deadline
+			// 		);
+			// 	}
+			// };
 		}
 	}
 
-	/// A public part of the pallet.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
-		// #[pallet::weight(0)]
-		// pub fn submit_unsigned_test (
-		// 	origin: OriginFor<T>,
-		// 	block_number: T::BlockNumber,
-		// ) -> DispatchResult {
-		// 	ensure_none(origin)?;
-		// 	<NextUnsignedAt2<T>>::put(block_number);
-		// 	Ok(().into())
-		// }
-
 		#[pallet::weight(0)]
-		#[transactional]
-		pub fn data_cleaning (
+		pub fn submit_unsigned_test(
 			origin: OriginFor<T>,
+			block_number: T::BlockNumber,
 		) -> DispatchResult {
 			ensure_none(origin)?;
-
-			// MaximumKeepLengthOfOldData
-			let current_bn = frame_system::Pallet::<T>::block_number();
-			let unsign_at = NextDataCleanUnsignedAt::<T>::get();
-			ensure!(current_bn >= unsign_at.saturating_add(T::MaximumKeepLengthOfOldData::get()), Error::<T>::TooOften);
-
-			NextDataCleanUnsignedAt::<T>::put(current_bn);
-
-			// Loop completedEstimates
-			CompletedEstimates::<T>::iter().for_each(|(keypair, mut es_config_vec)|{
-				let begin_count = es_config_vec.len();
-				let mut removed_estimates = BoundedVecOfCompletedEstimates::<T::BlockNumber, BalanceOf<T>>::default();
-				es_config_vec.retain(|es_config|{
-					let distribute_bn: T::BlockNumber = es_config.distribute;
-					if current_bn.saturating_sub(distribute_bn) >= T::MaximumKeepLengthOfOldData::get() {
-						let estimate_id: u64 = es_config.id.clone();
-						// estimates.winners
-						Winners::<T>::remove(&keypair, estimate_id);
-						// estimates.participants
-						Participants::<T>::remove(&keypair, estimate_id);
-						// Add to remove list
-						removed_estimates.try_push(es_config.clone());
-						return false;
-					}
-					return true;
-				});
-				let last_count = es_config_vec.len();
-				if(begin_count > last_count) {
-					CompletedEstimates::<T>::insert(keypair, es_config_vec);
-					Self::deposit_event(Event::<T>::RemovedEstimates {
-						list: removed_estimates
-					});
-				}
-			});
-
+			<NextUnsignedAt<T>>::put(block_number);
 			Ok(().into())
 		}
 
@@ -426,9 +623,9 @@ pub mod pallet {
 
 			if !CompletedEstimates::<T>::contains_key(&symbol) {
 				let val = BoundedVec::<
-					SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
-					MaximumEstimatesPerSymbol,
-				>::default();
+                    SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
+                    MaximumEstimatesPerSymbol,
+                >::default();
 				//
 				CompletedEstimates::<T>::insert(symbol.clone(), val);
 			}
@@ -467,12 +664,11 @@ pub mod pallet {
 				let mut bytes = [0u8; 40];
 				let r = hex::encode_to_slice(&bsc, &mut bytes);
 				ensure!(r.is_ok(), Error::<T>::AddressInvalid);
-				// ensure!(is_hex_address(&bytes), Error::<T>::AddressInvalid);
+				ensure!(is_hex_address(&bytes), Error::<T>::AddressInvalid);
 				Some(bsc)
 			} else {
 				None
 			};
-
 
 			log::info!(target: TARGET, "price={:?}, fraction={:?}", estimated_price, estimated_fraction_length);
 
@@ -582,8 +778,8 @@ pub mod pallet {
 			})
 		}
 
+
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn choose_winner(
 			origin: OriginFor<T>,
 			trigger_payload: ChooseTrigerPayload<T::Public>,
@@ -592,15 +788,18 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			ensure!(Self::is_active(), Error::<T>::PalletInactive);
+			log::info!(target: TARGET, "KAMI DEBUG RUN 1 ");
 
 			let symbol = trigger_payload.symbol.clone();
 
 			let config = ActiveEstimates::<T>::get(&symbol);
 			ensure!(config.is_some(), Error::<T>::EstimatesConfigInvalid);
+			log::info!(target: TARGET, "KAMI DEBUG RUN 2 ");
 
 			// Get and check subaccount.
 			let source_acc = Self::account_id(symbol.to_vec());
 			ensure!(source_acc.is_some(), Error::<T>::SubAccountGenerateFailed);
+			log::info!(target: TARGET, "KAMI DEBUG RUN 3 ");
 
 			let source_acc = source_acc.unwrap();
 			let config = config.unwrap();
@@ -617,6 +816,7 @@ pub mod pallet {
 				let price: Result<(u64, FractionLength, T::BlockNumber), ()> = T::PriceProvider::price(&symbol);
 				if let Ok(price) = price {
 					if participant_accounts.len() == 0 {
+						log::info!(target: TARGET, "KAMI DEBUG RUN 3.1 ");
 						// If no one is involved, it will be forced to end.
 						return Self::do_choose_winner(ChooseWinnersPayload {
 							block_number: frame_system::Pallet::<T>::block_number(),
@@ -627,7 +827,9 @@ pub mod pallet {
 							price: Some(price),
 						}, EstimatesState::Active);
 					} else {
+						log::info!(target: TARGET, "KAMI DEBUG RUN 3.2 ");
 						// If has participants
+						log::info!(target: TARGET, "accounts: {:?}, price: {:?}", participant_accounts, price);
 						let total_reward = T::Currency::free_balance(&source_acc);
 						if config.end <= now &&
 							now.saturating_sub(T::MaxEndDelay::get()) <= config.end &&
@@ -660,6 +862,8 @@ pub mod pallet {
 								&now,
 								T::MaxQuotationDelay::get()
 							);
+							// No winners
+							// ActiveEstimates::<T>::remove(&symbol);
 							if !UnresolvedEstimates::<T>::contains_key(&symbol) {
 								let config = ActiveEstimates::<T>::get(&symbol);
 								if let Some(mut config) = config {
@@ -740,145 +944,9 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub admins: Vec<T::AccountId>,
-		// pub white_list: Vec<T::AccountId>,
-		pub locked_estimates: T::BlockNumber,
-		pub minimum_ticket_price: BalanceOf<T>,
-		pub minimum_init_reward: BalanceOf<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig {
-				admins: Vec::<T::AccountId>::new(),
-				// white_list: Vec::<T::AccountId>::new(),
-				locked_estimates: 0u32.into(),
-				minimum_ticket_price: 0u32.into(),
-				minimum_init_reward: 0u32.into(),
-			}
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {
-			Admins::<T>::put(BoundedVecOfAdmins::create_on_vec(self.admins.clone()));
-			// Whitelist::<T>::put( BoundedVecOfWhitelist::create_on_vec(self.white_list.clone()));
-			LockedEstimates::<T>::put(self.locked_estimates.clone());
-			MinimumTicketPrice::<T>::put(self.minimum_ticket_price.clone());
-			MinimumInitReward::<T>::put(self.minimum_init_reward.clone());
-			ActivePallet::<T>::put(true);
-		}
-	}
-
-	/// Events for the pallet.
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		Deposit {
-			who: T::AccountId,
-			amount: BalanceOf<T>,
-		},
-
-		Reserved {
-			id: [u8; 8],
-			who: T::AccountId,
-			amount: BalanceOf<T>,
-		},
-
-		NewEstimates {
-			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
-			who: T::AccountId,
-		},
-
-		ParticipateEstimates {
-			symbol: BoundedVec<u8, StringLimit>,
-			id: u64,
-			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
-			who: T::AccountId,
-		},
-
-		CompletedEstimates {
-			config: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
-		},
-
-		RemovedEstimates {
-			list: BoundedVecOfCompletedEstimates::<T::BlockNumber, BalanceOf<T>>,
-		}
-	}
-
-	#[pallet::error]
-	pub enum Error<T> {
-		/// Invalid metadata given.
-		BadMetadata,
-
-		TooMany,
-
-		PalletInactive,
-
-		AddressInvalid,
-
-		PriceInvalid,
-
-		FreeBalanceTooLow,
-
-		SymbolNotSupported,
-
-		PreparedEstimatesExist,
-
-		EstimatesStartTooEarly,
-
-		EstimatesConfigInvalid,
-
-		EstimatesStateError,
-
-		ActiveEstimatesNotExist,
-
-		AccountEstimatesExist,
-
-		AlreadyEnded,
-
-		AlreadyParticipating,
-
-		ParameterInvalid,
-
-		TooManyEstimates,
-
-		NotMember,
-
-		MultiplierNotExist,
-
-		SubAccountGenerateFailed,
-
-		UnableToGetPrice,
-
-		UnresolvedEstimatesNotExist,
-
-		IllegalCall,
-
-		TooOften,
-	}
-
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
-
-		// fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		// 	// Firstly let's check that we call the right function.
-		// 	if let Call::submit_unsigned_test { block_number } = call {
-		// 		ValidTransaction::with_tag_prefix("for_kami_debug")
-		// 			.priority(T::UnsignedPriority::get())
-		// 			.and_provides(block_number)
-		// 			.longevity(5)
-		// 			.propagate(true)
-		// 			.build()
-		// 	} else {
-		// 		InvalidTransaction::Call.into()
-		// 	}
-		// }
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			log::warn!(target: TARGET, "# on validate_unsigned start");
@@ -895,8 +963,11 @@ pub mod pallet {
 				trigger_payload: ref payload,
 				ref signature,
 			} = call {
+				log::warn!(target: TARGET, "# on validate_unsigned payload = {:?}", &payload);
 				let symbol = &payload.symbol;
+
 				let config = ActiveEstimates::<T>::get(&symbol);
+				log::warn!(target: TARGET, "# on validate_unsigned config = {:?}", &config);
 				if config.is_none() {
 					log::error!(
 						target: TARGET,
@@ -909,6 +980,18 @@ pub mod pallet {
 				let config = config.unwrap();
 				let now = frame_system::Pallet::<T>::block_number();
 
+				// println!("on validate_unsigned check end {:?} <= now {:?} && {:?} <= {:?}",
+				// 		 &config.end,
+				// 		 &now,
+				// 		 &now.saturating_sub(T::MaxEndDelay::get()),
+				// 		 &config.end
+				// );
+				log::warn!(target: TARGET, "# on validate_unsigned check end {:?} <= now {:?} && {:?} <= {:?}",
+					&config.end,
+					&now,
+					&now.saturating_sub(T::MaxEndDelay::get()),
+					&config.end
+				);
 				// check end
 				if !(config.end <= now &&
 					now.saturating_sub(T::MaxEndDelay::get()) <= config.end)
@@ -938,138 +1021,38 @@ pub mod pallet {
 					.propagate(true)
 					.build()
 
-			}
-			// else if let Call::submit_unsigned_test { block_number } = call {
-			// 	ValidTransaction::with_tag_prefix("for_kami_debug")
-			// 		.priority(T::UnsignedPriority::get())
-			// 		.and_provides("kami")
-			// 		.longevity(5)
-			// 		.propagate(true)
-			// 		.build()
-			// }
-			else {
+			} else if let Call::submit_unsigned_test { block_number } = call {
+				ValidTransaction::with_tag_prefix("for_kami_debug")
+					.priority(T::UnsignedPriority::get())
+					.and_provides("kami")
+					.longevity(5)
+					.propagate(true)
+					.build()
+			} else {
 				InvalidTransaction::Call.into()
 			}
 		}
 	}
-
-	#[pallet::storage]
-	pub type SymbolEstimatesId<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, //symbol
-		u64,                         //id
-	>;
-
-	#[pallet::storage]
-	pub type LockedEstimates<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
-	#[pallet::storage]
-	pub type MinimumInitReward<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type MinimumTicketPrice<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type ActivePallet<T: Config> = StorageValue<_, bool, ValueQuery>;
-
-	/// admin account
-	#[pallet::storage]
-	#[pallet::getter(fn admins)]
-	pub type Admins<T: Config> =
-	StorageValue<_, BoundedVecOfAdmins<T::AccountId>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type PreparedEstimates<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVecOfPreparedEstimates,
-		// BoundedVec<u8, StringLimit>,                            // symbol
-		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
-	>;
-
-	#[pallet::storage]
-	pub type ActiveEstimates<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVecOfActiveEstimates,                            // symbol
-		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
-	>;
-
-	#[pallet::storage]
-	pub type UnresolvedEstimates<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVecOfActiveEstimates,                            // symbol
-		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
-	>;
-
-	#[pallet::storage]
-	pub type CompletedEstimates<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol btc-sudt => [0, 1, 3]
-		BoundedVecOfCompletedEstimates<T::BlockNumber, BalanceOf<T>>, // configs
-		ValueQuery,
-	>;
-
-	// Map<SymbolEstimatesConfig, Vec<AccountSymbolEstimates>>
-	// TODO the storage(Participants) should be cleared after estimates done.
-	#[pallet::storage]
-	pub type Participants<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol
-		Blake2_128Concat,
-		u64, // id
-		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>,
-		ValueQuery,
-	>;
-
-	#[pallet::storage]
-	pub type Winners<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol
-		Blake2_128Concat,
-		u64, // id
-		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>,
-	>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextDataCleanUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
-	// #[pallet::storage]
-	// #[pallet::getter(fn next_unsigned_at2)]
-	// pub(super) type NextUnsignedAt2<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 }
+
 
 impl<T: Config> Pallet<T> {
 
-	/// For test
-	// fn do_submit_unsigned_test(block_number: T::BlockNumber) -> Result<(), &'static str> {
-	// 	let call = Call::submit_unsigned_test { block_number };
-	//
-	// 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-	// 		.map_err(|()| {
-	// 			log::error!(
-	// 				target: TARGET,
-	// 				"offchain worker submit_unsigned_test faild",
-	// 			);
-	// 		});
-	// 	Ok(())
-	// }
+	/// A helper function to fetch the price and send a raw unsigned transaction.
+	fn do_submit_unsigned_test(block_number: T::BlockNumber) -> Result<(), &'static str> {
+		// ---------- FOR TEST.
+		let call = Call::<T>::submit_unsigned_test { block_number };
 
-	fn do_data_cleaning(block_number: T::BlockNumber) {
-		let call = Call::data_cleaning { };
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|()| {
 				log::error!(
 					target: TARGET,
 					"offchain worker submit_unsigned_test faild",
 				);
+				// return Err("offchain worker submit_unsigned_test faild");
 			});
+
+		Ok(())
 	}
 
 	pub fn is_active() -> bool {
@@ -1151,16 +1134,11 @@ impl<T: Config> Pallet<T> {
 						config.state = EstimatesState::Completed;
 						config.symbol_completed_price = price;
 						config.total_reward = total_reward;
-						configs.try_push(config.clone()).map_err(|_|Error::<T>::TooMany)
-					})?;
-
-					Self::deposit_event(Event::<T>::CompletedEstimates {
-						config
-					});
+						configs.try_push(config).map_err(|_|Error::<T>::TooMany)
+					})?
 				}
 			}
 		}
-
 		Ok(())
 	}
 
@@ -1261,7 +1239,7 @@ impl<T: Config> Pallet<T> {
 			};
 
 		let calculate_reward = |winners: &mut Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
-								count: u32| {
+		                        count: u32| {
 			let mut avg_reward = BalanceOf::<T>::from(0u32);
 			let i:u32 = 0;
 
@@ -1288,7 +1266,7 @@ impl<T: Config> Pallet<T> {
 			});
 		};
 
-		let mut winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Vec::new();
+		let mut winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = vec![];
 		let price = <ChainPrice as ConvertChainPrice<u64, u32>>::try_to_price(ChainPrice::new((price.0, price.1)), config.symbol_fraction);
 		if let Some(price) = price {
 			match estimates_type {
@@ -1350,7 +1328,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn hex_display_estimates_config(estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>) {
-		use sp_core::hexdisplay::HexDisplay;
 		// let hash = Blake2_128Concat::hash(estimates_config.encode().as_slice());
 		let encode = estimates_config.encode();
 		log::info!(
@@ -1359,5 +1336,4 @@ impl<T: Config> Pallet<T> {
 			HexDisplay::from(&encode) // encode
 		);
 	}
-
 }

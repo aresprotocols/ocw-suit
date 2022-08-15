@@ -19,6 +19,7 @@ bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-hel
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
+hex = { version = "0.4", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
@@ -43,6 +44,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"lite-json/std",
+	"hex/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-keystore",
