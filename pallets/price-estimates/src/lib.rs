@@ -1134,6 +1134,7 @@ impl<T: Config> Pallet<T> {
 						);
 					Winners::<T>::insert(&symbol, id, winners.clone());
 					ActiveEstimates::<T>::remove(&symbol);
+					UnresolvedEstimates::<T>::remove(&symbol);
 
 					for winner in winners {
 						let reward: BalanceOf<T> = (winner.reward).saturated_into();
