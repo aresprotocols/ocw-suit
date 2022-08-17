@@ -445,7 +445,7 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 }
 
 #[test]
-fn test_call_new_estimates_with_DEVIATION_with_invalid_price() {
+fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete() {
 	let mut t = new_test_ext();
 	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
@@ -636,6 +636,11 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price() {
 		assert_eq!(1, CompletedEstimates::<Test>::get(
 			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
 		).len());
+
+		// Check UnresolvedEstimates
+		assert!(!UnresolvedEstimates::<Test>::contains_key(
+			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
 		assert_eq!(Balances::free_balance(&account_participate.account.clone()), 3000000000100 + init_reward - 1);
