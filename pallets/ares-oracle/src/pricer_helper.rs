@@ -291,7 +291,7 @@ impl<T: Config> Pallet<T> {
         max_len: u32,
         timestamp: u64,
         create_bn: T::BlockNumber,
-    ) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)> {
+    ) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>, T::BlockNumber)> {
         let key_str = price_key;
         let current_block = <system::Pallet<T>>::block_number();
         // 1. Check key exists
@@ -344,9 +344,8 @@ impl<T: Config> Pallet<T> {
                 if current_block.saturating_sub(last_update_bn) <= ConfDataSubmissionInterval::<T>::get() {
                     // Within the threshold range.
                     if let Ok(new_price) = new_price_res {
-
-                        <AresPrice<T>>::insert(key_str.clone(), new_price);
                         <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
+                        <AresPrice<T>>::insert(key_str.clone(), new_price);
                     }else{
                         log::error!( target: ERROR_MAX_LENGTH_TARGET, "{}, on {}", ERROR_MAX_LENGTH_DESC, "new_price" );
                     }
@@ -358,6 +357,7 @@ impl<T: Config> Pallet<T> {
                     );
                     let mut new_price = AresPriceDataVecOf::<T>::default();
                     new_price.try_push(new_ares_price_data);
+                    <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
                     <AresPrice<T>>::insert(key_str.clone(), new_price);
                 }
             }else{
@@ -380,8 +380,9 @@ impl<T: Config> Pallet<T> {
                 timestamp,
                 update_bn: current_block,
             });
-            <AresPrice<T>>::insert(key_str.clone(), new_price);
             <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
+            <AresPrice<T>>::insert(key_str.clone(), new_price);
+
         }
 
         let avg_check_result = Self::check_and_update_avg_price_storage(key_str.clone(), max_len);
@@ -396,7 +397,7 @@ impl<T: Config> Pallet<T> {
         avg_check_result
     }
 
-    pub(crate) fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)> {
+    pub(crate) fn check_and_update_avg_price_storage(key_str: PriceKey, max_len: u32) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>, T::BlockNumber)> {
         let ares_price_list_len = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default()).len();
         if ares_price_list_len >= max_len as usize && ares_price_list_len > 0 {
             return Self::update_avg_price_storage(key_str.clone());
@@ -404,7 +405,7 @@ impl<T: Config> Pallet<T> {
         None
     }
 
-    pub(crate) fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)> {
+    pub(crate) fn update_avg_price_storage(key_str: PriceKey) -> Option<(PriceKey, u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>, T::BlockNumber)> {
         let prices_info = <AresPrice<T>>::get(key_str.clone()).unwrap_or(Default::default());
         let average_price_result = Self::average_price(prices_info, T::CalculationKind::get());
         if let Some((average, fraction_length, account_list)) = average_price_result {
@@ -458,7 +459,7 @@ impl<T: Config> Pallet<T> {
                 // Clear price pool.
                 <AresPrice<T>>::remove(key_str.clone());
                 //
-                return Some((key_str.clone(), average, fraction_length, account_list));
+                return Some((key_str.clone(), average, fraction_length, account_list, current_bn));
             }
         }
         None

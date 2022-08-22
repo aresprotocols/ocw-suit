@@ -95,25 +95,11 @@ mod tests {
         }).collect();
 
         assert_eq!(2, rpc_list.len());
-
-        // rpc_list.iter().any(|x|{
-        // 	if let Some(rpc_body) = x {
-        // 		println!("rpc_body = {:?}", rpc_body);
-        // 	}
-        // 	false
-        // });
-        // println!("rpc_list = {:?}", rpc_list);rpc_list.iter().any(|x|{
-        // 	if let Some(rpc_body) = x {
-        // 		println!("rpc_body = {:?}", rpc_body);
-        // 	}
-        // 	false
-        // });
-        // println!("rpc_list = {:?}", rpc_list);
     }
 
     // file extract
     pub fn test_file_content() -> String {
-        let mut file = std::fs::File::open("/Users/mac/work-files/coding/git-files/ke-fan/ares-chain/seed-reader/src/test_authority_raw.txt").unwrap();
+        let mut file = std::fs::File::open("test_authority_raw.txt").unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
         contents

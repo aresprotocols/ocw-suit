@@ -3,7 +3,7 @@ use crate::mock::*;
 use frame_support::{assert_noop, assert_ok};
 use crate::{Error, PendingList, StashAccout, WaiterAccout};
 use crate::types::{CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, Ident};
-use crate::types::BoundVecHelper;
+use bound_vec_helper::BoundVecHelper;
 
 #[test]
 fn test_update_waiter() {

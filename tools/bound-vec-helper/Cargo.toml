@@ -1,19 +1,15 @@
 [package]
-name = "seed-reader"
+name = "bound-vec-helper"
 version = "1.0.1"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-sp-core = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.17" }
 sp-std = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.17" }
 frame-support = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.17" }
 
 [features]
 default = ['std']
 std = [
-    'sp-core/std',
     'frame-support/std',
     'sp-std/std',
 ]

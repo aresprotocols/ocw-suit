@@ -715,8 +715,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
 		if let Call::AresOcw(crate::Call::submit_purchased_price_unsigned_with_signed_payload
-							 {price_payload: body, signature: signature}) =
-			tx.call
+							 {price_payload: body, signature: signature}) = tx.call
 		{
 			// println!("signature = {:?}", signature);
 			assert_eq!(body.clone(), price_payload_b1);
