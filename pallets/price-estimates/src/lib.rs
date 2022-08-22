@@ -910,14 +910,16 @@ pub mod pallet {
 				let now = frame_system::Pallet::<T>::block_number();
 
 				// check end
-				if !(config.end <= now &&
-					now.saturating_sub(T::MaxEndDelay::get()) <= config.end)
+				// if !(config.end <= now &&
+				// 	now.saturating_sub(T::MaxEndDelay::get()) <= config.end)
+				if !(config.end <= now )
 				{
 					log::error!(
 						target: TARGET,
-						"⛔️ validate_unsigned error. Not match MaxEndDelay::get = {:?} < config.end = {:?} .",
-						T::MaxEndDelay::get(),
-						&config.end
+						"⛔️ validate_unsigned error. Not satisfied config.end = {:?} < now = {:?} .",
+						// T::MaxEndDelay::get(),
+						&config.end,
+						now
 					);
 					return Err(TransactionValidityError::Invalid(InvalidTransaction::Call));
 				}
