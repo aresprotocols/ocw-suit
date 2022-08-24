@@ -16,7 +16,7 @@ use sp_runtime::{
 };
 use sp_runtime::testing::UintAuthorityId;
 use sp_runtime::traits::Convert;
-use crate::types::{EraIndex, MaximumPIDLength};
+use crate::types::{EraIndex};
 
 // use frame_benchmarking::frame_support::pallet_prelude::Get;
 

@@ -10,8 +10,8 @@ impl<T: crate::Config> OnRuntimeUpgrade for UpgradeStorage<T> {
 			"update FinalPerCheckResult",
 		);
 
-        let mut write_count: Weight = 1;
-        let mut read_count: Weight = 0;
+        let write_count: Weight = 1;
+        let read_count: Weight = 0;
 
         // Translate NextKeys, and key ownership relations at the same time.
         // <FinalPerCheckResult<T>>::translate::<Option<(T::BlockNumber, PreCheckStatus, Option<PreCheckCompareLog>)>, _>(|stash, old_value| {

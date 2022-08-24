@@ -5,7 +5,7 @@
 use crate::traits::*;
 use crate::types::*;
 use frame_support::sp_runtime::traits::AccountIdConversion;
-use frame_support::sp_std::convert::TryInto;
+// use frame_support::sp_std::convert::TryInto;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, ReservableCurrency};
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
@@ -34,7 +34,7 @@ pub mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::traits::{IForBase, IForReward};
+	use crate::traits::{IForReward};
 	use crate::types::*;
 	use frame_support::sp_runtime::traits::Zero;
 	use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
@@ -250,7 +250,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			0
 		}
 	}
@@ -318,12 +318,12 @@ pub mod pallet {
 
 			let current_era_opt = CurrentEra::<T>::get();
 			let mut era_list = Vec::new();
-			for (ask_era, _ask_point_num, pid) in reward_era_list {
+			for (ask_era, _ask_point_num, _pid) in reward_era_list {
 
 				if !era_list.iter().any(|exists_era|{
 					&ask_era == exists_era
 				}) {
-					if let (Some(current_era)) = current_era_opt {
+					if let Some(current_era) = current_era_opt {
 						if ask_era <  current_era {
 							era_list.push(ask_era);
 						}
@@ -485,7 +485,7 @@ impl<T: Config> IForReporter<T> for Pallet<T> {
 
 		//TODO new method should be test
 		RewardEra::<T>::try_mutate(who.clone(),|reward_era|{
-			reward_era.try_push((ask_era, ask_point, p_id)).map_err(|e|Error::<T>::PointRecordIsAlreadyExists)
+			reward_era.try_push((ask_era, ask_point, p_id)).map_err(|_e|Error::<T>::PointRecordIsAlreadyExists)
 		})
 		// Ok(())
 	}

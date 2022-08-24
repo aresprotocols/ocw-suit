@@ -72,7 +72,7 @@ fn test_transfer_to_eth() {
 
 		let current_bn = <frame_system::Pallet<Test>>::block_number();
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(0u8);
+		let _res = new_ident.try_push(0u8);
 
 		System::assert_has_event(Event::ManualBridge(crate::Event::CrossChainRequest {
 			acc: transfer_acc_b,
@@ -120,18 +120,18 @@ fn test_set_up_completed_list() {
 		let mut list = CrossChainInfoList::<Test>::default();
 
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(0u8);
+		let _res = new_ident.try_push(0u8);
 
-		list.try_push(CrossChainInfo{
+		let _res = list.try_push(CrossChainInfo{
 			iden: new_ident,
 			kind: CrossChainKind::ETH(eth_add_a),
 			amount: 5000,
 		});
 
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(1u8);
+		let _res = new_ident.try_push(1u8);
 
-		list.try_push(CrossChainInfo{
+		let _res = list.try_push(CrossChainInfo{
 			iden: new_ident,
 			kind: CrossChainKind::ETH(eth_add_a), // on error
 			amount: 6000,
@@ -147,7 +147,7 @@ fn test_set_up_completed_list() {
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
 		new_ident.try_push(1u8);
 
-		list.try_push(CrossChainInfo{
+		let _res = list.try_push(CrossChainInfo{
 			iden: new_ident,
 			kind: CrossChainKind::ETH(eth_add_b), // on error
 			amount: 6000,
@@ -160,7 +160,7 @@ fn test_set_up_completed_list() {
 		assert_eq!(pend_list.len(), 2usize);
 
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(2u8);
+		let _res = new_ident.try_push(2u8);
 		assert_eq!(pend_list[0], CrossChainInfo{
 			iden: new_ident,
 			kind: CrossChainKind::ETH(eth_add_c),
@@ -168,7 +168,7 @@ fn test_set_up_completed_list() {
 		});
 
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(3u8);
+		let _res = new_ident.try_push(3u8);
 		assert_eq!(pend_list[1], CrossChainInfo{
 			iden: new_ident,
 			kind: CrossChainKind::ETH(eth_add_a),

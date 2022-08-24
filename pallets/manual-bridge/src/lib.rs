@@ -18,13 +18,11 @@ mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use codec::KeyedVec;
 	use frame_support::pallet_prelude::*;
 	use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::Zero;
 	use bound_vec_helper::BoundVecHelper;
-	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, Ident, MaximumPendingList};
+	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, Ident, MaximumPendingList};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -273,9 +271,9 @@ pub mod pallet {
 			let mut ident = ident.unwrap();
 
 			let list_count = pending_list.len() as u32;
-			ident.try_push(list_count as u8);
+			let _res = ident.try_push(list_count as u8);
 
-			pending_list.try_push(CrossChainInfo{
+			let _res = pending_list.try_push(CrossChainInfo{
 				iden: ident.clone(),
 				kind: chain_kind.clone(),
 				amount: amount,

@@ -2,23 +2,18 @@
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 
-use codec::{Decode, Encode};
+use codec::{Encode};
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
 use frame_support::transactional;
 use frame_system::{
-	self as system,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
-		SignedPayload, Signer, SigningTypes, SubmitTransaction,
+		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction,
+		SignedPayload, Signer, SubmitTransaction,
 	},
 };
-use lite_json::json::JsonValue;
-use sp_core::crypto::KeyTypeId;
-use sp_runtime::{offchain::{
-	http,
-	storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
-	Duration,
-}, traits::Zero, transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction}, RuntimeDebug, DispatchResult, Permill, SaturatedConversion};
+// use lite_json::json::JsonValue;
+// use sp_core::crypto::KeyTypeId;
+use sp_runtime::{traits::Zero, transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction}, RuntimeDebug, DispatchResult, Permill, SaturatedConversion};
 use sp_std::vec::Vec;
 
 #[cfg(test)]
@@ -46,12 +41,12 @@ pub mod pallet {
 	use frame_support::dispatch::TransactionPriority;
 	use frame_support::pallet_prelude::{StorageDoubleMap, StorageMap, StorageValue, TransactionSource, ValueQuery};
 	use super::*;
-	use frame_support::{Blake2_128Concat, PalletId, StorageHasher};
+	use frame_support::{Blake2_128Concat, PalletId};
 	use frame_support::traits::{Hooks, IsType, Len, NamedReservableCurrency};
 	use frame_support::weights::Weight;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
-	use sp_runtime::traits::{Identity, StaticLookup, ValidateUnsigned};
+	use sp_runtime::traits::{StaticLookup, ValidateUnsigned};
 	use sp_runtime::transaction_validity::TransactionValidityError;
 	use ares_oracle::traits::SymbolInfo;
 	use ares_oracle::types::OffchainSignature;
@@ -204,13 +199,13 @@ pub mod pallet {
 						// estimates.participants
 						Participants::<T>::remove(&keypair, estimate_id);
 						// Add to remove list
-						removed_estimates.try_push(es_config.clone());
+						let _res = removed_estimates.try_push(es_config.clone());
 						return false;
 					}
 					return true;
 				});
 				let last_count = es_config_vec.len();
-				if(begin_count > last_count) {
+				if begin_count > last_count {
 					CompletedEstimates::<T>::insert(keypair, es_config_vec);
 					Self::deposit_event(Event::<T>::RemovedEstimates {
 						list: removed_estimates
@@ -353,7 +348,7 @@ pub mod pallet {
 
 				for range_value in new_range {
 					if let Some(range_value) = range_value {
-						range_vec.try_push(range_value);
+						let _res = range_vec.try_push(range_value);
 					}
 				}
 			}
@@ -1063,9 +1058,9 @@ impl<T: Config> Pallet<T> {
 	// 	Ok(())
 	// }
 
-	fn do_data_cleaning(block_number: T::BlockNumber) {
+	fn do_data_cleaning(_block_number: T::BlockNumber) {
 		let call = Call::data_cleaning { };
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+		let _res = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|()| {
 				log::error!(
 					target: TARGET,
@@ -1079,6 +1074,7 @@ impl<T: Config> Pallet<T> {
 		return if active.is_err() { true } else { active.unwrap() };
 	}
 
+	// TODO:: Add config.id parma.
 	pub fn account_id(symbol: Vec<u8>) -> Option<T::AccountId> {
 		if symbol.len() > 20usize {
 			return None;
@@ -1173,10 +1169,10 @@ impl<T: Config> Pallet<T> {
 			let config = config.unwrap();
 			let end = config.end;
 			let symbol = config.symbol.clone();
-			let deviation = config.deviation;
-			let range = config.range.clone();
-			let estimates_type = config.estimates_type.clone();
-			let id = config.id;
+			let _deviation = config.deviation;
+			let _range = config.range.clone();
+			let _estimates_type = config.estimates_type.clone();
+			let _id = config.id;
 
 			// Get and check subaccount.
 			let source_acc = Self::account_id(symbol.to_vec());
@@ -1266,7 +1262,7 @@ impl<T: Config> Pallet<T> {
 		let calculate_reward = |winners: &mut Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 								count: u32| {
 			let mut avg_reward = BalanceOf::<T>::from(0u32);
-			let i:u32 = 0;
+			// let i:u32 = 0;
 
 			if count > 0 {
 				//avg_reward = total_reward / BalanceOf::<T>::from(count);
@@ -1353,7 +1349,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn hex_display_estimates_config(estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>) {
-		use sp_core::hexdisplay::HexDisplay;
+		// use sp_core::hexdisplay::HexDisplay;
 		// let hash = Blake2_128Concat::hash(estimates_config.encode().as_slice());
 		let encode = estimates_config.encode();
 		log::info!(

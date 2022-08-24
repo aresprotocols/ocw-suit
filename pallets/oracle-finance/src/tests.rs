@@ -2,8 +2,6 @@ use crate::{mock::*, Error, PaymentTrace, AskEraPayment, RewardTrace, AskEraPoin
 use frame_support::{assert_ok};
 use crate::traits::*;
 use crate::types::*;
-use frame_support::traits::OnInitialize;
-use hex::ToHex;
 
 #[test]
 fn test_it_works_for_default_value() {
@@ -818,8 +816,8 @@ fn test_ask_era_num() {
 
 // use sp_core::Encode;
 // use sp_core::Decode;
-use sp_core::hexdisplay::{HexDisplay, AsBytesRef};
-use codec::{Encode, Decode};
+use sp_core::hexdisplay::{HexDisplay};
+use codec::{Encode};
 
 
 #[test]

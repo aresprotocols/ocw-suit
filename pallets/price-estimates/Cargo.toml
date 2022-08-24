@@ -32,6 +32,7 @@ sp-std = { git = "https://github.com/paritytech/substrate", default-features = f
 
 [dev-dependencies]
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
+pallet-bags-list = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.17" }
 
 [features]
 default = ["std"]

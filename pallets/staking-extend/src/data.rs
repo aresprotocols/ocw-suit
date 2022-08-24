@@ -2,7 +2,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use core::num::FpCategory::Zero;
+// use core::num::FpCategory::Zero;
 use ares_oracle_provider_support::{IAresOraclePreCheck, PreCheckStatus};
 use codec::Encode;
 use frame_election_provider_support::{data_provider, ElectionDataProvider, VoterOf};

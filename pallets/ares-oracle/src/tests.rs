@@ -59,7 +59,7 @@ use sp_core::sr25519::Public;
 // use pallet_session::historical as pallet_session_historical;
 use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
 // use pallet_authorship::SealVerify;
-use sp_runtime::traits::{AppVerify, Convert};
+use sp_runtime::traits::{Convert};
 use sp_staking::SessionIndex;
 
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -451,10 +451,10 @@ fn test_check_and_clean_hostkey_list() {
 		System::set_block_number(15);
 		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
 		//
-		LocalXRay::<Test>::insert(555, (15, RequestBaseVecU8::create_on_vec("house1".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
-		LocalXRay::<Test>::insert(666, (16, RequestBaseVecU8::create_on_vec("house2".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
-		LocalXRay::<Test>::insert(777, (17, RequestBaseVecU8::create_on_vec("house3".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
-		LocalXRay::<Test>::insert(888, (18, RequestBaseVecU8::create_on_vec("house4".as_bytes().to_vec()), AuthorityAresVec::<Test>::default(), true));
+		LocalXRay::<Test>::insert(555, (15, RequestBaseVecU8::create_on_vec("house1".as_bytes().to_vec()), AuthorityAresVec::<AuraId>::default(), true));
+		LocalXRay::<Test>::insert(666, (16, RequestBaseVecU8::create_on_vec("house2".as_bytes().to_vec()), AuthorityAresVec::<AuraId>::default(), true));
+		LocalXRay::<Test>::insert(777, (17, RequestBaseVecU8::create_on_vec("house3".as_bytes().to_vec()), AuthorityAresVec::<AuraId>::default(), true));
+		LocalXRay::<Test>::insert(888, (18, RequestBaseVecU8::create_on_vec("house4".as_bytes().to_vec()), AuthorityAresVec::<AuraId>::default(), true));
 		assert_eq!(AresOcw::check_and_clean_hostkey_list(5), 1);
 		assert_eq!(LocalXRay::<Test>::iter().count(), 4);
 
@@ -503,16 +503,16 @@ fn test_get_local_host_key() {
 		number[..].copy_from_slice(hex::decode("513f053a").unwrap().as_slice());
 		println!("{:?} result = {:?}", number, u32::from_be_bytes(number));
 
-		LocalXRay::<Test>::insert(1, (100, RequestBaseVecU8::create_on_vec("a".encode()),  AuthorityAresVec::<Test>::create_on_vec( vec![authority_1.clone()]), true));
+		LocalXRay::<Test>::insert(1, (100, RequestBaseVecU8::create_on_vec("a".encode()),  AuthorityAresVec::<AuraId>::create_on_vec( vec![authority_1.clone()]), true));
 		assert_eq!(
 			LocalXRay::<Test>::get(1),
-			Some((100, RequestBaseVecU8::create_on_vec("a".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_1.clone()]), true))
+			Some((100, RequestBaseVecU8::create_on_vec("a".encode()), AuthorityAresVec::<AuraId>::create_on_vec(vec![authority_1.clone()]), true))
 		);
 
-		LocalXRay::<Test>::insert(1, (200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()]), true));
+		LocalXRay::<Test>::insert(1, (200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<AuraId>::create_on_vec(vec![authority_2.clone()]), true));
 		assert_eq!(
 			LocalXRay::<Test>::get(1),
-			Some((200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<Test>::create_on_vec(vec![authority_2.clone()]), true))
+			Some((200, RequestBaseVecU8::create_on_vec("b".encode()), AuthorityAresVec::<AuraId>::create_on_vec(vec![authority_2.clone()]), true))
 		);
 
 	});
@@ -532,7 +532,7 @@ fn test_fixbug_01161954() {
 
 		AresOcw::create_pre_check_task(stash_1, authority_1.clone(), 1);
 		AresOcw::create_pre_check_task(stash_2, authority_2.clone(), 2);
-		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap_or(PreCheckTaskListVec::<Test>::default());
+		let pre_check_list = PreCheckTaskList::<Test>::get().unwrap_or(PreCheckTaskListVec::<AccountId,AuraId, BlockNumber>::default());
 		assert_eq!(pre_check_list.len(), 2);
 		assert_eq!(
 			pre_check_list,
@@ -620,7 +620,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 	let public_key_2: AuraId = get_account_id_from_seed::<AuraId>("hunter2").into();
 	let public_key_3: AuraId = get_account_id_from_seed::<AuraId>("hunter3").into();
 	let public_key_4: AuraId = get_account_id_from_seed::<AuraId>("hunter4").into();
-	let public_key_5: AuraId = get_account_id_from_seed::<AuraId>("hunter5").into();
+	let _public_key_5: AuraId = get_account_id_from_seed::<AuraId>("hunter5").into();
 
 	println!("**** public_key_1 = {:?}", public_key_1);
 	println!("**** public_key_2 = {:?}", public_key_2);
@@ -685,7 +685,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
 
 		// TODO:: remove under line.
-		let result =
+		let _result =
 			OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
 
 		assert_ok!(AresOcw::ask_price(
@@ -1940,7 +1940,7 @@ fn update_purchase_avg_price_storage() {
 		PurchasedPricePool::<Test>::insert(
 			PurchaseId::create_on_vec(to_test_vec("abc")),
 			PriceKey::create_on_vec("btc_price".encode()),
-			PurchasedPriceDataVec::<Test>::create_on_vec(vec![
+			PurchasedPriceDataVec::<AccountId, BlockNumber>::create_on_vec(vec![
 				AresPriceData {
 					price: 100,
 					account_id: stash_1.clone(),
@@ -1975,7 +1975,7 @@ fn update_purchase_avg_price_storage() {
 		PurchasedPricePool::<Test>::insert(
 			PurchaseId::create_on_vec(to_test_vec("bcd")),
 			PriceKey::create_on_vec("btc_price".encode()),
-			PurchasedPriceDataVec::<Test>::create_on_vec(vec![
+			PurchasedPriceDataVec::<AccountId, BlockNumber>::create_on_vec(vec![
 				AresPriceData {
 					price: 200,
 					account_id: stash_1.clone(),
@@ -2409,7 +2409,7 @@ fn addprice_of_ares() {
 
 		// (price_val, accountid, block_num, fraction_num)
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				// (3333, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 3333,
@@ -2439,7 +2439,7 @@ fn addprice_of_ares() {
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
 		// (price_val, accountid, block_num, fraction_num)
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				// (7777, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 7777,
@@ -2468,7 +2468,7 @@ fn addprice_of_ares() {
 		AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 1111, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				// (1111, Default::default(), 1, 4, Default::default())
 				AresPriceData {
 					price: 1111,
@@ -2546,7 +2546,7 @@ fn test_addprice_of_exceeded_the_maximum_interval() {
 		//
 		// // (price_val, accountid, block_num, fraction_num)
 		// assert_eq!(
-		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 	AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 		// 		// (3333, Default::default(), 1, 4, Default::default())
 		// 		AresPriceData {
 		// 			price: 3333,
@@ -2576,7 +2576,7 @@ fn test_addprice_of_exceeded_the_maximum_interval() {
 		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
 		// // (price_val, accountid, block_num, fraction_num)
 		// assert_eq!(
-		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 	AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 		// 		// (7777, Default::default(), 1, 4, Default::default())
 		// 		AresPriceData {
 		// 			price: 7777,
@@ -2605,7 +2605,7 @@ fn test_addprice_of_exceeded_the_maximum_interval() {
 		// AresOcw::add_price_and_try_to_agg(AccountId::from_raw([0;32]), 1111, PriceKey::create_on_vec(price_key.clone()), 4, Default::default(), 2, 0, 1);
 		// let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("eth_price".as_bytes().to_vec().clone())).unwrap_or(Default::default());
 		// assert_eq!(
-		// 	AresPriceDataVecOf::<Test>::create_on_vec(vec![
+		// 	AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 		// 		// (1111, Default::default(), 1, 4, Default::default())
 		// 		AresPriceData {
 		// 			price: 1111,
@@ -2789,7 +2789,7 @@ fn test_abnormal_price_despose() {
 		// AresPriceData<ares_oracle_provider_support::crypto::sr25519::app_sr25519::Public, u64>,
 		// types::AvgPriceData)>`
 		assert_eq!(
-			AbnormalPriceDataVec::<Test>::create_on_vec(vec![(
+			AbnormalPriceDataVec::<AccountId, BlockNumber>::create_on_vec(vec![(
 				ares_price_data_from_tuple((2000, AccountId::from_raw([0;32]), 1, 4, Default::default(), 0, BN)),
 				AvgPriceData {
 					integer: 1030,
@@ -3119,7 +3119,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		);
 		let btc_price_list = AresOcw::ares_prices(price_key.clone()).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![ares_price_data_from_tuple((
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![ares_price_data_from_tuple((
 				number1.to_price(4),
 				AccountId::from_raw([0;32]),
 				1,
@@ -3145,7 +3145,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		);
 		let btc_price_list = AresOcw::ares_prices(price_key.clone()).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((number1.to_price(4), AccountId::from_raw([0;32]), 1, 4, number1.clone(), 0, BN,)),
 				ares_price_data_from_tuple((number2.to_price(4), AccountId::from_raw([0;32]), 1, 4, number2.clone(), 0, BN,))
 			]),
@@ -3165,7 +3165,7 @@ fn test_request_price_update_then_the_price_list_will_be_update_if_the_fractioin
 		);
 		let btc_price_list = AresOcw::ares_prices(price_key.clone()).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((number1.to_price(3), AccountId::from_raw([0;32]), 1, 3, number1.clone(), 0, BN,)),
 				ares_price_data_from_tuple((number2.to_price(3), AccountId::from_raw([0;32]), 1, 3, number2.clone(), 0, BN,)),
 				ares_price_data_from_tuple((number3.to_price(3), AccountId::from_raw([0;32]), 1, 3, number3.clone(), 0, BN,)),
@@ -3900,7 +3900,7 @@ fn test_jump_block_submit() {
 		assert_eq!(AresOcw::get_last_price_author(price_key_eth_price.clone()), None);
 
 		let stash_id = AresOcw::get_stash_id(&authority_1.clone());
-		let mut trace_data = AuthorTraceData::<Test>::default();
+		let mut trace_data = AuthorTraceData::<AccountId, BlockNumber>::default();
 		trace_data.try_push((stash_id.unwrap(), 2));
 		BlockAuthorTrace::<Test>::put(trace_data);
 
@@ -3943,7 +3943,7 @@ fn test_jump_block_submit() {
 		assert_eq!(AresOcw::get_jump_block_number(PriceKey::create_on_vec(to_test_vec("eth_price"))), 0);
 
 		let stash_id = AresOcw::get_stash_id(&authority_1.clone());
-		let mut trace_data = AuthorTraceData::<Test>::default();
+		let mut trace_data = AuthorTraceData::<AccountId, BlockNumber>::default();
 		trace_data.try_push((stash_id.unwrap(), 2));
 		BlockAuthorTrace::<Test>::put(trace_data);
 
@@ -3985,7 +3985,7 @@ fn test_jump_block_submit() {
 		assert_eq!(AresOcw::get_jump_block_number(price_key_dot_price.clone()), 0);
 
 		let stash_id = AresOcw::get_stash_id(&authority_2.clone());
-		let mut trace_data = AuthorTraceData::<Test>::default();
+		let mut trace_data = AuthorTraceData::<AccountId, BlockNumber>::default();
 		trace_data.try_push((stash_id.unwrap(), 3));
 		BlockAuthorTrace::<Test>::put(trace_data);
 
@@ -4104,7 +4104,7 @@ fn test_debug_old_block_attack() {
 		assert_eq!(AresOcw::get_last_price_author(price_key_btc_price.clone()), None);
 		assert_eq!(AresOcw::get_last_price_author(price_key_eth_price.clone()), None);
 
-		let mut trace_data = AuthorTraceData::<Test>::default();
+		let mut trace_data = AuthorTraceData::<AccountId, BlockNumber>::default();
 		trace_data.try_push((stash_2.clone(), 19));
 		trace_data.try_push((stash_2.clone(), 20));
 		trace_data.try_push((stash_2.clone(), 21));
@@ -4397,7 +4397,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 		// Get save price
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("xxx_price".as_bytes().to_vec().clone())).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3)),
 				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3))
 			]),
@@ -4425,7 +4425,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 		// Get old price list, Unaffected
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("xxx_price".as_bytes().to_vec().clone())).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3)),
 				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3))
 			]),
@@ -4453,7 +4453,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 		// Get old price list, Unaffected
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("xxx_price".as_bytes().to_vec().clone())).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3)),
 				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3))
 			]),
@@ -4481,7 +4481,7 @@ fn test_request_propose_submit_impact_on_the_price_pool() {
 		// Get old price list, Unaffected
 		let btc_price_list = AresOcw::ares_prices(PriceKey::create_on_vec("xxx_price".as_bytes().to_vec().clone())).unwrap();
 		assert_eq!(
-			AresPriceDataVecOf::<Test>::create_on_vec(vec![
+			AresPriceDataVecOf::<AccountId, BlockNumber>::create_on_vec(vec![
 				ares_price_data_from_tuple((8888, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3)),
 				ares_price_data_from_tuple((7777, AccountId::from_raw([0; 32]), 1, 4, Default::default(), 0, 3))
 			]),

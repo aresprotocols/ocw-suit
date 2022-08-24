@@ -24,7 +24,7 @@ impl<T: Config> Pallet<T> {
     /// Calculate current average price. // fraction_length: FractionLength
     pub(crate) fn average_price(
         // prices_info: Vec<AresPriceData<T::AccountId, T::BlockNumber>>,
-        prices_info: PurchasedPriceDataVec<T>,
+        prices_info: PurchasedPriceDataVec<T::AccountId, T::BlockNumber>,
         kind: u8,
     ) -> Option<(u64, FractionLength, Vec<(T::AccountId, T::BlockNumber)>)> {
         let mut fraction_length_of_pool: FractionLength = 0;
@@ -73,7 +73,7 @@ impl<T: Config> Pallet<T> {
         let current_block = <system::Pallet<T>>::block_number();
         price_list.iter().any(|PricePayloadSubPrice(a, b, c, d, timestamp)| {
             let mut price_data_vec = <PurchasedPricePool<T>>::get(purchase_id.clone(), a.clone()).unwrap_or(Default::default());
-            price_data_vec.try_push(AresPriceData {
+            let _res = price_data_vec.try_push(AresPriceData {
                 price: *b,
                 account_id: account_id.clone(),
                 create_bn: create_bn.clone(),
@@ -105,10 +105,10 @@ impl<T: Config> Pallet<T> {
     pub(crate) fn handler_purchase_avg_price_storage (
         purchase_id: PurchaseId,
         price_key: PriceKey,
-        mut prices_info: PurchasedPriceDataVec<T>,
+        mut prices_info: PurchasedPriceDataVec<T::AccountId, T::BlockNumber>,
         reached_type: u8,
     ) -> Option<(PriceKey, PurchasedAvgPriceData, Vec<T::AccountId>)> {
-        let (average, fraction_length, account_list) =
+        let (average, fraction_length, _account_list) =
             Self::average_price(prices_info.clone(), T::CalculationKind::get()).expect("The average is not empty.");
 
         // Abnormal price index list
@@ -122,13 +122,13 @@ impl<T: Config> Pallet<T> {
                 // 	_ => 0,
                 // };
                 let offset_percent = match check_price.price {
-                    x if &x > &average => Percent::from_rational((x - average), average),
-                    x if &x < &average => Percent::from_rational((average - x), average),
+                    x if &x > &average => Percent::from_rational( x - average, average),
+                    x if &x < &average => Percent::from_rational( average - x , average),
                     _ => Percent::from_percent(0),
                 };
                 if offset_percent > <PriceAllowableOffset<T>>::get()  {
 
-                    <AresAbnormalPrice<T>>::try_append(
+                    let _res = <AresAbnormalPrice<T>>::try_append(
                         price_key.clone(),
                         (
                             check_price,
@@ -337,7 +337,7 @@ impl<T: Config> Pallet<T> {
             };
             new_price.push(new_ares_price_data.clone());
 
-            let new_price_res = AresPriceDataVecOf::<T>::try_create_on_vec(new_price);
+            let new_price_res = AresPriceDataVecOf::<T::AccountId, T::BlockNumber>::try_create_on_vec(new_price);
             // Get the last price.
             if let Some((_, last_update_bn)) = Self::get_last_price_author(key_str.clone()) {
                 // Compare with the current price.
@@ -355,8 +355,8 @@ impl<T: Config> Pallet<T> {
                         "⛔ The data submission interval is too long and data pool will be reset. price_key = {:?}, last = {:?}, current = {:?}",
                         key_str, last_update_bn, current_block
                     );
-                    let mut new_price = AresPriceDataVecOf::<T>::default();
-                    new_price.try_push(new_ares_price_data);
+                    let mut new_price = AresPriceDataVecOf::<T::AccountId, T::BlockNumber>::default();
+                    let _res = new_price.try_push(new_ares_price_data);
                     <LastPriceAuthor<T>>::insert(key_str.clone(), (who.clone(), create_bn));
                     <AresPrice<T>>::insert(key_str.clone(), new_price);
                 }
@@ -366,12 +366,12 @@ impl<T: Config> Pallet<T> {
                     "⛔ No last update was found for the corresponding price and data pool will be reset. price_key = {:?}",
                     key_str
                 );
-                <AresPrice<T>>::insert(key_str.clone(), AresPriceDataVecOf::<T>::default());
+                <AresPrice<T>>::insert(key_str.clone(), AresPriceDataVecOf::<T::AccountId, T::BlockNumber>::default());
             }
         } else {
             // push a new value.
-            let mut new_price = AresPriceDataVecOf::<T>::default();
-            new_price.try_push(AresPriceData {
+            let mut new_price = AresPriceDataVecOf::<T::AccountId, T::BlockNumber>::default();
+            let _res = new_price.try_push(AresPriceData {
                 price: price.clone(),
                 account_id: who.clone(),
                 create_bn,
@@ -417,14 +417,14 @@ impl<T: Config> Pallet<T> {
                 for (index, check_price) in price_list_of_pool.iter().enumerate() {
 
                     let offset_percent = match check_price.price {
-                        x if &x > &average => Percent::from_rational((x - average), average),
-                        x if &x < &average => Percent::from_rational((average - x), average),
+                        x if &x > &average => Percent::from_rational(x - average, average),
+                        x if &x < &average => Percent::from_rational(average - x, average),
                         _ => Percent::from_percent(0),
                     };
 
                     if offset_percent > <PriceAllowableOffset<T>>::get() {
                         // Set price to abnormal list and pick out check_price
-                        <AresAbnormalPrice<T>>::try_append(
+                        let _res = <AresAbnormalPrice<T>>::try_append(
                             key_str.clone(),
                             (
                                 check_price,

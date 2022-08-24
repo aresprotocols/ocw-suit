@@ -1,14 +1,14 @@
 use super::*;
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
-use frame_support::traits::{ConstU32, IsType};
+use frame_support::traits::{ConstU32};
 use frame_support::BoundedVec;
 use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
-use sp_std::fmt::Debug;
-use ares_oracle_provider_support::{MaximumPoolSize, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
+// use sp_std::fmt::Debug;
+use ares_oracle_provider_support::{MaximumPoolSize, PriceKey, RawSourceKeys, RequestKeys};
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;

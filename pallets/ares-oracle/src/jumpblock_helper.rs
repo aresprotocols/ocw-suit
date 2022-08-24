@@ -15,9 +15,9 @@ impl<T: Config> Pallet<T> {
             .iter()
             .any(|(price_key, price_token, fraction_length, request_interval)| {
                 if Self::is_need_update_jump_block(price_key.clone(), account.clone()) {
-                    jump_format_data.try_push(PricePayloadSubJumpBlock(price_key.clone(), *request_interval));
+                    let _res = jump_format_data.try_push(PricePayloadSubJumpBlock(price_key.clone(), *request_interval));
                 } else {
-                    new_format_data.try_push((price_key.clone(), price_token.clone(), *fraction_length));
+                    let _res = new_format_data.try_push((price_key.clone(), price_token.clone(), *fraction_length));
                 }
                 false
             });

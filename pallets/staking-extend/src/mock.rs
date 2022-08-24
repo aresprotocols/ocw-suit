@@ -1,3 +1,5 @@
+#[cfg(test)]
+
 // use crate as member_extend;
 use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
 use frame_support::sp_runtime::traits::{Convert, IdentifyAccount, OpaqueKeys, Verify};
@@ -24,7 +26,7 @@ use frame_election_provider_support::{data_provider, onchain, ElectionProvider, 
 use frame_support::pallet_prelude::PhantomData;
 use frame_support::sp_runtime::Perbill;
 use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
-use std::borrow::BorrowMut;
+// use std::borrow::BorrowMut;
 use std::{cell::RefCell, collections::HashSet};
 // use sp_core::{crypto::key_types::DUMMY, H256};
 use frame_system::limits::BlockWeights;

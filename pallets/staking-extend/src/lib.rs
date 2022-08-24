@@ -15,11 +15,13 @@ use sp_core::sp_std::vec::Vec;
 #[cfg(test)]
 mod mock;
 
+#[cfg(test)]
+mod tests;
+
 pub mod data;
 pub mod elect;
 
-#[cfg(test)]
-mod tests;
+
 
 /// Implement the structure of IStakingNpos
 pub struct StakingNPOS<T: Config>(PhantomData<T>);

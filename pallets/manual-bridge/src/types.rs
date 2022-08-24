@@ -1,17 +1,13 @@
 use super::*;
 use frame_support::BoundedVec;
-use frame_support::traits::{ConstU32, Currency, Get};
+use frame_support::traits::{ConstU32, Currency};
 use sp_runtime::{RuntimeDebug};
 use scale_info::TypeInfo;
-use sp_std::fmt::Debug;
 use sp_std::vec::Vec;
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{ Decode, Encode, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
-
-#[cfg(feature = "std")]
-use sp_runtime::traits::Zero;
 
 pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -21,7 +17,7 @@ pub type Ident = BoundedVec<u8, MaxIdenSize>;
 
 // for cross-chain pending list
 pub type MaximumPendingList = ConstU32<127>;
-pub type CrossChainInfoList<T: Config> = BoundedVec<CrossChainInfo<Ident, CrossChainKind, BalanceOf<T>>, MaximumPendingList>;
+pub type CrossChainInfoList<T> = BoundedVec<CrossChainInfo<Ident, CrossChainKind, BalanceOf<T>>, MaximumPendingList>;
 
 //
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -50,7 +46,6 @@ impl CrossChainKind {
                 return verify_eth(addr);
             }
         }
-        false
     }
 }
 

@@ -74,7 +74,7 @@ impl Default for EstimatesType {
 pub(crate) type BoundedVecOfAdmins<Account> = BoundedVec<Account, MaximumAdmins>;
 pub(crate) type BoundedVecOfPreparedEstimates = BoundedVec<u8, StringLimit>;
 pub(crate) type BoundedVecOfMultiplierOption = BoundedVec<MultiplierOption, MaximumOptions>;
-pub(crate) type BoundedVecOfConfigRange = BoundedVec<u64, MaximumOptions>;
+// pub(crate) type BoundedVecOfConfigRange = BoundedVec<u64, MaximumOptions>;
 pub(crate) type BoundedVecOfChooseWinnersPayload<ACC, BN> = BoundedVec<AccountParticipateEstimates<ACC, BN>, MaximumWinners>;
 pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
 pub(crate) type BoundedVecOfActiveEstimates = BoundedVec<u8, StringLimit>;

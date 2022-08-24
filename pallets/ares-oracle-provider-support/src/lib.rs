@@ -206,7 +206,7 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	fn take_price_for_pre_check(_check_config: PreCheckTaskConfig) -> PreCheckList {
 		Default::default()
 	}
-	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList, auth: AU) -> PreCheckStatus { PreCheckStatus::Review }
+	fn save_pre_check_result(_stash: AC, _bn: B, _pre_check_list: PreCheckList, _auth: AU) -> PreCheckStatus { PreCheckStatus::Review }
 	fn get_pre_check_status(_stash: AC) -> Option<(B, PreCheckStatus)> {
 		None
 	}

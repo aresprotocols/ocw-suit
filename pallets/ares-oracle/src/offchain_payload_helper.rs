@@ -88,7 +88,7 @@ impl<T: Config> Pallet<T> {
 				"⛔ Ocw network error."
 			);
             // Record http error.
-            Self::trace_network_error(
+            let _res = Self::trace_network_error(
                 account_id,
                 purchased_key.clone().raw_source_keys,
                 price_result.err().unwrap(),
@@ -269,7 +269,7 @@ impl<T: Config> Pallet<T> {
 				target: "pallet::ocw::save_fetch_purchased_price_and_send_payload_signed",
 				"⛔ Ocw network error."
 			);
-            Self::trace_network_error(
+            let _res = Self::trace_network_error(
                 account_id,
                 format_arr.clone(),
                 price_result.err().unwrap(),
@@ -301,7 +301,7 @@ impl<T: Config> Pallet<T> {
         if price_list.len() > 0 || jump_block.len() > 0 {
             let sign_public_keys = Self::handler_get_sign_public_keys(account_id.clone());
             // Singer
-            let (acc_id, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
+            let (_acc_id, result) = Signer::<T, T::OffchainAppCrypto>::any_account()
                 .with_filter(sign_public_keys)
                 .send_unsigned_transaction(
                     |account| PricePayload {

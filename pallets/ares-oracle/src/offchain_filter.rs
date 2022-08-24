@@ -26,9 +26,9 @@ impl <T: Config, Address, Call, Signature, Extra> AresOracleFilter<T, Address, C
 		if let Some(x_call) = Call::try_get_pallet_call(in_call) {
 			if let super::pallet::Call::submit_price_unsigned_with_signed_payload {
 				price_payload: ref payload,
-				signature: ref signature,
+				signature: ref _signature,
 			} = x_call {
-				let mut block_trace = super::pallet::Pallet::<T>::block_author_trace().unwrap_or(AuthorTraceData::<T>::default());
+				let block_trace = super::pallet::Pallet::<T>::block_author_trace().unwrap_or(AuthorTraceData::<T::AccountId, T::BlockNumber>::default());
 				let mut block_trace_author = None;
 				block_trace.iter().any(|(acc, bn)|{
 					if &payload.block_number == bn {

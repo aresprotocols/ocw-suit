@@ -39,7 +39,7 @@ use frame_support::traits::Len;
 use crate::*;
 use frame_system::offchain::{SignedPayload, SigningTypes};
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
-use sp_runtime::{testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}, RuntimeAppPublic, Permill};
+use sp_runtime::{testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup, Verify}, RuntimeAppPublic, Permill};
 
 use sp_runtime::traits::{AppVerify, ValidateUnsigned};
 use sp_runtime::transaction_validity::TransactionSource;
@@ -48,9 +48,9 @@ use bound_vec_helper::BoundVecHelper;
 use crate::{ActiveEstimates, Admins, BalanceOf, CompletedEstimates, Error, LockedEstimates, MinimumInitReward, MinimumTicketPrice, PreparedEstimates, UnresolvedEstimates};
 use crate::types::{AccountParticipateEstimates, BoundedVecOfActiveEstimates, BoundedVecOfChooseWinnersPayload, BoundedVecOfPreparedEstimates, BoundedVecOfSymbol, ChooseTrigerPayload, EstimatesState, EstimatesType, MultiplierOption};
 
-fn test_pub() -> sp_core::sr25519::Public {
-	sp_core::sr25519::Public::from_raw([1u8; 32])
-}
+// fn test_pub() -> sp_core::sr25519::Public {
+// 	sp_core::sr25519::Public::from_raw([1u8; 32])
+// }
 
 #[test]
 fn test_call_preference() {
@@ -2689,7 +2689,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 }
 
 #[test]
-fn test_config_type_MaxEndDelay() {
+fn test_config_type_max_end_delay() {
 	let mut t = new_test_ext();
 	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
@@ -3029,7 +3029,7 @@ fn test_subaccount2() {
 }
 
 #[test]
-fn test_ChainPrcie() {
+fn test_chain_prcie() {
 	// Test create
 	let one = ChainPrice::new((10123, 3u32)); // 10.123
 	let two = ChainPrice::new((101230, 4u32)); // 10.1230

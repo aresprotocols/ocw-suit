@@ -1,3 +1,5 @@
+#[cfg(test)]
+
 use crate::mock::*;
 use crate::IStakingNpos;
 
@@ -164,11 +166,9 @@ fn test_near_era_change() {
 		assert_eq!(crate::StakingNPOS::<Test>::current_staking_era(), 0);
 		assert!(!crate::StakingNPOS::<Test>::near_era_change(2));
 
-		println!("---- change begin");
 		advance_session(); // 11
 		assert_eq!(crate::StakingNPOS::<Test>::current_staking_era(), 1);
 		assert!(!crate::StakingNPOS::<Test>::near_era_change(2));
-		println!("---- change end");
 
 		advance_session(); // 12
 		assert_eq!(crate::StakingNPOS::<Test>::current_staking_era(), 1);
