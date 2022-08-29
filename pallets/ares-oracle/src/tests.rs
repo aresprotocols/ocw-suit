@@ -18,6 +18,7 @@
 use super::Event as AresOcwEvent;
 use crate as ares_oracle;
 use crate::*;
+use staking_extend::IStakingNpos;
 use codec::Decode;
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types, traits::GenesisBuild, ConsensusEngineId, PalletId,
@@ -273,7 +274,32 @@ impl Config for Test {
 	type ErrLogPoolDepth = ErrLogPoolDepth;
 	type AuthorityCount = TestAuthorityCount;
 	type OracleFinanceHandler = OracleFinance;
-	type AresIStakingNpos = ();
+	type AresIStakingNpos = NoNpos<Self>;
+}
+
+pub struct NoNpos<T>(PhantomData<T>);
+impl <A,B,T:ares_oracle::Config> IStakingNpos<A, B> for NoNpos<T> {
+	type StashId = <T as frame_system::Config>::AccountId;
+
+	fn current_staking_era() -> u32 {
+		0
+	}
+
+	fn near_era_change(period_multiple: B) -> bool {
+		false
+	}
+
+	fn calculate_near_era_change(period_multiple: B, current_bn: B, session_length: B, per_era: B) -> bool {
+		false
+	}
+
+	fn old_npos() -> Vec<Self::StashId> {
+		Vec::new()
+	}
+
+	fn pending_npos() -> Vec<(Self::StashId, Option<A>)> {
+		Vec::new()
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
