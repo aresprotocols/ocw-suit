@@ -4,8 +4,8 @@ version = "1.0.1"
 edition = "2018"
 
 [dependencies]
-sp-std = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.17" }
-frame-support = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.17" }
+sp-std = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.28" }
+frame-support = { git = "https://github.com/paritytech/substrate.git", default-features = false, branch = "polkadot-v0.9.28" }
 
 [features]
 default = ['std']
