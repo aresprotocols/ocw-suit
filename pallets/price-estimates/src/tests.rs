@@ -649,7 +649,7 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 }
 
 #[test]
-fn test_fix_immortality_estimates_bug_08191422() {
+fn test_fix_immortality_estimates_bug_08250957() {
 	let mut t = new_test_ext();
 	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
@@ -687,12 +687,14 @@ fn test_fix_immortality_estimates_bug_08191422() {
 
 		run_to_block(50);
 		//
-		helper_create_new_estimates_with_deviation (
+		let admin_acc =helper_create_new_estimates_with_deviation (
 			80,
 			deviation,
 			init_reward,
 			price,
 		);
+
+		assert_eq!(Balances::free_balance(&admin_acc), 1000000000100 - init_reward );
 
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
@@ -719,12 +721,14 @@ fn test_fix_immortality_estimates_bug_08191422() {
 		));
 
 		// Add a new estimates before the old one is over
-		helper_create_new_estimates_with_deviation (
+		let admin_acc = helper_create_new_estimates_with_deviation (
 			86,
 			deviation,
 			init_reward,
 			price,
 		);
+
+		assert_eq!(Balances::free_balance(&admin_acc), 1000000000100 - init_reward * 2);
 
 		// New one's ending is 90, id is 1
 		let new_prepared = PreparedEstimates::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()));
@@ -822,7 +826,6 @@ fn test_fix_immortality_estimates_bug_08191422() {
 		run_to_block(97);
 
 		// Check
-		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
 			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
 		));
@@ -833,15 +836,17 @@ fn test_fix_immortality_estimates_bug_08191422() {
 		).len());
 
 		// Check UnresolvedEstimates
-		assert!(UnresolvedEstimates::<Test>::contains_key(
+		assert_eq!(1, UnresolvedEstimates::<Test>::get(
 			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
-		));
+		).len());
 
 		// New Estimates can not start yet because the old one not completed.
 		assert!(PreparedEstimates::<Test>::contains_key(
 			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
 		));
 
+		// Check user balance.
+		assert_eq!(Balances::free_balance(&account_participate.account.clone()), 3000000000100 - price * 3);
 
 		// Go to 99 block number participate will don't change
 		assert_ok!(
@@ -853,8 +858,10 @@ fn test_fix_immortality_estimates_bug_08191422() {
             )
 		);
 
+		// Check user balance.
+		assert_eq!(Balances::free_balance(&account_participate.account.clone()), 3000000000100 + init_reward - 1);
+
 		run_to_block(98);
-		println!("A =============================");
 
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();

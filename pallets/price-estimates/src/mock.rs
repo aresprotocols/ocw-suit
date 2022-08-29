@@ -218,7 +218,7 @@ pub(crate) fn helper_create_new_estimates_with_deviation(
 	deviation: Permill,
 	init_reward: Balance,
 	price: Balance,
-) {
+) -> AccountId {
 	run_to_block(init_block);
 
 	assert!(Estimates::is_active());
@@ -291,6 +291,8 @@ pub(crate) fn helper_create_new_estimates_with_deviation(
 			state: EstimatesState::InActive,
 		}
 	));
+
+	admins[0]
 }
 
 pub(crate) fn helper_create_new_estimates_with_range(

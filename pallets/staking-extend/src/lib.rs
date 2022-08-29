@@ -11,6 +11,8 @@ use frame_support::sp_runtime::RuntimeAppPublic;
 use frame_support::traits::EstimateNextNewSession;
 use frame_support::traits::Get;
 use sp_core::sp_std::vec::Vec;
+use sp_runtime::traits::MaybeDisplay;
+use sp_std::fmt::Debug;
 
 #[cfg(test)]
 mod mock;
@@ -136,7 +138,8 @@ where
 }
 
 impl<A, B> IStakingNpos<A, B> for () {
-	type StashId = sp_application_crypto::sr25519::Public;
+	// type StashId = sp_application_crypto::sr25519::Public;
+	type StashId = sp_runtime::AccountId32;
 	fn current_staking_era() -> u32 {
 		0
 	}

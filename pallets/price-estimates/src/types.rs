@@ -83,35 +83,24 @@ pub(crate) type BoundedVecOfCompletedEstimates<BN, Balance> = BoundedVec<SymbolE
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
 	pub symbol: BoundedVecOfPreparedEstimates,
-
 	pub estimates_type: EstimatesType,
-
 	/// Round ID
 	pub id: u64,
-
 	/// Price per entry.
 	pub ticket_price: Balance,
-
 	pub symbol_completed_price: u64,
-
 	pub symbol_fraction: FractionLength,
-
 	/// Starting block of the estimates.
 	pub start: BlockNumber,
 	/// ending block of the estimates
 	pub end: BlockNumber,
 	/// Delay for payout the winner of the estimates. (start + length + delay = payout).
 	pub distribute: BlockNumber,
-
 	// pub multiplier: BoundedVec<MultiplierOption, MaximumOptions>,
 	pub multiplier: BoundedVecOfMultiplierOption,
-
 	pub deviation: Option<Permill>,
-
 	pub range: Option<BoundedVec<u64, MaximumOptions>>,
-
 	pub total_reward: Balance,
-
 	pub state: EstimatesState,
 }
 
@@ -161,19 +150,6 @@ impl<T: SigningTypes> SignedPayload<T> for ChooseTrigerPayload<T::Public> {
 		self.public.clone()
 	}
 }
-
-// #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-// pub struct PricePayload<Public, BlockNumber> {
-// 	block_number: BlockNumber,
-// 	price: u32,
-// 	public: Public,
-// }
-//
-// impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-// 	fn public(&self) -> T::Public {
-// 		self.public.clone()
-// 	}
-// }
 
 pub trait ConvertChainPrice<B, F> {
 	fn try_to_price(self, fraction: F) -> Option<B>;

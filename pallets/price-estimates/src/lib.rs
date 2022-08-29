@@ -198,6 +198,8 @@ pub mod pallet {
 						Winners::<T>::remove(&keypair, estimate_id);
 						// estimates.participants
 						Participants::<T>::remove(&keypair, estimate_id);
+						//
+						EstimatesInitDeposit::<T>::remove(&keypair, estimate_id);
 						// Add to remove list
 						let _res = removed_estimates.try_push(es_config.clone());
 						return false;
@@ -217,6 +219,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
 		pub fn force_complete(
 			origin: OriginFor<T>,
 			symbol: Vec<u8>,
@@ -237,9 +240,14 @@ pub mod pallet {
 
 			let source_acc = Self::account_id(symbol.to_vec());
 			ensure!(source_acc.is_some(), Error::<T>::AddressInvalid);
-			let source_acc = source_acc.unwrap();
-			let total_reward = T::Currency::free_balance(&source_acc);
+			// let source_acc = source_acc.unwrap();
 			let config = config.unwrap();
+
+			// let total_reward = T::Currency::free_balance(&source_acc);
+			let total_reward = EstimatesInitDeposit::<T>::try_get(symbol.clone(), config.id);
+			ensure!(total_reward.is_ok(), Error::<T>::EstimatesInitDepositNotExist);
+			let total_reward = total_reward.unwrap();
+
 			let estimates_type = config.estimates_type.clone();
 			let deviation = config.deviation.clone();
 			let range = config.range.clone();
@@ -264,6 +272,7 @@ pub mod pallet {
 				accounts,
 				price, // (u64, FractionLength, T::BlockNumber)
 			);
+
 			Self::do_choose_winner(ChooseWinnersPayload {
 				block_number: frame_system::Pallet::<T>::block_number(),
 				winners: BoundedVecOfChooseWinnersPayload::create_on_vec(winners),
@@ -275,6 +284,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[transactional]
 		pub fn new_estimates(
 			origin: OriginFor<T>,
 			symbol: Vec<u8>,
@@ -404,6 +414,12 @@ pub mod pallet {
 			}
 
 			let current_id = estimates_config.id;
+			// Check id not be used.
+			ensure!(
+				EstimatesInitDeposit::<T>::try_get(symbol.clone(), estimates_config.id).ok().is_none(),
+				Error::<T>::EstimatesConfigInvalid
+			);
+			EstimatesInitDeposit::<T>::insert(symbol.clone(), estimates_config.id, init_reward);
 			SymbolEstimatesId::<T>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
 			PreparedEstimates::<T>::insert(symbol.clone(), &estimates_config);
 			Self::hex_display_estimates_config(&estimates_config);
@@ -467,7 +483,6 @@ pub mod pallet {
 			} else {
 				None
 			};
-
 
 			log::info!(target: TARGET, "price={:?}, fraction={:?}", estimated_price, estimated_fraction_length);
 
@@ -563,6 +578,16 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
+				let symbol_for_deposit = BoundedVecOfPreparedEstimates::try_create_on_vec(symbol.to_vec())
+					.map_err(|_| Error::<T>::BadMetadata)?;
+
+				let init_deposit = EstimatesInitDeposit::<T>::try_get(symbol_for_deposit.clone(), config.id);
+				ensure!(
+					init_deposit.is_ok(),
+					Error::<T>::EstimatesInitDepositNotExist
+				);
+				EstimatesInitDeposit::<T>::insert(symbol_for_deposit, config.id, init_deposit.unwrap().saturating_add(ticket_price));
+
 				accounts
 					.try_push(estimates.clone())
 					.map_err(|_| Error::<T>::TooMany)?;
@@ -623,7 +648,11 @@ pub mod pallet {
 						}, EstimatesState::Active);
 					} else {
 						// If has participants
-						let total_reward = T::Currency::free_balance(&source_acc);
+						// let total_reward = T::Currency::free_balance(&source_acc);
+						let total_reward = EstimatesInitDeposit::<T>::try_get(symbol.clone(), config.id);
+						ensure!(total_reward.is_ok(), Error::<T>::EstimatesInitDepositNotExist);
+						let total_reward = total_reward.unwrap();
+
 						if config.end <= now &&
 							now.saturating_sub(T::MaxEndDelay::get()) <= config.end &&
 							price.2 >= now.saturating_sub(T::MaxQuotationDelay::get())
@@ -855,6 +884,8 @@ pub mod pallet {
 		IllegalCall,
 
 		TooOften,
+
+		EstimatesInitDepositNotExist,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1010,8 +1041,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	// Map<SymbolEstimatesConfig, Vec<AccountSymbolEstimates>>
-	// TODO the storage(Participants) should be cleared after estimates done.
 	#[pallet::storage]
 	pub type Participants<T: Config> = StorageDoubleMap<
 		_,
@@ -1020,6 +1049,17 @@ pub mod pallet {
 		Blake2_128Concat,
 		u64, // id
 		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	pub type EstimatesInitDeposit<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		BoundedVec<u8, StringLimit>,
+		Blake2_128Concat,
+		u64, // id
+		BalanceOf<T>,
 		ValueQuery,
 	>;
 
@@ -1074,8 +1114,9 @@ impl<T: Config> Pallet<T> {
 		return if active.is_err() { true } else { active.unwrap() };
 	}
 
-	// TODO:: Add config.id parma.
+	//
 	pub fn account_id(symbol: Vec<u8>) -> Option<T::AccountId> {
+
 		if symbol.len() > 20usize {
 			return None;
 		}
@@ -1088,6 +1129,7 @@ impl<T: Config> Pallet<T> {
 		winner_payload: ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>,
 		estimates_state: EstimatesState,
 	) -> DispatchResult {
+
 		let now = frame_system::Pallet::<T>::block_number();
 		let winners = winner_payload.winners;
 		let symbol = winner_payload.symbol;
@@ -1159,7 +1201,6 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 		}
-
 		Ok(())
 	}
 
@@ -1311,29 +1352,14 @@ impl<T: Config> Pallet<T> {
 						let range_index = usize::from(x.range_index.unwrap());
 
 						if range_index == 0 && price <= range[0] {
-							// println!("RANGE WINNER 1");
-							// log::info!(target: TARGET, "price:{:?} <= range:{:?}", price, range[0]);
-							// price <= range[0]
 							push_winner(&mut winners, x);
 						} else if range_index == range.len() && price > range[range.len() - 1] {
-							// println!("RANGE WINNER 2");
-							// log::info!(target: TARGET, "price:{:?} > range:{:?}", price, range[range.len() - 1]);
-							// price > range[range.length-1]
 							push_winner(&mut winners, x);
 						} else if 0 < range_index
 							&& range_index < range.len()
 							&& range[range_index-1] < price
 							&& price <= range[range_index]
 						{
-							// println!("RANGE WINNER 3");
-							// 	log::info!(
-							// 	target: TARGET,
-							// 	" range:{:?} < price:{:?} <= range:{:?}",
-							// 	range[range_index - 1],
-							// 	price,
-							// 	range[range_index]
-							// );
-							// range[index-1] < price <= range[index]
 							push_winner(&mut winners, x);
 						}
 					}
