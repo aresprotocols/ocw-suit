@@ -2,30 +2,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub use pallet::*;
 use crate::traits::*;
 use crate::types::*;
 use frame_support::sp_runtime::traits::AccountIdConversion;
-// use frame_support::sp_std::convert::TryInto;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, ReservableCurrency};
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
-pub use pallet::*;
+use pallet_session::SessionManager;
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::vec::Vec;
-use pallet_session::SessionManager;
-
-// #[cfg(feature = "std")]
-// use frame_support::traits::GenesisBuild;
 
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
-
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
 
 /// Modules that provide interface definitions.
 pub mod traits;
@@ -44,6 +34,7 @@ pub mod pallet {
 	use pallet_session::SessionManager;
 	use sp_runtime::traits::Convert;
 	use sp_std::convert::TryFrom;
+	use sp_std::convert::TryInto;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -171,7 +162,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			let finance_account = <Pallet<T>>::account_id();
+			let finance_account = <Pallet<T>>::account_id().unwrap();
 			if T::Currency::total_balance(&finance_account).is_zero() {
 				log::info!("oracle-finance deposit creating, {:?}", T::Currency::minimum_balance());
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
@@ -217,8 +208,8 @@ pub mod pallet {
 	}
 
 	// Errors inform users that something went wrong.
-	#[pallet::error]
 	#[derive(PartialEq, Eq)]
+	#[pallet::error]
 	pub enum Error<T> {
 		/// Error names should be descriptive.
 		NoneValue,
@@ -246,6 +237,10 @@ pub mod pallet {
 		VectorIsFull,
 		//
 		NoStashAccount,
+		//
+		NoPotAccount,
+		//
+		CalculateFeeError,
 	}
 
 	#[pallet::hooks]
@@ -411,6 +406,13 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 	}
 
 	fn pay_to_ask(p_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>> {
+		// Get pot account
+		let pot_account = Self::account_id();
+		if pot_account.is_none() {
+			return Err(Error::<T>::NoPotAccount);
+		}
+		let pot_account = pot_account.unwrap();
+
 		let payment_list = <PaymentTrace<T>>::iter_prefix(p_id.clone());
 
 		let mut opt_paid_value: Option<(T::AccountId, PaidValue<T::BlockNumber, BalanceOf<T>, EraIndex>)> = None;
@@ -434,11 +436,14 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 
 		// Calculate the actual cost.
 		let actual_amount = Self::calculate_fee_of_ask_quantity(agg_count as u32);
-		assert!(actual_amount <= paid_value.amount);
+		// assert!(actual_amount <= paid_value.amount);
+		if actual_amount > paid_value.amount {
+			return Err(Error::<T>::CalculateFeeError);
+		}
 
 		let res = T::Currency::transfer(
 			&who,
-			&Self::account_id(),
+			&pot_account,
 			actual_amount,
 			ExistenceRequirement::KeepAlive,
 		);
@@ -452,7 +457,7 @@ impl<T: Config> IForPrice<T> for Pallet<T> {
 		// Emit an event.
 		Self::deposit_event(Event::PayForPurchase {
 			agg_count: agg_count as u32,
-			dest: Self::account_id(),
+			dest: pot_account,
 			fee: actual_amount,
 			purchase_id: p_id,
 			unreserve_balance: paid_value.amount,
@@ -520,6 +525,13 @@ impl<T: Config> IForBase<T> for Pallet<T> {
 impl<T: Config> IForReward<T> for Pallet<T> {
 	//
 	fn take_reward(ask_era: EraIndex, who: T::AccountId) -> Result<BalanceOf<T>, Error<T>> {
+
+		let pot_account = Self::account_id();
+		if pot_account.is_none() {
+			return Err(Error::<T>::NoPotAccount);
+		}
+		let pot_account = pot_account.unwrap();
+
 		//
 		if <RewardTrace<T>>::contains_key(ask_era.clone(), who.clone()) {
 			return Err(Error::<T>::RewardHasBeenClaimed);
@@ -567,7 +579,7 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 		let reward_balance = single_reward_balance.saturating_mul(reward_point.into());
 
 		let res = T::Currency::transfer(
-			&Self::account_id(),
+			&pot_account,
 			&who,
 			reward_balance,
 			ExistenceRequirement::KeepAlive,
@@ -610,13 +622,11 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 
 	//
 	fn check_and_slash_expired_rewards(check_era: EraIndex) -> Option<BalanceOf<T>> {
-		// println!(" RUN check_and_slash_expired_rewards  ");
-		// let check_era = ask_era.checked_sub(T::HistoryDepth::get() + 1);
-		// if check_era.is_none() {
-		// 	return None;
-		// }
-		// let check_era = check_era.unwrap();
-		// println!("check_era={:?}", check_era);
+		let pot_account = Self::account_id();
+		if pot_account.is_none() {
+			return None;
+		}
+		let pot_account = pot_account.unwrap();
 
 		// get checkout era fund
 		let era_income: BalanceOf<T> = Self::get_era_income(check_era);
@@ -633,10 +643,10 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 			return None;
 		}
 
-		let (negative_imbalance, _remaining_balance) = T::Currency::slash(&Self::account_id(), diff);
+		let (negative_imbalance, _remaining_balance) = T::Currency::slash(&pot_account, diff);
 		T::OnSlash::on_unbalanced(negative_imbalance);
 
-		<RewardTrace<T>>::remove_prefix(check_era, None);
+		let _res = <RewardTrace<T>>::clear_prefix(check_era, u32::MAX, None);
 		// <AskEraPoint<T>>::remove_prefix(check_era, None);
 		// RewardEra
 		<AskEraPoint<T>>::iter_prefix(check_era).any(|((acc, _), _)| {
@@ -650,8 +660,8 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 			<RewardEra<T>>::insert(acc.clone(), reward_era);
 			false
 		});
-		<AskEraPoint<T>>::remove_prefix(check_era, None);
-		<AskEraPayment<T>>::remove_prefix(check_era, None);
+		let _res = <AskEraPoint<T>>::clear_prefix(check_era, u32::MAX, None);
+		let _res = <AskEraPayment<T>>::clear_prefix(check_era, u32::MAX, None);
 
 		let current_block_number = <frame_system::Pallet<T>>::block_number();
 		Self::deposit_event(Event::PurchaseRewardSlashedAfterExpiration {
@@ -665,13 +675,19 @@ impl<T: Config> IForReward<T> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+
+	pub fn account_id() -> Option<T::AccountId> {
+		// T::PalletId::get().try_into_account()
+		Some(T::PalletId::get().into_account_truncating())
 	}
-	fn pot() -> (T::AccountId, BalanceOf<T>) {
+	fn pot() -> Option<(T::AccountId, BalanceOf<T>)> {
 		let account_id = Self::account_id();
+		if account_id.is_none() {
+			return None
+		}
+		let account_id = account_id.unwrap();
 		let balance = T::Currency::free_balance(&account_id).saturating_sub(T::Currency::minimum_balance());
-		(account_id, balance)
+		Some((account_id, balance))
 	}
 	/// Clear all era information for given era.
 	pub(crate) fn clear_era_information(era_index: EraIndex) {

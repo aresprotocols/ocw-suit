@@ -422,7 +422,7 @@ pub mod pallet {
 			EstimatesInitDeposit::<T>::insert(symbol.clone(), estimates_config.id, init_reward);
 			SymbolEstimatesId::<T>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
 			PreparedEstimates::<T>::insert(symbol.clone(), &estimates_config);
-			Self::hex_display_estimates_config(&estimates_config);
+			// Self::hex_display_estimates_config(&estimates_config);
 
 			// log::debug!(target: TARGET, "RUN 3 symbol : current_id={:?}", &current_id);
 
@@ -472,17 +472,18 @@ pub mod pallet {
 			let symbol: BoundedVec<u8, StringLimit> =
 				symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
 
-			let bsc_address: Option<BoundedVecOfBscAddress> = if let Some(bsc) = bsc_address {
-				let bsc: BoundedVec<u8, StringLimit> =
-					bsc.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
-				let mut bytes = [0u8; 40];
-				let r = hex::encode_to_slice(&bsc, &mut bytes);
-				ensure!(r.is_ok(), Error::<T>::AddressInvalid);
-				// ensure!(is_hex_address(&bytes), Error::<T>::AddressInvalid);
-				Some(bsc)
-			} else {
-				None
-			};
+			// let bsc_address: Option<BoundedVecOfBscAddress> = if let Some(bsc) = bsc_address {
+			// 	let bsc: BoundedVec<u8, StringLimit> =
+			// 		bsc.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
+			// 	let mut bytes = [0u8; 40];
+			// 	let r = hex::encode_to_slice(&bsc, &mut bytes);
+			// 	ensure!(r.is_ok(), Error::<T>::AddressInvalid);
+			// 	// ensure!(is_hex_address(&bytes), Error::<T>::AddressInvalid);
+			// 	Some(bsc)
+			// } else {
+			// 	None
+			// };
+			let bsc_address: Option<BoundedVecOfBscAddress> = None;
 
 			log::info!(target: TARGET, "price={:?}, fraction={:?}", estimated_price, estimated_fraction_length);
 
@@ -1122,7 +1123,7 @@ impl<T: Config> Pallet<T> {
 		}
 		let mut u8list: [u8; 20] = [0; 20];
 		u8list[..symbol.len()].copy_from_slice(symbol.as_slice());
-		Some(T::PalletId::get().into_sub_account(u8list))
+		T::PalletId::get().try_into_sub_account(u8list)
 	}
 
 	fn do_choose_winner(
@@ -1374,15 +1375,15 @@ impl<T: Config> Pallet<T> {
 		winners
 	}
 
-	pub fn hex_display_estimates_config(estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>) {
-		// use sp_core::hexdisplay::HexDisplay;
-		// let hash = Blake2_128Concat::hash(estimates_config.encode().as_slice());
-		let encode = estimates_config.encode();
-		log::info!(
-			target: TARGET,
-			"estimates_encode: {:?}",
-			HexDisplay::from(&encode) // encode
-		);
-	}
+	// pub fn hex_display_estimates_config(estimates_config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>) {
+	// 	// use sp_core::hexdisplay::HexDisplay;
+	// 	// let hash = Blake2_128Concat::hash(estimates_config.encode().as_slice());
+	// 	let encode = estimates_config.encode();
+	// 	log::info!(
+	// 		target: TARGET,
+	// 		"estimates_encode: {:?}",
+	// 		HexDisplay::from(&encode) // encode
+	// 	);
+	// }
 
 }

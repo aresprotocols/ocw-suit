@@ -345,7 +345,7 @@ where
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -353,7 +353,7 @@ where
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::PalletId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account_truncating(b"payouts")
 	}
 
 	pub fn is_aura() -> bool {

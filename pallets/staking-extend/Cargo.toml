@@ -14,36 +14,32 @@ readme = 'README.md'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-lite-json = { version = "0.1", default-features = false }
-log = { version = "0.4.14", default-features = false }
-serde = { version = '1.0.130', default-features = false, features = ['derive'] }
-serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-
+ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len", ] }
+frame-election-provider-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-frame-election-provider-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-keystore = { git = "https://github.com/paritytech/substrate", optional = true, branch = "polkadot-v0.9.28" }
-sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-sp-npos-elections = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-pallet-authorship = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-pallet-election-provider-multi-phase = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.28" }
+lite-json = { version = "0.1", default-features = false }
+log = { version = "0.4.14", default-features = false }
 pallet-authority-discovery = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-pallet-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+pallet-authorship = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+pallet-election-provider-multi-phase = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 pallet-session = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-
-ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
-#sp-consensus-aura = { version = "0.10.0-dev", default-features = false, git = "https://github.com/paritytech/substrate", tag = "monthly-2021-09+1" }
-#[dev-dependencies]
+pallet-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.28" }
+pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = '1.0.130', default-features = false, features = ['derive'] }
+serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", optional = true, branch = "polkadot-v0.9.28" }
+sp-npos-elections = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 
 [dev-dependencies]
 serde = { version = '1.0.130'}
@@ -52,29 +48,27 @@ pallet-bags-list = { git = "https://github.com/paritytech/substrate", default-fe
 [features]
 default = ["std"]
 std = [
-    "scale-info/std",
-    "sp-application-crypto/std",
+    "ares-oracle-provider-support/std",
     "codec/std",
+    "frame-election-provider-support/std",
     "frame-support/std",
     "frame-system/std",
     "lite-json/std",
+    "log/std",
+    "pallet-authority-discovery/std",
+    "pallet-authorship/std",
+    "pallet-balances/std",
+    "pallet-election-provider-multi-phase/std",
+    "pallet-session/std",
+    "pallet-staking/std",
+    "sp-application-crypto/std",
     "sp-core/std",
     "sp-io/std",
     "sp-keystore/std",
     "sp-runtime/std",
-    "sp-std/std",
-    "log/std",
-    "pallet-balances/std",
-    "pallet-authorship/std",
-    "pallet-staking/std",
-    "pallet-session/std",
     "sp-staking/std",
-    "ares-oracle-provider-support/std",
-    #    "sp-consensus-aura/std",
-    #    "pallet-timestamp/std",
-    "pallet-authority-discovery/std",
-    "frame-election-provider-support/std",
-    "pallet-election-provider-multi-phase/std",
+    "sp-std/std",
+    "scale-info/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
 

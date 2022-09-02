@@ -26,11 +26,16 @@ pallet-babe = { git = "https://github.com/paritytech/substrate", branch = "polka
 
 [dependencies]
 # -- snip --
-codec = { package = "parity-scale-codec", features = ['derive'], version = "2.0.0", default-features = false }
+#codec = { package = "parity-scale-codec", features = ['derive'], version = "2.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+    "derive",
+    "max-encoded-len",
+] }
 sp-std = { default-features = false, version = '3.0.0' }
-log = { version = "0.4.14", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-
+#log = { version = "0.4.14", default-features = false }
+log = { version = "0.4.17", default-features = false }
+#scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.28" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }

@@ -6,20 +6,15 @@ pub mod tests {
 	use frame_support::traits::ConstU32;
 	use frame_support::weights::DispatchClass;
 	use frame_support::{assert_ok, PalletId};
-	use frame_support::{
-		parameter_types,
-		weights::{IdentityFee, RuntimeDbWeight},
-	};
+	use frame_support::{parameter_types,weights::{RuntimeDbWeight}};
 	use frame_system::ChainContext;
 	use pallet_collective::EnsureProportionAtLeast;
 	use pallet_transaction_payment::CurrencyAdapter;
-	use sp_runtime::traits::Hash;
 	use sp_runtime::BuildStorage;
-	use sp_runtime::{
-		generic::Era,
-		testing::{Block, Header},
-		traits::{BlakeTwo256, IdentityLookup},
-	};
+	use sp_runtime::traits::Hash;
+	use sp_runtime::{ generic::Era, testing::{Block, Header}, traits::{BlakeTwo256, IdentityLookup}};
+	use sp_std::convert::TryFrom;
+	use sp_std::convert::TryInto;
 
 	frame_support::construct_runtime!(
 		pub enum Runtime where
@@ -29,12 +24,26 @@ pub mod tests {
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+			// TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 			Council: pallet_collective::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, Config<T>},
 			TechnicalCommittee: pallet_collective::<Instance2>::{Pallet, Call, Storage, Origin<T>, Event<T>, Config<T>},
 			AresChallenge: crate::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		}
 	);
+
+
+	// frame_support::construct_runtime!(
+	// 	pub enum Test where
+	// 		Block = Block,
+	// 		NodeBlock = Block,
+	// 		UncheckedExtrinsic = UncheckedExtrinsic,
+	// 	{
+	// 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+	// 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+	// 		Aura: pallet_aura::{Pallet, Storage, Config<T>},
+	// 	}
+	// );
+
 	type AccountId = u64;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -98,13 +107,31 @@ pub mod tests {
 		pub const OperationalFeeMultiplier: u8 = 5;
 	}
 
-	impl pallet_transaction_payment::Config for Runtime {
-		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
-		type TransactionByteFee = TransactionByteFee;
-		type OperationalFeeMultiplier = OperationalFeeMultiplier;
-		type WeightToFee = IdentityFee<Balance>;
-		type FeeMultiplierUpdate = ();
-	}
+	// impl pallet_transaction_payment::Config for Runtime {
+	// 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+	// 	type TransactionByteFee = TransactionByteFee;
+	// 	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	// 	type WeightToFee = IdentityFee<Balance>;
+	// 	type FeeMultiplierUpdate = ();
+	// }
+
+	// impl pallet_transaction_payment::Config for Runtime {
+	// 	type Event = Event;
+	// 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+	// 	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	// 	type WeightToFee = IdentityFee<Balance>;
+	// 	type LengthToFee = IdentityFee<Balance>;
+	// 	type FeeMultiplierUpdate = ();
+	// }
+
+	// impl pallet_transaction_payment::Config for Test {
+	// 	type Event = Event;
+	// 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
+	// 	type OperationalFeeMultiplier = ConstU8<5>;
+	// 	type WeightToFee = IdentityFee<u64>;
+	// 	type LengthToFee = IdentityFee<u64>;
+	// 	type FeeMultiplierUpdate = ();
+	// }
 
 	parameter_types! {
 		pub const MotionDuration: u64 = 3;
@@ -157,8 +184,9 @@ pub mod tests {
 		type Proposal = Call;
 		type MinimumDeposit = MinimumDeposit;
 		type PalletId = ChallengePalletId;
-		type CouncilMajorityOrigin =
-			EnsureProportionAtLeast<sp_core::u32_trait::_3, sp_core::u32_trait::_4, AccountId, CouncilCollective>;
+		// type CouncilMajorityOrigin =
+		// 	EnsureProportionAtLeast<sp_core::u32_trait::_3, sp_core::u32_trait::_4, AccountId, CouncilCollective>;
+		type CouncilMajorityOrigin = EnsureProportionAtLeast<u64, Challenge1, 3, 4>;
 		type Currency = Balances;
 		type SlashProposer = AresChallenge;
 		type IsAuthority = Self;
@@ -183,8 +211,6 @@ pub mod tests {
 		frame_system::CheckEra<Runtime>,
 		frame_system::CheckNonce<Runtime>,
 		frame_system::CheckWeight<Runtime>,
-		/* crate::CheckCall<Runtime, Challenge1>,
-		 * pallet_transaction_payment::ChargeTransactionPayment<Runtime>, */
 	);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
 	type TestBlock = Block<TestXt>;

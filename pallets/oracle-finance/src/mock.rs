@@ -1,24 +1,15 @@
 use crate as oracle_finance;
-// use frame_support::sp_runtime::app_crypto::sp_core::sr25519::Signature;
-// use frame_support::sp_runtime::traits::{IdentifyAccount, Verify};
-use frame_support::{parameter_types, traits::{Get, Contains, GenesisBuild, Hooks}, PalletId, BoundedVec};
+
+use crate::types::{EraIndex};
 use frame_support::sp_std::convert::TryInto;
-// use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
-
-
+use frame_support::{parameter_types, traits::{Get, Contains, GenesisBuild, Hooks}, PalletId, BoundedVec};
 use frame_system as system;
 use pallet_balances;
-// use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Zero},
-};
 use sp_runtime::testing::UintAuthorityId;
 use sp_runtime::traits::Convert;
-use crate::types::{EraIndex};
-
-// use frame_benchmarking::frame_support::pallet_prelude::Get;
+use sp_runtime::{ testing::Header, traits::{BlakeTwo256, IdentityLookup, Zero}};
+use sp_std::convert::TryFrom;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

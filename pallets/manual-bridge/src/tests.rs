@@ -1,9 +1,9 @@
+use bound_vec_helper::BoundVecHelper;
 use codec::Encode;
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok};
-use crate::{Error, PendingList, StashAccout, WaiterAccout};
 use crate::types::{CrossChainInfo, CrossChainInfoList, CrossChainKind, EthereumAddress, Ident};
-use bound_vec_helper::BoundVecHelper;
+use crate::{Error, PendingList, StashAccout, WaiterAccout};
+use frame_support::{assert_noop, assert_ok};
 
 #[test]
 fn test_update_waiter() {
@@ -145,7 +145,7 @@ fn test_set_up_completed_list() {
 		list.remove(1);
 
 		let mut new_ident = Ident::create_on_vec(current_bn.encode());
-		new_ident.try_push(1u8);
+		let _res = new_ident.try_push(1u8);
 
 		let _res = list.try_push(CrossChainInfo{
 			iden: new_ident,

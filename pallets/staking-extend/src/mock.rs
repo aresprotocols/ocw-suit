@@ -16,31 +16,30 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 
+use frame_election_provider_support::{data_provider, onchain, ElectionProvider, Support, Supports, VoteWeight, VoterOf, ElectionDataProvider, SequentialPhragmen};
 use frame_election_provider_support;
-use frame_system as system;
-// use pallet_balances;
-// use pallet_balances::{BalanceLock, Error as BalancesError};
-
-// use frame_benchmarking::frame_support::pallet_prelude::Get;
-use frame_election_provider_support::{data_provider, onchain, ElectionProvider, Support, Supports, VoteWeight, VoterOf, ElectionDataProvider};
 use frame_support::pallet_prelude::PhantomData;
 use frame_support::sp_runtime::Perbill;
 use frame_support::traits::{Get, Hooks, OneSessionHandler, ValidatorSet};
-// use std::borrow::BorrowMut;
-use std::{cell::RefCell, collections::HashSet};
-// use sp_core::{crypto::key_types::DUMMY, H256};
+use frame_support::{bounded_vec, traits::ConstU32};
+use frame_system as system;
 use frame_system::limits::BlockWeights;
+use pallet_staking::BalanceOf;
 use pallet_staking::StakerStatus;
 use sp_core::H256;
 use sp_staking::EraIndex;
-use frame_support::{bounded_vec, traits::ConstU32};
-// use crate::OnChainConfig;
+use sp_std::collections::btree_map::BTreeMap;
+use sp_std::convert::TryFrom;
+use sp_std::convert::TryInto;
+use std::{cell::RefCell, collections::HashSet};
+
+use crate::Config;
+use crate::elect::OnChainSequentialPhragmen;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-// pub(crate) type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
 pub(crate) type AccountId = u64;
-/// Balance of an account.
 pub type Balance = u64;
 pub type BlockNumber = u64;
 pub type AskPeriodNum = u64;
@@ -124,14 +123,26 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static MaxNominations: u32 = 16;
+	// pub static RewardOnUnbalanceWasCalled: bool = false;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
+
+// impl pallet_bags_list::Config for Test {
+// 	type Event = Event;
+// 	type WeightInfo = ();
+// 	type VoteWeightProvider = Staking;
+// 	type BagThresholds = BagThresholds;
+// }
 
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
+
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
@@ -286,19 +297,18 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-sp_npos_elections::generate_solution_type!(
-	#[compact]
-	pub struct NposSolution16::<
-		VoterIndex = u32,
-		TargetIndex = u16,
-		Accuracy = sp_runtime::PerU16,
-	>(16)
-);
-
-parameter_types! {
-	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
-}
-
+// sp_npos_elections::generate_solution_type!(
+// 	#[compact]
+// 	pub struct NposSolution16::<
+// 		VoterIndex = u32,
+// 		TargetIndex = u16,
+// 		Accuracy = sp_runtime::PerU16,
+// 	>(16)
+// );
+//
+// parameter_types! {
+// 	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
+// }
 
 impl crate::data::Config for Test {
 	type DataProvider = Staking;
@@ -310,19 +320,27 @@ impl crate::data::Config for Test {
 
 impl crate::elect::Config for Test {
 	// type ElectionProvider = TestElectionProvider<TestStakingDataProvider>;
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Test>;
+	type GenesisElectionProvider = OnChainSequentialPhragmen<Test>;
 	type ElectionProvider = TestElectionProvider<crate::data::DataProvider<Test>>;
 	type DataProvider = Staking;
 }
 
+// impl onchain::Config for Test {
+// 	type Accuracy = Perbill;
+// 	type DataProvider = crate::data::DataProvider<Test>;
+// }
+
 impl onchain::Config for Test {
-	type Accuracy = Perbill;
-	type DataProvider = crate::data::DataProvider<Test>;
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
+	type DataProvider = Staking;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
@@ -339,15 +357,57 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type SortedListProvider = BagsList;
+	type VoterList = BagsList;
+	type MaxUnlockingChunks = ConstU32<32>;
 	// type ElectionProvider =  ElectionProviderMultiPhase;
 	// type ElectionProvider = StakingExtend;
 	// type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type ElectionProvider = crate::elect::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = crate::elect::OnChainSequentialPhragmenGenesis<Self>;
-	type WeightInfo = pallet_staking::weights::SubstrateWeight<Test>;
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
+	type WeightInfo = pallet_staking::weights::SubstrateWeight<Test>;
 }
+
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
+}
+
+// impl pallet_staking::Config for Test {
+// 	type MaxNominations = MaxNominations;
+// 	type Currency = Balances;
+// 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
+// 	type UnixTime = Timestamp;
+// 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+// 	type RewardRemainder = RewardRemainderMock;
+// 	type Event = Event;
+// 	type Slash = ();
+// 	type Reward = MockReward;
+// 	type SessionsPerEra = SessionsPerEra;
+// 	type SlashDeferDuration = SlashDeferDuration;
+// 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
+// 	type BondingDuration = BondingDuration;
+// 	type SessionInterface = Self;
+// 	type EraPayout = ConvertCurve<RewardCurve>;
+// 	type NextNewSession = Session;
+// 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
+// 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+// 	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+// 	type GenesisElectionProvider = Self::ElectionProvider;
+// 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
+// 	type VoterList = BagsList;
+// 	type MaxUnlockingChunks = ConstU32<32>;
+// 	type OnStakerSlash = OnStakerSlashMock<Test>;
+// 	type BenchmarkingConfig = TestBenchmarkingConfig;
+// 	type WeightInfo = ();
+// }
 
 pub struct StakingBenchmarkingConfig;
 impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {

@@ -12,7 +12,9 @@ use sc_service::{Role};
 use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
-use sc_rpc_api::{DenyUnsafe, UnsafeRpcError};
+
+use sc_rpc_api::{DenyUnsafe};
+// use sc_rpc_api::policy::UnsafeRpcError;
 use sp_core::{
     offchain::{OffchainStorage, StorageKind},
     Bytes,
@@ -44,8 +46,9 @@ pub enum Error {
     #[error("This storage kind is not available yet.")]
     UnavailableStorageKind,
     /// Call to an unsafe RPC was denied.
-    #[error(transparent)]
-    UnsafeRpcCalled(#[from] UnsafeRpcError),
+    // #[error(transparent)]
+    #[error("Unsafe rpc called.")]
+    UnsafeRpcCalled,
     /// Call to request error.
     #[error("Attempt to request with `warehouse` request failed.")]
     HttpRequestFailed,
@@ -84,7 +87,11 @@ impl From<Error> for rpc::Error {
                 message: format!("Json parsing or format error. (#{})", x).into(),
                 data: None,
             },
-            Error::UnsafeRpcCalled(e) => e.into(),
+            Error::UnsafeRpcCalled => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 6),
+                message: format!("Unsafe rpc called.").into(),
+                data: None,
+            },
         }
     }
 }
@@ -94,7 +101,7 @@ pub enum NodeRole {
     /// Regular full node.
     Full,
     /// Regular light node.
-    Light,
+    // Light,
     /// Actual authority.
     Authority,
 }
@@ -103,7 +110,7 @@ impl From<Role> for NodeRole {
     fn from(e: Role) -> Self {
         match e {
             Role::Full => { NodeRole::Full }
-            Role::Light => { NodeRole::Light }
+            // Role::Light => { NodeRole::Light }
             Role::Authority => { NodeRole::Authority }
         }
     }
@@ -196,7 +203,9 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
 
     /// Set offchain local storage under given key and prefix.
     fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
-        self.deny_unsafe.check_if_safe()?;
+        if self.deny_unsafe.check_if_safe().is_err() {
+            return Err(Error::UnsafeRpcCalled);
+        }
 
         let prefix = match kind {
             StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
@@ -208,7 +217,9 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
 
     /// Get offchain local storage under given key and prefix.
     fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
-        self.deny_unsafe.check_if_safe()?;
+        if self.deny_unsafe.check_if_safe().is_err() {
+            return Err(Error::UnsafeRpcCalled);
+        }
 
         let prefix = match kind {
             StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
@@ -218,7 +229,10 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
     }
 
     fn get_warehouse(&self) -> Result<Option<String>> {
-        self.deny_unsafe.check_if_safe()?;
+        if self.deny_unsafe.check_if_safe().is_err() {
+            return Err(Error::UnsafeRpcCalled);
+        }
+
         let result = self.get_local_storage(StorageKind::PERSISTENT, Bytes(LOCAL_STORAGE_PRICE_REQUEST_DOMAIN.to_vec()));
         if let Ok(x) = result {
             if let Some(mut b) = x {
@@ -246,7 +260,9 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
     }
 
    fn get_infos(&self) -> Result<AresOracleInfos> {
-       self.deny_unsafe.check_if_safe()?;
+       if self.deny_unsafe.check_if_safe().is_err() {
+           return Err(Error::UnsafeRpcCalled);
+       }
 
        let check_res = self.try_get_request();
        let mut request_scheme_checked = "Failed".to_string();
@@ -257,7 +273,7 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
            request_scheme_checked = res.check_scheme().map(|x|"Ok".to_string()).unwrap_or("Failed".to_string());
            request_status_checked = res.check_status().map(|x|"Ok".to_string()).unwrap_or("Failed".to_string());
            let check_body_res = res.check_body();
-           if(check_body_res.is_ok()){
+           if check_body_res.is_ok() {
                request_body_checked = "Ok".to_string();
            }else{
                let body_err = check_body_res.err();
@@ -278,7 +294,10 @@ impl<T: OffchainStorage + 'static> AresToolsApi for AresToolsStruct<T> {
     }
 
     fn try_get_request(&self) -> Result<AresOracleCheckResult> {
-        self.deny_unsafe.check_if_safe()?;
+        if self.deny_unsafe.check_if_safe().is_err() {
+            return Err(Error::UnsafeRpcCalled);
+        }
+
         let mut request_url = self.get_warehouse()?.unwrap_or("http://".to_string());
         let request_path = "/api/getBulkCurrencyPrices?currency=usdt&symbol=btc_eth";
         request_url.push_str(request_path);

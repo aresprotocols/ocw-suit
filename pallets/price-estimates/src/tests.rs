@@ -2899,15 +2899,15 @@ fn test_config_type_max_end_delay() {
 #[test]
 fn test_subaccount() {
 
-	let acc: AccountId = TestPalletId.into_account();
+	let acc: AccountId = TestPalletId.try_into_account().unwrap();
 	println!("ACC: {:?}", acc );
 
-	let uni_usdt: AccountId = TestPalletId.into_sub_account("uni-usdt".as_bytes().to_vec());
+	let uni_usdt: AccountId = TestPalletId.try_into_sub_account("uni-usdt".as_bytes().to_vec()).unwrap();
 	// 6d6f 64 6c70792f61 7265737424 20756e692d75736474 00000000000000000000
 	// 6d6f646c70792f61726573742420756e692d7573647400000000000000000000
 	println!("uni_usdt 1 = {:?}, {:?}", uni_usdt, "uni-usdt".as_bytes().to_vec());
 
-	let uni_usdt: AccountId = TestPalletId.into_sub_account(b"uni-usdt");
+	let uni_usdt: AccountId = TestPalletId.try_into_sub_account(b"uni-usdt").unwrap();
 	// 6d6f 64 6c70792f61 7265737424 20756e692d75736474 00000000000000000000
 	// 6d6f646c70792f61726573742420756e692d7573647400000000000000000000
 	println!("uni_usdt 2 = {:?}, {:?}", uni_usdt, b"uni-usdt");
@@ -2929,7 +2929,7 @@ fn test_subaccount() {
 	println!("{:?}", "btc-usdt".as_bytes().to_vec());
 
 	// let btc_usdc: AccountId = TestPalletId.into_sub_account(b"btc-usdt");
-	let btc_usdc: AccountId = TestPalletId.into_sub_account("btc-usdt".as_bytes());
+	let btc_usdc: AccountId = TestPalletId.try_into_sub_account("btc-usdt".as_bytes()).unwrap();
 	// 6d6f646c70792f6172657374206274632d757364740000000000000000000000 ERROR
 	// 6d6f646c70792f61726573746274632d75736474000000000000000000000000 RIGTH
 
@@ -2937,7 +2937,7 @@ fn test_subaccount() {
 	println!("ENCODE A={:?}", "btc-usdt".as_bytes().encode());
 
 	// ---- success
-	let left: AccountId = TestPalletId.into_sub_account(b"btc-usdt");
+	let left: AccountId = TestPalletId.try_into_sub_account(b"btc-usdt").unwrap();
 
 	// // -------- failed
 	// let right: AccountId = TestPalletId.into_sub_account("btc-usdt");
@@ -2950,7 +2950,7 @@ fn test_subaccount() {
 	let mut u8list: [u8; 8] = [0; 8]; /// .. "btc-usdt".as_bytes();
 	// u8list.copy_from_slice("btc-usdt".as_bytes());
 	u8list.copy_from_slice("btc-usdt".as_bytes().to_vec().as_slice());
-	let right: AccountId = TestPalletId.into_sub_account(u8list);
+	let right: AccountId = TestPalletId.try_into_sub_account(u8list).unwrap();
 	println!("btc-usdt hex = {:?}", right);
 	assert_eq!(
 		left,
@@ -2960,11 +2960,11 @@ fn test_subaccount() {
 
 	// JS:      0x6d6f646c70792f6172657374616176652d757364740000000000000000000000
 	// RUST:      6d6f646c70792f6172657374616176652d757364740000000000000000000000
-	let left: AccountId = TestPalletId.into_sub_account(b"aave-usdt");
+	let left: AccountId = TestPalletId.try_into_sub_account(b"aave-usdt").unwrap();
 	let mut u8list: [u8; 20] = [0; 20]; /// .. "btc-usdt".as_bytes();
 	// u8list.copy_from_slice("btc-usdt".as_bytes());
 	u8list[.."aave-usdt".len()].copy_from_slice("aave-usdt".as_bytes().to_vec().as_slice());
-	let right: AccountId = TestPalletId.into_sub_account(u8list);
+	let right: AccountId = TestPalletId.try_into_sub_account(u8list).unwrap();
 	println!("aave-usdt hex = {:?}", right);
 	assert_eq!(
 		left,
@@ -2973,13 +2973,13 @@ fn test_subaccount() {
 
 	println!("btc-usdt = {:?}", btc_usdc);
 
-	let aave_usdt: AccountId = TestPalletId.into_sub_account("aave-usdt".as_bytes().to_vec());
+	let aave_usdt: AccountId = TestPalletId.try_into_sub_account("aave-usdt".as_bytes().to_vec()).unwrap();
 	println!("ERROR : aave_usdt = {:?}", aave_usdt);
 
-	let aave_usdc: AccountId = TestPalletId.into_sub_account("aave-usdc".as_bytes().to_vec());
+	let aave_usdc: AccountId = TestPalletId.try_into_sub_account("aave-usdc".as_bytes().to_vec()).unwrap();
 	println!("ERROR : aave_usdc = {:?}", aave_usdc);
 
-	let aavel_usdc: AccountId = TestPalletId.into_sub_account("aavel-usdc".as_bytes().to_vec());
+	let aavel_usdc: AccountId = TestPalletId.try_into_sub_account("aavel-usdc".as_bytes().to_vec()).unwrap();
 	println!("ERROR : aavel_usdc = {:?}", aavel_usdc);
 
 }
@@ -2987,51 +2987,51 @@ fn test_subaccount() {
 #[test]
 fn test_subaccount2() {
 
-	let acc: AccountId = TestPalletId.into_account();
+	let acc: AccountId = TestPalletId.try_into_account().unwrap();
 	println!("ACC: {:?}", acc );
 
 	let symbol="a";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="ab";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abc";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcd";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcde";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdef";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdefg";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdefgh";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdefghi";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdefghij";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 
 	let symbol="abcdefghijk";
-	let show: AccountId = TestPalletId.into_sub_account(symbol.as_bytes().to_vec());
+	let show: AccountId = TestPalletId.try_into_sub_account(symbol.as_bytes().to_vec()).unwrap();
 	println!("{:?} = {:?}", symbol, show);
 }
 
@@ -3055,5 +3055,11 @@ fn test_chain_prcie() {
 		<ChainPrice as ConvertChainPrice<Balance, u32>>::try_to_price(one.clone(), 3),
 		<ChainPrice as ConvertChainPrice<Balance, u32>>::try_to_price(two.clone(), 3)
 	);
+}
 
+#[test]
+fn test_encode_to_slice() {
+	let mut output_1 = [0; 4 * 2];
+	hex::encode_to_slice(b"kiwi", &mut output_1).unwrap();
+	assert_eq!(&output_1, b"6b697769");
 }

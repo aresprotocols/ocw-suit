@@ -91,7 +91,7 @@ fn test_unreserve_ask() {
 		);
 		assert_eq!(
 			OracleFinance::pot(),
-			(OracleFinance::account_id(), 0)
+			Some((OracleFinance::account_id().unwrap(), 0))
 		);
 
 		// check storage status
@@ -179,7 +179,7 @@ fn test_unreserve_ask() {
 		);
 		assert_eq!(
 			OracleFinance::pot(),
-			(OracleFinance::account_id(), 0) // because use reserve
+			Some((OracleFinance::account_id().unwrap(), 0)) // because use reserve
 		);
 
 	});
@@ -251,7 +251,7 @@ fn test_check_and_slash_expired_rewards() {
 		assert_ok!(OracleFinance::record_submit_point(ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
 		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
 		// check pot
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 
 		assert_eq!(<RewardEra<Test>>::get(ACCOUNT_ID_1), vec![
 			(3, 2, to_test_vec("Purchased_ID_BN_55"))
@@ -290,7 +290,7 @@ fn test_check_and_slash_expired_rewards() {
 		assert!(<AskEraPoint<Test>>::contains_key(3, (ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"))));
 		assert!(<AskEraPoint<Test>>::contains_key(3, (ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"))));
 
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 
 		// if reward is expired
 		// assert_eq!(
@@ -322,8 +322,8 @@ fn test_check_and_slash_expired_rewards() {
 		assert_eq!(false, <AskEraPoint<Test>>::contains_key(3, (ACCOUNT_ID_1, to_test_vec("Purchased_ID_BN_55"))));
 		assert_eq!(false, <AskEraPoint<Test>>::contains_key(3, (ACCOUNT_ID_3, to_test_vec("Purchased_ID_BN_55"))));
 
-		// assert_eq!(Balances::usable_balance(OracleFinance::account_id()),0);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		// assert_eq!(Balances::usable_balance(OracleFinance::account_id().unwrap()),0);
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 0)));
 		assert_eq!(<RewardEra<Test>>::get(ACCOUNT_ID_1), vec![]);
 		assert_eq!(<RewardEra<Test>>::get(ACCOUNT_ID_3), vec![]);
 
@@ -436,9 +436,9 @@ fn test_take_reward() {
 
 		// ask paid.
 		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 0)));
 		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 
 		//
 		assert_eq!(
@@ -489,14 +489,14 @@ fn test_take_reward() {
 
 		const ACCOUNT_ID_1: u64 = 1;
 
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 		assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_1), Ok(2000000000000/2));
 		//
 		assert_eq!(
 			OracleFinance::take_reward(5, ACCOUNT_ID_1),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 1000000000000)));
 		assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 2000000000100);
 	});
 
@@ -512,7 +512,7 @@ fn test_take_reward() {
 
 		const ACCOUNT_ID_3: u64 = 3;
 
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 1000000000000)));
 		assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_3), Ok(1000000000000));
 
 		//
@@ -520,7 +520,7 @@ fn test_take_reward() {
 			OracleFinance::take_reward(5, ACCOUNT_ID_3),
 			Err(Error::<Test>::RewardHasBeenClaimed)
 		);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 0)));
 		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 4000000000100);
 	});
 }
@@ -561,9 +561,9 @@ fn test_take_full_ear_reward() {
 
 		// ask paid.
 		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_2, to_test_vec("Purchased_ID_BN_55"), 2);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 0)));
 		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_55"), 2));
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 
 		//
 		assert_eq!(
@@ -612,9 +612,9 @@ fn test_take_full_ear_reward() {
 		assert_eq!(OracleFinance::eras_start_session_index(6), Some(14));
 
 		OracleFinance::reserve_for_ask_quantity(ACCOUNT_ID_4, to_test_vec("Purchased_ID_BN_66"), 2);
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 		assert_ok!(OracleFinance::pay_to_ask(to_test_vec("Purchased_ID_BN_66"), 2));
-		assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 4000000000000));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 4000000000000)));
 
 		advance_session();
 		assert_eq!(<frame_system::Pallet<Test>>::block_number(), 70 );
@@ -668,14 +668,14 @@ fn test_take_full_ear_reward() {
 	//
 	// 	const ACCOUNT_ID_1: u64 = 1;
 	//
-	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 2000000000000));
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id().unwrap(), 2000000000000));
 	// 	// assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_1), Ok(2000000000000/2));
 	// 	//
 	// 	assert_eq!(
 	// 		OracleFinance::take_reward(5, ACCOUNT_ID_1),
 	// 		Err(Error::<Test>::RewardHasBeenClaimed)
 	// 	);
-	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id().unwrap(), 1000000000000));
 	// 	assert_eq!(Balances::free_balance(ACCOUNT_ID_1), 2000000000100);
 	// });
 	//
@@ -695,7 +695,7 @@ fn test_take_full_ear_reward() {
 	//
 	// 	const ACCOUNT_ID_3: u64 = 3;
 	//
-	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 1000000000000));
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id().unwrap(), 1000000000000));
 	// 	assert_eq!(OracleFinance::take_reward(5, ACCOUNT_ID_3), Ok(1000000000000));
 	//
 	// 	//
@@ -703,7 +703,7 @@ fn test_take_full_ear_reward() {
 	// 		OracleFinance::take_reward(5, ACCOUNT_ID_3),
 	// 		Err(Error::<Test>::RewardHasBeenClaimed)
 	// 	);
-	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id(), 0));
+	// 	assert_eq!(OracleFinance::pot(),(OracleFinance::account_id().unwrap(), 0));
 	// 	assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 4000000000100);
 	// });
 }

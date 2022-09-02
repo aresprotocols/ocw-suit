@@ -18,25 +18,21 @@ mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use bound_vec_helper::BoundVecHelper;
+	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, Ident, MaximumPendingList};
 	use frame_support::pallet_prelude::*;
 	use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
-	use bound_vec_helper::BoundVecHelper;
-	use crate::types::{BalanceOf, CrossChainInfo, CrossChainInfoList, CrossChainKind, Ident, MaximumPendingList};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-
 		/// The balance.
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
+		/// RequestOrigin
 		type RequestOrigin: EnsureOrigin<Self::Origin>;
-
-		// type MinimumBalanceThreshold: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -256,7 +252,7 @@ pub mod pallet {
 			let mut pending_list = pending_list.unwrap_or(CrossChainInfoList::<T>::default());
 
 			// TODO:: Change max count to ::bound()
-			let max_count: u32 = MaximumPendingList::get();
+			let max_count: u32 = <MaximumPendingList as frame_support::traits::Get<u32>>::get(); // MaximumPendingList::get();
 			ensure!((pending_list.len() as u32) < max_count, Error::<T>::StorageOverflow );
 
 			T::Currency::transfer(&who, &stash.unwrap(), amount, ExistenceRequirement::KeepAlive)?;

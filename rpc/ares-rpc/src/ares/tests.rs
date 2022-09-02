@@ -1,6 +1,5 @@
 use std::ops::Range;
 use super::*;
-use super::*;
 use assert_matches::assert_matches;
 use frame_support::BoundedVec;
 use frame_support::sp_std::convert::TryFrom;
@@ -36,11 +35,11 @@ fn test_calls_considered_unsafe() {
 
     assert_matches!(
 		offchain.set_local_storage(StorageKind::PERSISTENT, key.clone(), value.clone()),
-		Err(Error::UnsafeRpcCalled(_))
+		Err(Error::UnsafeRpcCalled)
 	);
     assert_matches!(
 		offchain.get_local_storage(StorageKind::PERSISTENT, key),
-		Err(Error::UnsafeRpcCalled(_))
+		Err(Error::UnsafeRpcCalled)
 	);
 }
 

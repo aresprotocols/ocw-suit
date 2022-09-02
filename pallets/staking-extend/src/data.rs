@@ -42,9 +42,9 @@ where
 	type MaxVotesPerVoter = <<T as Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter; // T::MaxNominations;
 																								 // const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>> {
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>> {
 		//
-		let result = T::DataProvider::targets(maybe_max_len);
+		let result = T::DataProvider::electable_targets(maybe_max_len);
 		// log::debug!(target: "staking_extend", "******* LINDEBUG:: new targets:: == {:?}", result);
 
 		if result.is_ok() {
@@ -88,27 +88,8 @@ where
 		return result;
 	}
 
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		let voters = T::DataProvider::voters(maybe_max_len);
-		// if let Ok(voter_list) = voters {
-		// 	// Get new target
-		// 	let new_target = Self::targets(maybe_max_len);
-		// 	let mut filter_list = Vec::<VoterOf<Self>>::new();
-		// 	voter_list.into_iter().for_each(|x|{
-		// 		if let Ok(target_list) = new_target.clone() {
-		// 			let is_exists = target_list.iter().any(|t|{
-		// 				if t == &x.0 {
-		// 					return true;
-		// 				}
-		// 				false
-		// 			});
-		// 			if is_exists {
-		// 				filter_list.push(x);
-		// 			}
-		// 		}
-		// 	});
-		// 	return Ok(filter_list);
-		// }
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+		let voters = T::DataProvider::electing_voters(maybe_max_len);
 		voters
 	}
 
@@ -116,7 +97,7 @@ where
 
 		let staking_desired_target = T::DataProvider::desired_targets();
 		if let Ok(staking_desired_target) = staking_desired_target {
-			let desired_targets = Self::targets(None).ok().map_or(0usize, |v| { v.len() }) as u32;
+			let desired_targets = Self::electable_targets(None).ok().map_or(0usize, |v| { v.len() }) as u32;
 			if desired_targets > staking_desired_target {
 				return data_provider::Result::<u32>::Ok(staking_desired_target)
 			}

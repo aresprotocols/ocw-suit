@@ -16,14 +16,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 ares-oracle = { default-features = false, path = '../ares-oracle' }
 ares-oracle-provider-support = { default-features = false, path = '../ares-oracle-provider-support' }
 bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-lite-json = { version = "0.1", default-features = false }
-log = { version = "0.4.14", default-features = false }
-hex = { version = "0.4", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [ "derive", "max-encoded-len", ] }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+#hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+lite-json = { version = "0.1", default-features = false }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 sp-keystore = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28", optional = true }
@@ -31,26 +30,27 @@ sp-runtime = { git = "https://github.com/paritytech/substrate", default-features
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 
 [dev-dependencies]
+hex = { version = "0.4", default-features = false, features = ["alloc"]}
 pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 pallet-bags-list = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 
 [features]
 default = ["std"]
 std = [
-	"ares-oracle/std",
 	"ares-oracle-provider-support/std",
+	"ares-oracle/std",
 	"bound-vec-helper/std",
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
+#	"hex",
 	"lite-json/std",
-	"hex/std",
+	"log/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
-	"log/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
