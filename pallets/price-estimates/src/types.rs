@@ -33,6 +33,12 @@ pub type MaximumAdmins = ConstU32<100>;
 
 pub type MaximumWhitelist = ConstU32<100>;
 
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo, Copy)]
+pub enum Releases {
+	V0,
+	V1,
+}
+
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum MultiplierOption {
 	Base(u8),
@@ -65,24 +71,34 @@ pub enum EstimatesType {
 	RANGE,
 }
 
+impl EstimatesType {
+	pub fn get_type_number(self)-> u8 {
+		match self {
+			EstimatesType::DEVIATION => {2u8}
+			EstimatesType::RANGE => {1u8}
+		}
+	}
+}
+
 impl Default for EstimatesType {
 	fn default() -> Self {
 		EstimatesType::DEVIATION
 	}
 }
 
-pub(crate) type BoundedVecOfAdmins<Account> = BoundedVec<Account, MaximumAdmins>;
-pub(crate) type BoundedVecOfPreparedEstimates = BoundedVec<u8, StringLimit>;
-pub(crate) type BoundedVecOfMultiplierOption = BoundedVec<MultiplierOption, MaximumOptions>;
-// pub(crate) type BoundedVecOfConfigRange = BoundedVec<u64, MaximumOptions>;
-pub(crate) type BoundedVecOfChooseWinnersPayload<ACC, BN> = BoundedVec<AccountParticipateEstimates<ACC, BN>, MaximumWinners>;
+
+// pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
+// pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
 pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
-pub(crate) type BoundedVecOfActiveEstimates = BoundedVec<u8, StringLimit>;
+
+pub(crate) type BoundedVecOfAdmins<Account> = BoundedVec<Account, MaximumAdmins>;
+pub(crate) type BoundedVecOfMultiplierOption = BoundedVec<MultiplierOption, MaximumOptions>;
+pub(crate) type BoundedVecOfChooseWinnersPayload<ACC, BN> = BoundedVec<AccountParticipateEstimates<ACC, BN>, MaximumWinners>;
 pub(crate) type BoundedVecOfCompletedEstimates<BN, Balance> = BoundedVec<SymbolEstimatesConfig<BN, Balance>, MaximumEstimatesPerSymbol>;
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct SymbolEstimatesConfig<BlockNumber, Balance> {
-	pub symbol: BoundedVecOfPreparedEstimates,
+	pub symbol: BoundedVecOfSymbol,
 	pub estimates_type: EstimatesType,
 	/// Round ID
 	pub id: u64,
@@ -129,7 +145,7 @@ pub struct ChooseWinnersPayload<Public, AccountId, BlockNumber> {
 	pub winners: BoundedVecOfChooseWinnersPayload<AccountId, BlockNumber>,
 	pub public: Option<Public>,
 	pub estimates_id: u64,
-	pub symbol: BoundedVecOfSymbol,
+	pub symbol: (BoundedVecOfSymbol,EstimatesType),
 	pub price: Option<(u64, FractionLength, BlockNumber)>,
 }
 
@@ -141,7 +157,7 @@ impl<T: SigningTypes> SignedPayload<T> for ChooseWinnersPayload<T::Public, T::Ac
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct ChooseTrigerPayload<Public> {
-	pub symbol: BoundedVecOfSymbol,
+	pub symbol: (BoundedVecOfSymbol, EstimatesType),
 	pub public: Public,
 }
 

@@ -2,7 +2,8 @@
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 
-use codec::{Encode};
+use codec::{Encode, Decode};
+use frame_support::pallet_prelude::TypeInfo;
 use frame_support::traits::{Currency, ExistenceRequirement, Get};
 use frame_support::transactional;
 use frame_system::{
@@ -23,16 +24,17 @@ mod mock;
 mod tests;
 
 pub mod types;
+pub mod migrations;
 
 pub use pallet::*;
-use crate::types::{AccountParticipateEstimates, ChainPrice, ChooseTrigerPayload, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
+use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, ChainPrice, ChooseTrigerPayload, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
 use frame_support::{BoundedVec, ensure};
 use ares_oracle_provider_support::FractionLength;
 use sp_runtime::traits::{AccountIdConversion, CheckedDiv};
 use sp_runtime::traits::Saturating;
 use sp_core::hexdisplay::HexDisplay;
 
-const TARGET: &str = "ares::price-estimates";
+pub const TARGET: &str = "ares::price-estimates";
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -42,6 +44,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::{StorageDoubleMap, StorageMap, StorageValue, TransactionSource, ValueQuery};
 	use super::*;
 	use frame_support::{Blake2_128Concat, PalletId};
+	use frame_support::storage::types::OptionQuery;
 	use frame_support::traits::{Hooks, IsType, Len, NamedReservableCurrency};
 	use frame_support::weights::Weight;
 	use frame_system::pallet_prelude::*;
@@ -52,7 +55,7 @@ pub mod pallet {
 	use ares_oracle::types::OffchainSignature;
 	use bound_vec_helper::BoundVecHelper;
 
-	use crate::types::{AccountParticipateEstimates, BoundedVecOfActiveEstimates, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, BoundedVecOfPreparedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig};
+	use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig, Releases};
 
 	/// This pallet's configuration trait
 	#[pallet::config]
@@ -102,28 +105,28 @@ pub mod pallet {
 			if !Self::is_active() {
 				return 0;
 			}
-			let mut to_active_symbol: Vec<BoundedVec<u8, StringLimit>> = Vec::new();
-			PreparedEstimates::<T>::iter().for_each(|(_symbol, config)| {
+			let mut to_active_symbol: Vec<(BoundedVecOfSymbol, EstimatesType)> = Vec::new();
+			PreparedEstimates::<T>::iter().for_each(|(symbol, config)| {
 				if config.start <= n {
 					log::debug!(
 						target: TARGET,
 						"symbol: {:?} to active .. config: {:?}",
-						&_symbol,
+						&symbol,
 						config
 					);
-					to_active_symbol.push(_symbol);
+					to_active_symbol.push(symbol);
 				}
 			});
 			// -
-			to_active_symbol.iter().for_each(|_symbol| {
-				if !ActiveEstimates::<T>::contains_key(&_symbol) &&
-					!UnresolvedEstimates::<T>::contains_key(&_symbol) {
-					let config = PreparedEstimates::<T>::get(&_symbol);
+			to_active_symbol.iter().for_each(|symbol| {
+				if !ActiveEstimates::<T>::contains_key(&symbol) &&
+					!UnresolvedEstimates::<T>::contains_key(&symbol) {
+					let config = PreparedEstimates::<T>::get(&symbol);
 					if let Some(mut config) = config {
 						// let mut config = config.as_mut().unwrap();
 						config.state = EstimatesState::Active;
-						PreparedEstimates::<T>::remove(&_symbol);
-						ActiveEstimates::<T>::insert(&_symbol, config)
+						PreparedEstimates::<T>::remove(&symbol);
+						ActiveEstimates::<T>::insert(&symbol, config)
 					}
 				}
 			});
@@ -223,6 +226,7 @@ pub mod pallet {
 		pub fn force_complete(
 			origin: OriginFor<T>,
 			symbol: Vec<u8>,
+			estimates_type: EstimatesType,
 			ruling_price: u64,
 			ruling_fraction_length: u32,
 		) -> DispatchResult {
@@ -235,16 +239,18 @@ pub mod pallet {
 			// Get estimates config
 			let symbol: BoundedVec<u8, StringLimit> =
 				symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
-			let config = UnresolvedEstimates::<T>::get(&symbol);
+			let storage_key=(symbol.clone(), estimates_type.clone());
+
+			let config = UnresolvedEstimates::<T>::get(&storage_key);
 			ensure!(config.is_some(), Error::<T>::UnresolvedEstimatesNotExist);
 
-			let source_acc = Self::account_id(symbol.to_vec());
+			let source_acc = Self::account_id(storage_key.clone());
 			ensure!(source_acc.is_some(), Error::<T>::AddressInvalid);
 			// let source_acc = source_acc.unwrap();
 			let config = config.unwrap();
 
 			// let total_reward = T::Currency::free_balance(&source_acc);
-			let total_reward = EstimatesInitDeposit::<T>::try_get(symbol.clone(), config.id);
+			let total_reward = EstimatesInitDeposit::<T>::try_get(storage_key.clone(), config.id);
 			ensure!(total_reward.is_ok(), Error::<T>::EstimatesInitDepositNotExist);
 			let total_reward = total_reward.unwrap();
 
@@ -258,14 +264,14 @@ pub mod pallet {
 			ensure!(price.is_some(), Error::<T>::PriceInvalid);
 			let price = price.unwrap();
 
-			let accounts = Participants::<T>::get(&symbol, config.id.clone());
+			let accounts = Participants::<T>::get(&storage_key, config.id.clone());
 
 			let price = (price, chain_fraction_length, frame_system::Pallet::<T>::block_number());
 			// call_winner
 			let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::call_winners(
 				&config,
-				estimates_type,
-				&symbol,
+				// estimates_type,
+				// &symbol,
 				total_reward,
 				deviation,
 				range,
@@ -277,8 +283,8 @@ pub mod pallet {
 				block_number: frame_system::Pallet::<T>::block_number(),
 				winners: BoundedVecOfChooseWinnersPayload::create_on_vec(winners),
 				public: None,
-				symbol,
 				estimates_id: config.id.clone(),
+				symbol: storage_key,
 				price: Some(price),
 			}, EstimatesState::Unresolved)
 		}
@@ -338,8 +344,10 @@ pub mod pallet {
 			// let symbol: BoundedVec<u8, StringLimit> =
 			// 	symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
 
-			let symbol = BoundedVecOfPreparedEstimates::try_create_on_vec(symbol.clone())
+			let symbol = BoundedVecOfSymbol::try_create_on_vec(symbol.clone())
 				.map_err(|_| Error::<T>::BadMetadata)?;
+
+			let storage_key = (symbol.clone(), estimates_type.clone());
 
 			type BoundedVecOfRange = BoundedVec<u64, MaximumOptions>;
 			let mut range_vec = BoundedVecOfRange::default() ;
@@ -370,12 +378,12 @@ pub mod pallet {
 
 
 			ensure!(
-				!PreparedEstimates::<T>::contains_key(&symbol),
+				!PreparedEstimates::<T>::contains_key(&storage_key),
 				Error::<T>::PreparedEstimatesExist
 			);
 
 			// Get and check subaccount.
-			let source_acc = Self::account_id(symbol.to_vec());
+			let source_acc = Self::account_id(storage_key.clone());
 			ensure!(source_acc.is_some(), Error::<T>::SubAccountGenerateFailed);
 			let source_acc = source_acc.unwrap();
 
@@ -407,7 +415,7 @@ pub mod pallet {
 				range,
 			};
 
-			let id = SymbolEstimatesId::<T>::get(&symbol);
+			let id = SymbolEstimatesId::<T>::get(&storage_key);
 
 			if let Some(id) = id {
 				estimates_config.id = id; // symbol exist
@@ -416,35 +424,23 @@ pub mod pallet {
 			let current_id = estimates_config.id;
 			// Check id not be used.
 			ensure!(
-				EstimatesInitDeposit::<T>::try_get(symbol.clone(), estimates_config.id).ok().is_none(),
+				EstimatesInitDeposit::<T>::try_get(storage_key.clone(), estimates_config.id).ok().is_none(),
 				Error::<T>::EstimatesConfigInvalid
 			);
-			EstimatesInitDeposit::<T>::insert(symbol.clone(), estimates_config.id, init_reward);
-			SymbolEstimatesId::<T>::insert(symbol.clone(), estimates_config.id.clone() + 1); //generate next id
-			PreparedEstimates::<T>::insert(symbol.clone(), &estimates_config);
-			// Self::hex_display_estimates_config(&estimates_config);
+			EstimatesInitDeposit::<T>::insert(storage_key.clone(), estimates_config.id, init_reward);
+			SymbolEstimatesId::<T>::insert(storage_key.clone(), estimates_config.id.clone() + 1); //generate next id
+			PreparedEstimates::<T>::insert(storage_key.clone(), &estimates_config);
 
-			// log::debug!(target: TARGET, "RUN 3 symbol : current_id={:?}", &current_id);
-
-			// update symbol reward
-			// let reward: Option<BalanceOf<T>> = SymbolRewardPool::<T>::get(&symbol);
-			// if let Some(reward) = reward {
-			// 	let reward = reward + init_reward;
-			// 	SymbolRewardPool::<T>::insert(&symbol, reward);
-			// } else {
-			// 	SymbolRewardPool::<T>::insert(&symbol, init_reward);
-			// }
-
-			if !CompletedEstimates::<T>::contains_key(&symbol) {
+			if !CompletedEstimates::<T>::contains_key(&storage_key) {
 				let val = BoundedVec::<
 					SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
 					MaximumEstimatesPerSymbol,
 				>::default();
 				//
-				CompletedEstimates::<T>::insert(symbol.clone(), val);
+				CompletedEstimates::<T>::insert(storage_key.clone(), val);
 			}
 
-			Participants::<T>::insert(symbol, current_id, BoundedVec::<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>::default());
+			Participants::<T>::insert(storage_key, current_id, BoundedVec::<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>::default());
 			Self::deposit_event(Event::NewEstimates {
 				estimate: estimates_config,
 				who: caller,
@@ -457,6 +453,7 @@ pub mod pallet {
 		pub fn participate_estimates(
 			origin: OriginFor<T>,
 			symbol: Vec<u8>,
+			estimated_type: EstimatesType,
 			estimated_price: Option<u64>,
 			estimated_fraction_length: Option<u32>,
 			range_index: Option<u8>,
@@ -469,8 +466,9 @@ pub mod pallet {
 			let chain_fraction_length = T::PriceProvider::fraction(&symbol);
 			ensure!(chain_fraction_length.is_some(), Error::<T>::SymbolNotSupported);
 
-			let symbol: BoundedVec<u8, StringLimit> =
-				symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
+			let per_symbol = symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
+			let symbol: (BoundedVecOfSymbol, EstimatesType) = (per_symbol, estimated_type);
+
 
 			// let bsc_address: Option<BoundedVecOfBscAddress> = if let Some(bsc) = bsc_address {
 			// 	let bsc: BoundedVec<u8, StringLimit> =
@@ -568,7 +566,7 @@ pub mod pallet {
 				};
 
 				// Get and check subaccount.
-				let source_acc = Self::account_id(symbol.to_vec());
+				let source_acc = Self::account_id(symbol.clone());
 				ensure!(source_acc.is_some(), Error::<T>::SubAccountGenerateFailed);
 				let source_acc = source_acc.unwrap();
 
@@ -579,25 +577,26 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				let symbol_for_deposit = BoundedVecOfPreparedEstimates::try_create_on_vec(symbol.to_vec())
-					.map_err(|_| Error::<T>::BadMetadata)?;
+				// let symbol_for_deposit = BoundedVecOfSymbol::try_create_on_vec(symbol.to_vec())
+				// 	.map_err(|_| Error::<T>::BadMetadata)?;
 
-				let init_deposit = EstimatesInitDeposit::<T>::try_get(symbol_for_deposit.clone(), config.id);
+				let init_deposit = EstimatesInitDeposit::<T>::try_get(symbol.clone(), config.id);
 				ensure!(
 					init_deposit.is_ok(),
 					Error::<T>::EstimatesInitDepositNotExist
 				);
-				EstimatesInitDeposit::<T>::insert(symbol_for_deposit, config.id, init_deposit.unwrap().saturating_add(ticket_price));
+				EstimatesInitDeposit::<T>::insert(symbol.clone(), config.id, init_deposit.unwrap().saturating_add(ticket_price));
 
 				accounts
 					.try_push(estimates.clone())
 					.map_err(|_| Error::<T>::TooMany)?;
 
 				Self::deposit_event(Event::ParticipateEstimates {
-					symbol: symbol.clone(),
+					symbol: symbol.0.clone(),
 					id: estimates_id,
 					estimate: estimates,
 					who: caller,
+					estimate_type: symbol.1.clone(),
 				});
 				Ok(())
 			})
@@ -620,14 +619,14 @@ pub mod pallet {
 			ensure!(config.is_some(), Error::<T>::EstimatesConfigInvalid);
 
 			// Get and check subaccount.
-			let source_acc = Self::account_id(symbol.to_vec());
+			let source_acc = Self::account_id(symbol.clone());
 			ensure!(source_acc.is_some(), Error::<T>::SubAccountGenerateFailed);
 
 			let source_acc = source_acc.unwrap();
 			let config = config.unwrap();
 			let now = frame_system::Pallet::<T>::block_number();
 			let end = config.end;
-			let symbol = config.symbol.clone();
+			// let symbol = config.symbol.clone();
 			let deviation = config.deviation;
 			let range = config.range.clone();
 			let estimates_type = config.estimates_type.clone();
@@ -635,7 +634,7 @@ pub mod pallet {
 
 			if now >= end {
 				let participant_accounts = Participants::<T>::get(&symbol, id);
-				let price: Result<(u64, FractionLength, T::BlockNumber), ()> = T::PriceProvider::price(&symbol);
+				let price: Result<(u64, FractionLength, T::BlockNumber), ()> = T::PriceProvider::price(&symbol.0);
 				if let Ok(price) = price {
 					if participant_accounts.len() == 0 {
 						// If no one is involved, it will be forced to end.
@@ -660,8 +659,8 @@ pub mod pallet {
 						{
 							let winners: Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> = Self::call_winners(
 								&config,
-								estimates_type,
-								&symbol,
+								// estimates_type,
+								// &symbol,
 								total_reward,
 								deviation,
 								range,
@@ -824,6 +823,7 @@ pub mod pallet {
 			id: u64,
 			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
 			who: T::AccountId,
+			estimate_type: EstimatesType,
 		},
 
 		CompletedEstimates {
@@ -839,53 +839,29 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Invalid metadata given.
 		BadMetadata,
-
 		TooMany,
-
 		PalletInactive,
-
 		AddressInvalid,
-
 		PriceInvalid,
-
 		FreeBalanceTooLow,
-
 		SymbolNotSupported,
-
 		PreparedEstimatesExist,
-
 		EstimatesStartTooEarly,
-
 		EstimatesConfigInvalid,
-
 		EstimatesStateError,
-
 		ActiveEstimatesNotExist,
-
 		AccountEstimatesExist,
-
 		AlreadyEnded,
-
 		AlreadyParticipating,
-
 		ParameterInvalid,
-
 		TooManyEstimates,
-
 		NotMember,
-
 		MultiplierNotExist,
-
 		SubAccountGenerateFailed,
-
 		UnableToGetPrice,
-
 		UnresolvedEstimatesNotExist,
-
 		IllegalCall,
-
 		TooOften,
-
 		EstimatesInitDepositNotExist,
 	}
 
@@ -983,12 +959,7 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub type SymbolEstimatesId<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, //symbol
-		u64,                         //id
-	>;
+	pub type StorageVersion<T: Config> = StorageValue<_, Releases, OptionQuery>;
 
 	#[pallet::storage]
 	pub type LockedEstimates<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
@@ -1009,10 +980,18 @@ pub mod pallet {
 	StorageValue<_, BoundedVecOfAdmins<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
+	pub type SymbolEstimatesId<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		(BoundedVecOfSymbol,EstimatesType), //symbol
+		u64,                         //id
+	>;
+
+	#[pallet::storage]
 	pub type PreparedEstimates<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		BoundedVecOfPreparedEstimates,
+		(BoundedVecOfSymbol,EstimatesType),
 		// BoundedVec<u8, StringLimit>,                            // symbol
 		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
 	>;
@@ -1021,7 +1000,7 @@ pub mod pallet {
 	pub type ActiveEstimates<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		BoundedVecOfActiveEstimates,                            // symbol
+		(BoundedVecOfSymbol,EstimatesType),                            // symbol
 		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
 	>;
 
@@ -1029,7 +1008,7 @@ pub mod pallet {
 	pub type UnresolvedEstimates<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		BoundedVecOfActiveEstimates,                            // symbol
+		(BoundedVecOfSymbol,EstimatesType),                            // symbol
 		SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>, // config
 	>;
 
@@ -1037,7 +1016,7 @@ pub mod pallet {
 	pub type CompletedEstimates<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol btc-sudt => [0, 1, 3]
+		(BoundedVecOfSymbol,EstimatesType),  // symbol btc-sudt => [0, 1, 3]
 		BoundedVecOfCompletedEstimates<T::BlockNumber, BalanceOf<T>>, // configs
 		ValueQuery,
 	>;
@@ -1046,7 +1025,7 @@ pub mod pallet {
 	pub type Participants<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol
+		(BoundedVecOfSymbol,EstimatesType),  // symbol
 		Blake2_128Concat,
 		u64, // id
 		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumParticipants>,
@@ -1057,7 +1036,7 @@ pub mod pallet {
 	pub type EstimatesInitDeposit<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>,
+		(BoundedVecOfSymbol,EstimatesType),
 		Blake2_128Concat,
 		u64, // id
 		BalanceOf<T>,
@@ -1068,7 +1047,7 @@ pub mod pallet {
 	pub type Winners<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		BoundedVec<u8, StringLimit>, // symbol
+		(BoundedVecOfSymbol, EstimatesType), // symbol
 		Blake2_128Concat,
 		u64, // id
 		BoundedVec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>, MaximumWinners>,
@@ -1116,11 +1095,24 @@ impl<T: Config> Pallet<T> {
 	}
 
 	//
-	pub fn account_id(symbol: Vec<u8>) -> Option<T::AccountId> {
+	// pub fn account_id(symbol: Vec<u8>) -> Option<T::AccountId> {
+	// 	if symbol.len() > 20usize {
+	// 		return None;
+	// 	}
+	// 	let mut u8list: [u8; 20] = [0; 20];
+	// 	u8list[..symbol.len()].copy_from_slice(symbol.as_slice());
+	// 	T::PalletId::get().try_into_sub_account(u8list)
+	// }
+
+	pub fn account_id(sign: (BoundedVecOfSymbol, EstimatesType)) -> Option<T::AccountId> {
+		let mut symbol = sign.0;
+		let estimat_type: u8 = sign.1.get_type_number();
+		symbol.try_push(estimat_type);
 
 		if symbol.len() > 20usize {
 			return None;
 		}
+
 		let mut u8list: [u8; 20] = [0; 20];
 		u8list[..symbol.len()].copy_from_slice(symbol.as_slice());
 		T::PalletId::get().try_into_sub_account(u8list)
@@ -1129,6 +1121,7 @@ impl<T: Config> Pallet<T> {
 	fn do_choose_winner(
 		winner_payload: ChooseWinnersPayload<T::Public, T::AccountId, T::BlockNumber>,
 		estimates_state: EstimatesState,
+		// estimate_type: EstimatesType,
 	) -> DispatchResult {
 
 		let now = frame_system::Pallet::<T>::block_number();
@@ -1136,15 +1129,17 @@ impl<T: Config> Pallet<T> {
 		let symbol = winner_payload.symbol;
 		let id = winner_payload.estimates_id;
 		let mut config = None;
+		// let storage_key = (symbol,estimate_type);
+		let storage_key = symbol;
 		match estimates_state {
 			EstimatesState::InActive => {}
 			EstimatesState::Active => {
-				config = ActiveEstimates::<T>::get(&symbol);
+				config = ActiveEstimates::<T>::get(&storage_key);
 			}
 			EstimatesState::WaitingPayout => {}
 			EstimatesState::Completed => {}
 			EstimatesState::Unresolved => {
-				config = UnresolvedEstimates::<T>::get(&symbol);
+				config = UnresolvedEstimates::<T>::get(&storage_key);
 			}
 		}
 
@@ -1160,7 +1155,7 @@ impl<T: Config> Pallet<T> {
 
 				if now >= end && state == estimates_state {
 					// Get and check subaccount.
-					let source_acc = Self::account_id(symbol.to_vec());
+					let source_acc = Self::account_id(storage_key.clone());
 					ensure!(source_acc.is_some(), Error::<T>::SubAccountGenerateFailed);
 					let source_acc = source_acc.unwrap();
 
@@ -1173,9 +1168,12 @@ impl<T: Config> Pallet<T> {
 							T::Currency::free_balance(&symbol_account) >= total_reward,
 							Error::<T>::FreeBalanceTooLow
 						);
-					Winners::<T>::insert(&symbol, id, winners.clone());
-					ActiveEstimates::<T>::remove(&symbol);
-					UnresolvedEstimates::<T>::remove(&symbol);
+					// let storage_key = (symbol.clone(), estimate_type.clone());
+					// let storage_key = symbol;
+
+					Winners::<T>::insert(&storage_key, id, winners.clone());
+					ActiveEstimates::<T>::remove(&storage_key);
+					UnresolvedEstimates::<T>::remove(&storage_key);
 
 					for winner in winners {
 						let reward: BalanceOf<T> = (winner.reward).saturated_into();
@@ -1189,7 +1187,7 @@ impl<T: Config> Pallet<T> {
 						// T::Currency::reserve_named(&id, &winner.account, reward)?;
 					}
 
-					CompletedEstimates::<T>::try_mutate(&symbol, |configs| {
+					CompletedEstimates::<T>::try_mutate(&storage_key, |configs| {
 						config.state = EstimatesState::Completed;
 						config.symbol_completed_price = price;
 						config.total_reward = total_reward;
@@ -1213,11 +1211,12 @@ impl<T: Config> Pallet<T> {
 			let symbol = config.symbol.clone();
 			let _deviation = config.deviation;
 			let _range = config.range.clone();
-			let _estimates_type = config.estimates_type.clone();
+			let estimates_type = config.estimates_type.clone();
 			let _id = config.id;
 
 			// Get and check subaccount.
-			let source_acc = Self::account_id(symbol.to_vec());
+			let storage_key = (symbol, estimates_type);
+			let source_acc = Self::account_id(storage_key);
 
 			log::info!(
 				target: TARGET,
@@ -1251,7 +1250,7 @@ impl<T: Config> Pallet<T> {
 			.send_unsigned_transaction(
 				|account| ChooseTrigerPayload {
 					public: account.public.clone(),
-					symbol: config.symbol.clone(),
+					symbol: (config.symbol.clone(), config.estimates_type.clone()),
 				},
 				|payload, signature| {
 					log::info!(
@@ -1282,8 +1281,8 @@ impl<T: Config> Pallet<T> {
 
 	pub fn call_winners(
 		config: &SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
-		estimates_type: EstimatesType,
-		_symbol: &Vec<u8>,
+		// estimates_type: EstimatesType,
+		// _symbol: &Vec<u8>,
 		total_reward: BalanceOf<T>,
 		deviation: Option<Permill>,
 		range: Option<BoundedVec<u64, MaximumOptions>>,
@@ -1291,7 +1290,7 @@ impl<T: Config> Pallet<T> {
 		price: (u64, FractionLength, T::BlockNumber),
 	) -> Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>> {
 		let mut count: u32 = 0;
-
+		let estimates_type = config.estimates_type.clone();
 		let mut push_winner =
 			|winners: &mut Vec<AccountParticipateEstimates<T::AccountId, T::BlockNumber>>,
 			 winner: AccountParticipateEstimates<T::AccountId, T::BlockNumber>| {

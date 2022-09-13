@@ -39,14 +39,14 @@ use frame_support::traits::Len;
 use crate::*;
 use frame_system::offchain::{SignedPayload, SigningTypes};
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
-use sp_runtime::{testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup, Verify}, RuntimeAppPublic, Permill};
+use sp_runtime::{testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup, Verify}, RuntimeAppPublic, Permill, print};
 
 use sp_runtime::traits::{AppVerify, ValidateUnsigned};
 use sp_runtime::transaction_validity::TransactionSource;
 use ares_oracle::traits::SymbolInfo;
 use bound_vec_helper::BoundVecHelper;
 use crate::{ActiveEstimates, Admins, BalanceOf, CompletedEstimates, Error, LockedEstimates, MinimumInitReward, MinimumTicketPrice, PreparedEstimates, UnresolvedEstimates};
-use crate::types::{AccountParticipateEstimates, BoundedVecOfActiveEstimates, BoundedVecOfChooseWinnersPayload, BoundedVecOfPreparedEstimates, BoundedVecOfSymbol, ChooseTrigerPayload, EstimatesState, EstimatesType, MultiplierOption};
+use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfChooseWinnersPayload, ChooseTrigerPayload, EstimatesState, EstimatesType, MultiplierOption};
 
 // fn test_pub() -> sp_core::sr25519::Public {
 // 	sp_core::sr25519::Public::from_raw([1u8; 32])
@@ -152,7 +152,7 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
 
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone())
 		);
 
 		// ######################### SETP 2 ##########################
@@ -161,17 +161,17 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 
 		// Check that the white list account is valid? No!!!!!
@@ -189,13 +189,15 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
 		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 		let completed = CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		);
 		assert_eq!(completed.len(), 0);
-		let estimate_config = ActiveEstimates::<Test>::get(BoundedVecOfActiveEstimates::create_on_vec(symbol.clone()));
+		let estimate_config = ActiveEstimates::<Test>::get(
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
+		);
 		assert!(estimate_config.is_some());
 		let mut estimate_config = estimate_config.unwrap();
 
@@ -216,7 +218,7 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()) ,
 			});
 
 			let signature_valid =
@@ -234,13 +236,13 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
 
 		// Estimate will to end without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		));
 		let completed = CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
 		);
 		assert_eq!(completed.len(), 1);
 		estimate_config.state = EstimatesState::Completed;
@@ -300,9 +302,11 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -311,17 +315,17 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ######################### SETP 2 ##########################
@@ -344,6 +348,7 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             Some(231648223),
             Some(4),
             account_participate.range_index.clone(),
@@ -376,7 +381,7 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -394,22 +399,22 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 
 		//
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		assert_eq!(CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len(), 1);
-		let winners = Winners::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let winners = Winners::<Test>::get(&storage_key, 0);
 		// println!("{:?}", winners);
 		assert!(winners.is_some());
 		assert_eq!(winners.unwrap().len(), 1);
-		let participants = Participants::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let participants = Participants::<Test>::get(&storage_key, 0);
 		// println!("{:?}", participants);
 		assert_eq!(participants.len(), 1);
 
@@ -418,26 +423,26 @@ fn test_call_new_estimates_with_DEVIATION_has_winner() {
 		assert_noop!(Estimates::data_cleaning(Origin::none()), Error::<Test>::TooOften);
 
 		// No change becouse the conditional is not met (block not reach)
-		let winners = Winners::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let winners = Winners::<Test>::get(&storage_key, 0);
 		assert!(winners.is_some());
 		assert_eq!(winners.unwrap().len(), 1);
-		let participants = Participants::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let participants = Participants::<Test>::get(&storage_key, 0);
 		assert_eq!(participants.len(), 1);
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
 		assert_eq!(Balances::free_balance(&account_participate.account.clone()), 3000000000100 + init_reward - 1);
 
 		// Force the BlockNumber
-		let complate_conf_vec = CompletedEstimates::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()));
+		let complate_conf_vec = CompletedEstimates::<Test>::get(&storage_key);
 		assert_eq!(complate_conf_vec.len(), 1);
 		let complate_conf = complate_conf_vec[0].clone();
 		System::set_block_number(complate_conf.distribute + MaximumKeepLengthOfOldData::get());
 		assert_ok!(Estimates::data_cleaning(Origin::none()));
-		let winners = Winners::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let winners = Winners::<Test>::get(&storage_key, 0);
 		assert!(winners.is_none());
-		let participants = Participants::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()), 0);
+		let participants = Participants::<Test>::get(&storage_key, 0);
 		assert_eq!(participants.len(), 0);
-		let complate_conf_vec = CompletedEstimates::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()));
+		let complate_conf_vec = CompletedEstimates::<Test>::get(&storage_key);
 		assert_eq!(complate_conf_vec.len(), 0);
 
 
@@ -492,9 +497,11 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -503,17 +510,17 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 		run_to_block(85);
 		assert_eq!(System::block_number(), 85) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check that the white list account is valid? No!!!!!
@@ -550,6 +557,7 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             Some(231648223),
             Some(4),
             account_participate.range_index.clone(),
@@ -574,7 +582,7 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -593,17 +601,17 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 		// Check
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Not input CompletedEstimates
 		assert_eq!(0 , CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		// Check UnresolvedEstimates
 		assert!(UnresolvedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Use admin go to force completed.
@@ -611,6 +619,7 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 		   Estimates::force_complete(
                 Origin::signed(AccountId::from_raw([3; 32])),
                 symbol.clone(),
+				estimates_type.clone(),
                 231648223,
                 4,
             ),
@@ -621,6 +630,7 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 		   Estimates::force_complete(
                 Origin::signed(AccountId::from_raw([6; 32])),
                 symbol.clone(),
+				estimates_type.clone(),
                 231648223,
                 4,
             )
@@ -628,18 +638,18 @@ fn test_call_new_estimates_with_DEVIATION_with_invalid_price_and_force_complete(
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert_eq!(1, CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		// Check UnresolvedEstimates
 		assert!(!UnresolvedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -696,9 +706,11 @@ fn test_fix_immortality_estimates_bug_08250957() {
 
 		assert_eq!(Balances::free_balance(&admin_acc), 1000000000100 - init_reward );
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -707,17 +719,17 @@ fn test_fix_immortality_estimates_bug_08250957() {
 		run_to_block(85);
 		assert_eq!(System::block_number(), 85) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Add a new estimates before the old one is over
@@ -731,11 +743,11 @@ fn test_fix_immortality_estimates_bug_08250957() {
 		assert_eq!(Balances::free_balance(&admin_acc), 1000000000100 - init_reward * 2);
 
 		// New one's ending is 90, id is 1
-		let new_prepared = PreparedEstimates::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()));
+		let new_prepared = PreparedEstimates::<Test>::get(&storage_key);
 		assert!(new_prepared.is_some());
 		let new_prepared = new_prepared.unwrap();
 		assert_eq!(
-			SymbolEstimatesId::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())),
+			SymbolEstimatesId::<Test>::get(&storage_key),
 			Some(2)
 		);
 		assert_eq!(new_prepared.id, 1);
@@ -779,6 +791,7 @@ fn test_fix_immortality_estimates_bug_08250957() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             Some(231648223),
             Some(4),
             account_participate.range_index.clone(),
@@ -794,7 +807,7 @@ fn test_fix_immortality_estimates_bug_08250957() {
 		run_to_block(91);
 
 		println!("DEBUG-ActiveEstimates A :{:?}", ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let tx = pool_state.write().transactions.pop().unwrap();
@@ -807,7 +820,7 @@ fn test_fix_immortality_estimates_bug_08250957() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()) ,
 			});
 
 			let signature_valid =
@@ -827,22 +840,22 @@ fn test_fix_immortality_estimates_bug_08250957() {
 
 		// Check
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Not input CompletedEstimates
 		assert_eq!(0 , CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		// Check UnresolvedEstimates
 		assert_eq!(1, UnresolvedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		// New Estimates can not start yet because the old one not completed.
 		assert!(PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check user balance.
@@ -853,6 +866,7 @@ fn test_fix_immortality_estimates_bug_08250957() {
 		   Estimates::force_complete(
                 Origin::signed(AccountId::from_raw([6; 32])),
                 symbol.clone(),
+				estimates_type.clone(),
                 231648223,
                 4,
             )
@@ -873,7 +887,7 @@ fn test_fix_immortality_estimates_bug_08250957() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -894,27 +908,27 @@ fn test_fix_immortality_estimates_bug_08250957() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Prepared estimate will go to unresolved list
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert_eq!(2, CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		// Check UnresolvedEstimates
 		assert_eq!(0, UnresolvedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		).len());
 
 		println!("UnresolvedEstimates {:?}", CompletedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		))
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -969,9 +983,10 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -980,17 +995,17 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ######################### SETP 2 ##########################
@@ -1025,6 +1040,7 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate1.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             Some(231648223),
             Some(4),
             account_participate1.range_index.clone(),
@@ -1039,6 +1055,7 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate2.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             Some(231648223),
             Some(4),
             account_participate2.range_index.clone(),
@@ -1074,7 +1091,7 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -1092,13 +1109,13 @@ fn test_call_new_estimates_with_DEVIATION_has_2_winner() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -1157,15 +1174,6 @@ fn test_call_new_estimates_with_DEVIATION_no_winner() {
 		// The arrival start block ActiveEstimates will fill new value.
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
 
 		// ######################### SETP 3 ##########################
 		//
@@ -1188,6 +1196,7 @@ fn test_call_new_estimates_with_DEVIATION_no_winner() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate.estimates.clone(),
             Some(4),
             account_participate.range_index.clone(),
@@ -1211,58 +1220,6 @@ fn test_call_new_estimates_with_DEVIATION_no_winner() {
 		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
 		// winners.try_push(account_participate.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -1271,7 +1228,7 @@ fn test_call_new_estimates_with_DEVIATION_no_winner() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -1287,54 +1244,23 @@ fn test_call_new_estimates_with_DEVIATION_no_winner() {
             ));
 		}
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type);
+
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
 		assert_eq!(Balances::free_balance(&account_participate.account.clone()), 3000000000100 - price * 3);
 	});
 }
-
-// #[test]
-// fn test_enviroment() {
-//     let mut t = new_test_ext();
-//
-//     const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
-//
-//     let (offchain, offchain_state) = testing::TestOffchainExt::new();
-//     let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-//     let keystore = KeyStore::new();
-//     SyncCryptoStore::sr25519_generate_new(&keystore, AresId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-//     SyncCryptoStore::sr25519_generate_new(&keystore, AresId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-//
-//     let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AresId::ID)
-//         .get(0)
-//         .unwrap()
-//         .clone();
-//
-//     let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AresId::ID)
-//         .get(1)
-//         .unwrap()
-//         .clone();
-//
-//     t.register_extension(OffchainWorkerExt::new(offchain));
-//     t.register_extension(TransactionPoolExt::new(pool));
-//     t.register_extension(KeystoreExt(Arc::new(keystore)));
-//
-//     t.execute_with(|| {
-//         run_to_block(5);
-//
-//     });
-//
-// }
 
 // Test range
 #[test]
@@ -1369,7 +1295,7 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		// let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		// let multiplier: Vec<MultiplierOption> = vec![
@@ -1390,9 +1316,10 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), EstimatesType::RANGE);
 		// // Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -1401,32 +1328,18 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 3 ##########################
 		// Go to the end block and call cal_winners
@@ -1434,59 +1347,7 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
-		// assert_eq!(tx.signature.unwrap().0, 1);
-		// println!("tx.call = {:?}", tx.call);
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners: BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default(),
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(),
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
 
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners: BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default(),
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
 
 		if let Call::Estimates(
 			crate::Call::choose_winner {
@@ -1496,7 +1357,7 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -1514,7 +1375,7 @@ fn test_call_new_estimates_with_RANGE_no_palyer() {
 
 		// The estimate will force to end without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 	});
@@ -1552,7 +1413,7 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		// let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -1571,9 +1432,12 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 			price,
 		);
 
+		let estimates_type = EstimatesType::RANGE;
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -1582,32 +1446,18 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 2 ##########################
 		// Make AccountParticipateEstimates
@@ -1629,6 +1479,7 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate.estimates.clone(),
             None,
             account_participate.range_index.clone(),
@@ -1652,57 +1503,6 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
 		winners.try_push(account_participate.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -1711,7 +1511,7 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -1729,13 +1529,13 @@ fn test_call_new_estimates_with_RANGE_has_winner() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -1776,7 +1576,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -1792,9 +1592,10 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -1803,32 +1604,18 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 2 ##########################
 		// Make AccountParticipateEstimates
@@ -1850,6 +1637,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate.estimates.clone(),
             None,
             account_participate.range_index.clone(),
@@ -1873,57 +1661,6 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
 		winners.try_push(account_participate.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -1932,7 +1669,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -1950,13 +1687,13 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_left() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -1997,7 +1734,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -2013,9 +1750,11 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -2024,32 +1763,18 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 2 ##########################
 		// Make AccountParticipateEstimates
@@ -2071,6 +1796,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate.estimates.clone(),
             None,
             account_participate.range_index.clone(),
@@ -2094,57 +1820,6 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
 		winners.try_push(account_participate.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -2153,7 +1828,7 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -2171,13 +1846,13 @@ fn test_call_new_estimates_with_RANGE_has_winner_on_right() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -2218,7 +1893,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -2234,9 +1909,11 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -2245,32 +1922,18 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 2 ##########################
 		// Make AccountParticipateEstimates
@@ -2306,6 +1969,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate1.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate1.estimates.clone(),
             None,
             account_participate1.range_index.clone(),
@@ -2321,6 +1985,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate2.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate2.estimates.clone(),
             None,
             account_participate2.range_index.clone(),
@@ -2345,57 +2010,6 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 		winners.try_push(account_participate1.clone());
 		winners.try_push(account_participate2.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -2404,7 +2018,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -2422,13 +2036,13 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_2_winner_on_right() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -2473,7 +2087,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -2489,9 +2103,11 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -2500,17 +2116,17 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check that the white list account is valid? No!!!!!
@@ -2561,6 +2177,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate1.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate1.estimates.clone(),
             None,
             account_participate1.range_index.clone(),
@@ -2576,6 +2193,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate2.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate2.estimates.clone(),
             None,
             account_participate2.range_index.clone(),
@@ -2599,57 +2217,6 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
 		winners.try_push(account_participate1.clone());
 
-		// assert_eq!(tx.call, Call::Estimates(crate::Call::choose_winner {
-		//     winner_payload: ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     }
-		// }));
-		//
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//     }) = tx.call {
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::signed(public_key_1.clone()),
-		//         body
-		//     ));
-		// }
-
-		// if let Call::Estimates(
-		//     crate::Call::choose_winner {
-		//         winner_payload: body,
-		//         signature: signature
-		//     }) = tx.call {
-		//
-		//     assert_eq!(body, ChooseWinnersPayload {
-		//         block_number: 16, // Why not 15?
-		//         winners,
-		//         public: Some(public_key_1.clone()),
-		//         estimates_id: 0,
-		//         symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
-		//         price: TestSymbolInfo::price(&symbol).ok(), // From SymbolInfo Interface.
-		//     });
-		//
-		//     let signature_valid =
-		//         <ChooseWinnersPayload<
-		//             <Test as SigningTypes>::Public,
-		//             AccountId,
-		//             <Test as frame_system::Config>::BlockNumber,
-		//         > as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
-		//     assert!(signature_valid);
-		//
-		//     assert_ok!(Estimates::choose_winner(
-		//         Origin::none(),
-		//         body,
-		//         signature,
-		//     ));
-		// }
-
 		if let Call::Estimates(
 			crate::Call::choose_winner {
 				trigger_payload: body,
@@ -2658,7 +2225,7 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -2676,13 +2243,13 @@ fn test_call_new_estimates_with_RANGE_has_2_palyer_1_winner_on_right() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// ################### Next, wait for the reward.
 		// ###############################################
 		assert!(CompletedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		// Check winner free balance , the last value subtracted is the transfer fee.
@@ -2727,7 +2294,7 @@ fn test_config_type_max_end_delay() {
 		let start: BlockNumber = 10; //     start: T::BlockNumber,
 		let end: BlockNumber = 15; //     end: T::BlockNumber,
 		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
-		let estimates_type =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type =  EstimatesType::RANGE; //     estimates_type: EstimatesType,
 		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
 		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
 		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
@@ -2743,9 +2310,11 @@ fn test_config_type_max_end_delay() {
 			price,
 		);
 
+		let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
+
 		// Check estimate.
 		let estimate = PreparedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 
 		// ######################### SETP 2 ##########################
@@ -2754,32 +2323,18 @@ fn test_config_type_max_end_delay() {
 		run_to_block(10);
 		assert_eq!(System::block_number(), 10) ;
 		assert!(ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let mut active_estimate = estimate.clone().unwrap();
 		active_estimate.state = EstimatesState::Active;
 		assert_eq!(Some(active_estimate), ActiveEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 		// Then PreparedEstimates is empty.
 		assert!(!PreparedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
-
-		// Check that the white list account is valid? No!!!!!
-		// assert!(!Estimates::can_send_signed(), "Not valid");
-		// So need to set it up first.
-		// assert_ok!(Estimates::preference(
-		//     Origin::root(),
-		//     None, // admins: Option<Vec<T::AccountId>>,
-		//     Some(vec![public_key_1]), // whitelist: Option<Vec<T::AccountId>>,
-		//     None, // locked_estimates: Option<T::BlockNumber>,
-		//     None, // minimum_ticket_price: Option<BalanceOf<T>>,
-		//     None, // minimum_init_reward: Option<BalanceOf<T>>,
-		// ));
-		// Check that the white list account is valid ? Yes, it's set.
-		// assert!(Estimates::can_send_signed(), "Yes, it's set");
 
 		// ######################### SETP 2 ##########################
 		// Make AccountParticipateEstimates
@@ -2815,6 +2370,7 @@ fn test_config_type_max_end_delay() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate1.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate1.estimates.clone(),
             None,
             account_participate1.range_index.clone(),
@@ -2830,6 +2386,7 @@ fn test_config_type_max_end_delay() {
 		assert_ok!(Estimates::participate_estimates(
             Origin::signed(account_participate2.account.clone()),
             symbol.clone(),
+			estimates_type.clone(),
             account_participate2.estimates.clone(),
             None,
             account_participate2.range_index.clone(),
@@ -2864,7 +2421,7 @@ fn test_config_type_max_end_delay() {
 
 			assert_eq!(body, ChooseTrigerPayload {
 				public: public_key_1.clone(),
-				symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone() ),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone()),
 			});
 
 			let signature_valid =
@@ -2882,17 +2439,342 @@ fn test_config_type_max_end_delay() {
 
 		// You can't end the event without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		assert!(UnresolvedEstimates::<Test>::contains_key(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		));
 
 		let estimates = UnresolvedEstimates::<Test>::get(
-			BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+			&storage_key
 		);
 		assert_eq!(estimates.unwrap().state, EstimatesState::Unresolved);
+	});
+}
+
+#[test]
+fn test_supports_creating_multiple_tasks_at_the_same_time() {
+	let mut t = new_test_ext();
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+	let keystore = KeyStore::new();
+	SyncCryptoStore::sr25519_generate_new(&keystore, AresId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	SyncCryptoStore::sr25519_generate_new(&keystore, AresId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+
+	let public_key_1 = SyncCryptoStore::sr25519_public_keys(&keystore, AresId::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	// let public_key_2 = SyncCryptoStore::sr25519_public_keys(&keystore, AresId::ID)
+	//     .get(1)
+	//     .unwrap()
+	//     .clone();
+
+	t.register_extension(OffchainWorkerExt::new(offchain.clone()));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
+	t.register_extension(OffchainDbExt::new(offchain.clone()));
+
+	t.execute_with(|| {
+
+		//
+		let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
+		let start: BlockNumber = 10; //     start: T::BlockNumber,
+		let end: BlockNumber = 15; //     end: T::BlockNumber,
+		let distribute: BlockNumber = 20; //     distribute: T::BlockNumber,
+		let estimates_type_deviation =  EstimatesType::DEVIATION; //     estimates_type: EstimatesType,
+		let estimates_type_range = EstimatesType::RANGE;
+		let deviation = Permill::from_percent(10); //     deviation: Option<Permill>,
+		let range: Option<Vec<u64>>=None; //     range: Option<Vec<u64>>, // [{ 'Base': 1 }, { 'Base': 3 }, { 'Base': 5 }]
+		let init_reward: BalanceOf<Test> = 1000; //     #[pallet::compact] init_reward: BalanceOf<T>,
+		let price: BalanceOf<Test> = 500; //     #[pallet::compact] price: BalanceOf<T>,
+
+		//
+		helper_create_new_estimates_with_deviation (
+			5,
+			deviation,
+			init_reward,
+			price,
+		);
+		// helper_create_new_estimates_with_range (
+		// 	6,
+		// 	vec![21481_3055u64, 23481_3055u64, 27481_3055u64, 29481_3055u64],
+		// 	4,
+		// 	init_reward,
+		// 	price,
+		// );
+		// Create new estimates. (23164_8223)
+		helper_create_new_estimates_with_range (
+			6,
+			// 23164_8223 > 23064_8223u64 YES. so select index 4
+			vec![20064_8223u64, 21064_8223u64, 22064_8223u64, 23064_8223u64],
+			4,
+			init_reward,
+			price,
+		);
+
+		let storage_key_deviation = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type_deviation.clone());
+		let storage_key_range = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type_range.clone());
+
+		// // Check estimate.
+		let estimate_deviation = PreparedEstimates::<Test>::get(
+			&storage_key_deviation
+		);
+		let estimate_range = PreparedEstimates::<Test>::get(
+			&storage_key_range
+		);
+
+		// ######################### SETP 2 ##########################
+		// The arrival start block ActiveEstimates will fill new value.
+
+		run_to_block(11);
+		assert_eq!(System::block_number(), 11) ;
+		assert!(ActiveEstimates::<Test>::contains_key(
+			&storage_key_deviation
+		));
+		assert!(ActiveEstimates::<Test>::contains_key(
+			&storage_key_range
+		));
+
+		let mut active_estimate_deviation = estimate_deviation.clone().unwrap();
+		active_estimate_deviation.state = EstimatesState::Active;
+		assert_eq!(Some(active_estimate_deviation), ActiveEstimates::<Test>::get(
+			&storage_key_deviation
+		));
+
+		let mut active_estimate_range = estimate_range.clone().unwrap();
+		active_estimate_range.state = EstimatesState::Active;
+		assert_eq!(Some(active_estimate_range), ActiveEstimates::<Test>::get(
+			&storage_key_range
+		));
+
+		// Then PreparedEstimates is empty.
+		assert!(!PreparedEstimates::<Test>::contains_key(
+			&storage_key_deviation
+		));
+		assert!(!PreparedEstimates::<Test>::contains_key(
+			&storage_key_range
+		));
+
+		// ######################### SETP 2.1 ##########################
+		// Make AccountParticipateEstimates
+		let account_participate1 = AccountParticipateEstimates{
+			account: AccountId::from_raw([3; 32]),
+			end: 15,
+			estimates: Some(23164822300),
+			range_index: None,
+			bsc_address: None,
+			multiplier: MultiplierOption::Base(3),
+			reward: ((1000+500*8)/8*3)
+		};
+
+		// Make AccountParticipateEstimates
+		let account_participate2 = AccountParticipateEstimates{
+			account: AccountId::from_raw([4; 32]),
+			end: 15,
+			estimates: Some(23164822300),
+			range_index: None,
+			bsc_address: None,
+			multiplier: MultiplierOption::Base(5),
+			reward: ((1000+500*8)/8*5)
+		};
+
+		// Check winner free balance
+		assert_eq!(Balances::free_balance(&account_participate1.account.clone()), 3000000000100);
+		assert_eq!(Balances::free_balance(&account_participate2.account.clone()), 4000000000100);
+
+		// Make winner.
+		// Call participate_estimates
+		assert_ok!(Estimates::participate_estimates(
+            Origin::signed(account_participate1.account.clone()),
+            symbol.clone(),
+			estimates_type_deviation.clone(),
+            Some(231648223),
+            Some(4),
+            account_participate1.range_index.clone(),
+            account_participate1.multiplier.clone(),
+            None, // bsc address
+        ));
+
+		assert_ok!(Estimates::participate_estimates(
+            Origin::signed(account_participate2.account.clone()),
+            symbol.clone(),
+			estimates_type_deviation.clone(),
+            Some(231648223),
+            Some(4),
+            account_participate2.range_index.clone(),
+            account_participate2.multiplier.clone(),
+            None, // bsc address
+        ));
+
+		// Check winner free balance
+		assert_eq!(Balances::free_balance(&account_participate1.account.clone()), 3000000000100 - price * 3);
+		assert_eq!(Balances::free_balance(&account_participate2.account.clone()), 4000000000100 - price * 5);
+
+		//----------------------------------------------------------------------
+
+		// ######################### SETP 2.2 ##########################
+		// Make AccountParticipateEstimates
+		let account_participate3 = AccountParticipateEstimates{
+			account: AccountId::from_raw([3; 32]),
+			end: 15,
+			estimates: None,
+			range_index: Some(4),
+			bsc_address: None,
+			multiplier: MultiplierOption::Base(3),
+			reward: ((2500+500*5)/8*3)
+		};
+
+		// Make AccountParticipateEstimates
+		let account_participate4 = AccountParticipateEstimates{
+			account: AccountId::from_raw([4; 32]),
+			end: 15,
+			estimates: None,
+			range_index: Some(4),
+			bsc_address: None,
+			multiplier: MultiplierOption::Base(5),
+			reward: ((2500+500*5)/8*5)
+		};
+
+
+		// Make winner.
+		// Call participate_estimates
+		assert_ok!(Estimates::participate_estimates(
+            Origin::signed(account_participate3.account.clone()),
+            symbol.clone(),
+			estimates_type_range.clone(),
+            account_participate3.estimates.clone(),
+            None,
+            account_participate3.range_index.clone(),
+            account_participate3.multiplier.clone(),
+            None, // bsc address
+        ));
+
+		// Check winner free balance
+		assert_eq!(Balances::free_balance(&account_participate1.account.clone()), 3000000000100 - price * 6);
+
+		// Make player2.
+		// Call participate_estimates
+		assert_ok!(Estimates::participate_estimates(
+            Origin::signed(account_participate4.account.clone()),
+            symbol.clone(),
+			estimates_type_range.clone(),
+            account_participate4.estimates.clone(),
+            None,
+            account_participate4.range_index.clone(),
+            account_participate4.multiplier.clone(),
+            None, // bsc address
+        ));
+
+		// Check winner free balance
+		assert_eq!(Balances::free_balance(&account_participate2.account.clone()), 4000000000100 - price * 10);
+
+		println!("account_participate1.account.balance={:?}", Balances::free_balance(&account_participate1.account.clone()));
+		println!("account_participate2.account.balance={:?}", Balances::free_balance(&account_participate2.account.clone()));
+
+
+		// ######################### SETP 3 ##########################
+		// Go to the end block and call cal_winners
+		run_to_block(17);
+
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+
+		// Create winner
+		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
+		winners.try_push(account_participate3.clone());
+		winners.try_push(account_participate4.clone());
+
+		if let Call::Estimates(
+			crate::Call::choose_winner {
+				trigger_payload: body,
+				signature: signature
+			}) = tx.call {
+
+			assert_eq!(body, ChooseTrigerPayload {
+				public: public_key_1.clone(),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type_range.clone()),
+			});
+
+			let signature_valid =
+				<ChooseTrigerPayload<
+					<Test as SigningTypes>::Public,
+				> as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
+			assert!(signature_valid);
+
+			assert_ok!(Estimates::choose_winner(
+                Origin::none(),
+                body,
+                signature,
+            ));
+		}
+
+		// You can't end the event without WINNER.
+		assert!(!ActiveEstimates::<Test>::contains_key(
+			&storage_key_range
+		));
+
+		// ---------- fro deviation
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+
+		// Create winner
+		let mut winners = BoundedVecOfChooseWinnersPayload::<AccountId, BlockNumber>::default();
+		winners.try_push(account_participate1.clone());
+		winners.try_push(account_participate2.clone());
+
+		if let Call::Estimates(
+			crate::Call::choose_winner {
+				trigger_payload: body,
+				signature: signature
+			}) = tx.call {
+
+			assert_eq!(body, ChooseTrigerPayload {
+				public: public_key_1.clone(),
+				symbol: (BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type_deviation.clone()),
+			});
+
+			let signature_valid =
+				<ChooseTrigerPayload<
+					<Test as SigningTypes>::Public,
+				> as SignedPayload<Test>>::verify::<ares_oracle::ares_crypto::AresCrypto<AresId>>(&body, signature.clone());
+			assert!(signature_valid);
+
+			assert_ok!(Estimates::choose_winner(
+                Origin::none(),
+                body,
+                signature,
+            ));
+		}
+
+		// Check winner free balance , the last value subtracted is the transfer fee.
+		// assert_eq!(Balances::free_balance(&account_participate1.account.clone()), 3000000000100 - price * 3 + ((init_reward+ price * 8)/8*3));
+		// assert_eq!(Balances::free_balance(&account_participate2.account.clone()), 4000000000100 - price * 5 + ((init_reward+ price * 8)/8*5));
+
+		// You can't end the event without WINNER.
+		assert!(!ActiveEstimates::<Test>::contains_key(
+			&storage_key_deviation
+		));
+
+		// ################### Next, wait for the reward.
+		// ###############################################
+		assert!(CompletedEstimates::<Test>::contains_key(
+			&storage_key_range
+		));
+		assert!(CompletedEstimates::<Test>::contains_key(
+			&storage_key_deviation
+		));
+
+		// all amount
+		let each_amount_range = (init_reward+price*8)/8;
+		let each_amount_deviation = (init_reward+price*8)/8;
+
+		// Check winner free balance , the last value subtracted is the transfer fee.
+		assert_eq!(Balances::free_balance(&account_participate1.account.clone()), 3000000000100 - price * 6 + each_amount_range * 3 + each_amount_deviation * 3 );
+		assert_eq!(Balances::free_balance(&account_participate2.account.clone()), 4000000000100 - price * 10 + each_amount_range * 5 + each_amount_deviation * 5);
 	});
 }
 

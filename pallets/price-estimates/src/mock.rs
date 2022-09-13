@@ -265,17 +265,19 @@ pub(crate) fn helper_create_new_estimates_with_deviation(
             price.clone(),
         ));
 
+	let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type.clone());
 	// Check estimate.
 	let estimate = PreparedEstimates::<Test>::get(
-		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+		&storage_key
 	);
 
-	let inc_id = SymbolEstimatesId::<Test>::get(BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()));
+
+	let inc_id = SymbolEstimatesId::<Test>::get(&storage_key );
 	let inc_id = inc_id.unwrap_or(1);
 
 	assert_eq!(estimate, Some(
 		SymbolEstimatesConfig{
-			symbol: BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone()),
+			symbol: BoundedVecOfSymbol::create_on_vec(symbol.clone()),
 			estimates_type,
 			id: inc_id-1,
 			ticket_price: price,
@@ -314,7 +316,7 @@ pub(crate) fn helper_create_new_estimates_with_range(
 	// let min_ticket_price = MinimumTicketPrice::<Test>::get();
 	// let min_init_reward = MinimumInitReward::<Test>::get();
 
-	assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
+	// assert_eq!(Balances::free_balance(&admins[0]), 1000000000100);
 
 	let symbol = "btc-usdt".as_bytes().to_vec(); //     symbol: Vec<u8>,
 	let start: BlockNumber = init_block+5; //     start: T::BlockNumber,
@@ -356,9 +358,10 @@ pub(crate) fn helper_create_new_estimates_with_range(
             price.clone(),
         ));
 
+	let storage_key = (BoundedVecOfSymbol::create_on_vec(symbol.clone()), estimates_type);
 	// Check estimate.
 	let estimate = PreparedEstimates::<Test>::get(
-		BoundedVecOfPreparedEstimates::create_on_vec(symbol.clone())
+		&storage_key
 	);
 }
 
