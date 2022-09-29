@@ -13,6 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.28" }
 ares-oracle = { default-features = false, path = '../ares-oracle' }
 ares-oracle-provider-support = { default-features = false, path = '../ares-oracle-provider-support' }
 bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
@@ -28,6 +29,7 @@ sp-io = { git = "https://github.com/paritytech/substrate", default-features = fa
 sp-keystore = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28", optional = true }
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+oracle-finance = { default-features = false, path = "../oracle-finance" }
 
 [dev-dependencies]
 hex = { version = "0.4", default-features = false, features = ["alloc"]}
@@ -43,6 +45,8 @@ std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
+	"oracle-finance/std",
+	'frame-benchmarking/std',
 #	"hex",
 	"lite-json/std",
 	"log/std",
@@ -53,4 +57,10 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"oracle-finance/runtime-benchmarks"
+]
+
 try-runtime = ["frame-support/try-runtime"]

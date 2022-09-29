@@ -23,11 +23,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+
 pub mod types;
 pub mod migrations;
 
+pub mod weights;
+
 pub use pallet::*;
-use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, ChainPrice, ChooseTrigerPayload, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
+use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, ChainPrice, ChooseTrigerPayload, ChooseType, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
 use frame_support::{BoundedVec, ensure};
 use ares_oracle_provider_support::FractionLength;
 use sp_runtime::traits::{AccountIdConversion, CheckedDiv};
@@ -36,7 +41,7 @@ use sp_core::hexdisplay::HexDisplay;
 
 pub const TARGET: &str = "ares::price-estimates";
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -55,7 +60,8 @@ pub mod pallet {
 	use ares_oracle::types::OffchainSignature;
 	use bound_vec_helper::BoundVecHelper;
 
-	use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig, Releases};
+	use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig, Releases, ChooseType};
+	use crate::weights::WeightInfo;
 
 	/// This pallet's configuration trait
 	#[pallet::config]
@@ -91,6 +97,8 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type MaximumKeepLengthOfOldData: Get<Self::BlockNumber>;
+
+		type WeightInfo: WeightInfo;
 
 	}
 
@@ -221,7 +229,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(0)]
 		#[transactional]
 		pub fn force_complete(
 			origin: OriginFor<T>,
@@ -289,7 +297,7 @@ pub mod pallet {
 			}, EstimatesState::Unresolved)
 		}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(0)]
 		#[transactional]
 		pub fn new_estimates(
 			origin: OriginFor<T>,
@@ -449,7 +457,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(<T as Config>::WeightInfo::participate_estimates())]
 		pub fn participate_estimates(
 			origin: OriginFor<T>,
 			symbol: Vec<u8>,
@@ -458,10 +466,10 @@ pub mod pallet {
 			estimated_fraction_length: Option<u32>,
 			range_index: Option<u8>,
 			multiplier: MultiplierOption,
-			bsc_address: Option<Vec<u8>>,
+			_bsc_address: Option<Vec<u8>>,
 		) -> DispatchResult {
 			ensure!(Self::is_active(), Error::<T>::PalletInactive);
-			let caller = ensure_signed(origin.clone())?;
+			let caller = ensure_signed(origin)?;
 
 			let chain_fraction_length = T::PriceProvider::fraction(&symbol);
 			ensure!(chain_fraction_length.is_some(), Error::<T>::SymbolNotSupported);
@@ -481,6 +489,7 @@ pub mod pallet {
 			// } else {
 			// 	None
 			// };
+
 			let bsc_address: Option<BoundedVecOfBscAddress> = None;
 
 			log::info!(target: TARGET, "price={:?}, fraction={:?}", estimated_price, estimated_fraction_length);
@@ -577,9 +586,6 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				// let symbol_for_deposit = BoundedVecOfSymbol::try_create_on_vec(symbol.to_vec())
-				// 	.map_err(|_| Error::<T>::BadMetadata)?;
-
 				let init_deposit = EstimatesInitDeposit::<T>::try_get(symbol.clone(), config.id);
 				ensure!(
 					init_deposit.is_ok(),
@@ -597,6 +603,7 @@ pub mod pallet {
 					estimate: estimates,
 					who: caller,
 					estimate_type: symbol.1.clone(),
+					deposit: ticket_price,
 				});
 				Ok(())
 			})
@@ -667,6 +674,7 @@ pub mod pallet {
 								participant_accounts,
 								price,
 							);
+
 							return Self::do_choose_winner(ChooseWinnersPayload {
 								block_number: frame_system::Pallet::<T>::block_number(),
 								winners: BoundedVecOfChooseWinnersPayload::create_on_vec(winners),
@@ -706,23 +714,23 @@ pub mod pallet {
 			Err(Error::<T>::IllegalCall.into())
 		}
 
-		#[pallet::weight(10_000)]
-		pub fn claim(
-			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] value: BalanceOf<T>,
-		) -> DispatchResult {
-			let caller = ensure_signed(origin.clone())?;
-			let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
-			ensure!(members.contains(&caller), Error::<T>::NotMember);
+		// #[pallet::weight(10_000)]
+		// pub fn claim(
+		// 	origin: OriginFor<T>,
+		// 	dest: <T::Lookup as StaticLookup>::Source,
+		// 	#[pallet::compact] value: BalanceOf<T>,
+		// ) -> DispatchResult {
+		// 	let caller = ensure_signed(origin.clone())?;
+		// 	let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
+		// 	ensure!(members.contains(&caller), Error::<T>::NotMember);
+		//
+		// 	let dest = T::Lookup::lookup(dest)?;
+		// 	let id = T::PalletId::get().0;
+		// 	// T::Currency::unreserve_named(&id, &dest, value);
+		// 	Ok(())
+		// }
 
-			let dest = T::Lookup::lookup(dest)?;
-			let id = T::PalletId::get().0;
-			// T::Currency::unreserve_named(&id, &dest, value);
-			Ok(())
-		}
-
-		#[pallet::weight(10_000)]
+		#[pallet::weight(0)]
 		pub fn preference(
 			origin: OriginFor<T>,
 			admins: Option<Vec<T::AccountId>>,
@@ -824,16 +832,24 @@ pub mod pallet {
 			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
 			who: T::AccountId,
 			estimate_type: EstimatesType,
+			deposit: BalanceOf<T>,
 		},
 
 		CompletedEstimates {
 			config: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
+			winners: Vec<(T::AccountId, BalanceOf<T>)>
 		},
 
 		RemovedEstimates {
 			list: BoundedVecOfCompletedEstimates::<T::BlockNumber, BalanceOf<T>>,
+		},
+
+		ChooseWinner {
+			record: ChooseType<T::AccountId>,
 		}
 	}
+
+
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1175,14 +1191,16 @@ impl<T: Config> Pallet<T> {
 					ActiveEstimates::<T>::remove(&storage_key);
 					UnresolvedEstimates::<T>::remove(&storage_key);
 
+					let mut winner_events: Vec<(T::AccountId, BalanceOf<T>)> = Vec::new();
 					for winner in winners {
 						let reward: BalanceOf<T> = (winner.reward).saturated_into();
 						T::Currency::transfer(
 							&source_acc,
 							&winner.account,
-							reward,
+							reward.clone(),
 							ExistenceRequirement::AllowDeath,
 						)?;
+						winner_events.push((winner.account, reward));
 						// let id = T::PalletId::get().0;
 						// T::Currency::reserve_named(&id, &winner.account, reward)?;
 					}
@@ -1195,7 +1213,8 @@ impl<T: Config> Pallet<T> {
 					})?;
 
 					Self::deposit_event(Event::<T>::CompletedEstimates {
-						config
+						config,
+						winners: winner_events,
 					});
 				}
 			}
@@ -1338,19 +1357,36 @@ impl<T: Config> Pallet<T> {
 					let div_price: u64 = deviation.unwrap_or(Permill::from_percent(0)).mul_ceil(price);
 					let low_price: u64 = price.saturating_sub(div_price);
 					let high_price: u64 = price.saturating_add(div_price) ;
+
+					let mut check_list: Vec<(T::AccountId, Option<u64>)> = Vec::new();
+
 					for x in accounts {
 						if let Some(estimates) = x.estimates {
+							check_list.push((x.account.clone(), x.estimates.clone()));
 							if low_price <= estimates && estimates <= high_price {
 								push_winner(&mut winners, x);
 							}
 						}
 					}
+
+
+
+					Self::deposit_event(Event::<T>::ChooseWinner {
+						record: ChooseType::DEVIATION {
+							low_price,
+							high_price,
+							check_list
+						}
+					});
 				}
 				EstimatesType::RANGE => {
 					let range = range.unwrap();
-					for x in accounts {
-						let range_index = usize::from(x.range_index.unwrap());
 
+					let mut check_list: Vec<(T::AccountId, Option<u8>)> = Vec::new();
+
+					for x in accounts {
+						check_list.push((x.account.clone(), x.range_index.clone()));
+						let range_index = usize::from(x.range_index.unwrap());
 						if range_index == 0 && price <= range[0] {
 							push_winner(&mut winners, x);
 						} else if range_index == range.len() && price > range[range.len() - 1] {
@@ -1363,6 +1399,14 @@ impl<T: Config> Pallet<T> {
 							push_winner(&mut winners, x);
 						}
 					}
+
+					Self::deposit_event(Event::<T>::ChooseWinner {
+						record: ChooseType::RANGE {
+							range,
+							check_list
+						}
+					});
+
 				}
 			};
 		}

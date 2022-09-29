@@ -15,6 +15,7 @@ pub mod tests {
 	use sp_runtime::{ generic::Era, testing::{Block, Header}, traits::{BlakeTwo256, IdentityLookup}};
 	use sp_std::convert::TryFrom;
 	use sp_std::convert::TryInto;
+	use crate::weights::SubstrateWeight;
 
 	frame_support::construct_runtime!(
 		pub enum Runtime where
@@ -30,19 +31,6 @@ pub mod tests {
 			AresChallenge: crate::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		}
 	);
-
-
-	// frame_support::construct_runtime!(
-	// 	pub enum Test where
-	// 		Block = Block,
-	// 		NodeBlock = Block,
-	// 		UncheckedExtrinsic = UncheckedExtrinsic,
-	// 	{
-	// 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-	// 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-	// 		Aura: pallet_aura::{Pallet, Storage, Config<T>},
-	// 	}
-	// );
 
 	type AccountId = u64;
 	parameter_types! {
@@ -192,6 +180,7 @@ pub mod tests {
 		type IsAuthority = Self;
 		type AuthorityId = pallet_babe::AuthorityId;
 		type MinimumThreshold = MinimumThreshold;
+		type WeightInfo = SubstrateWeight<Self, Challenge1>;
 	}
 
 	pub struct RuntimeVersion;
@@ -224,8 +213,6 @@ pub mod tests {
 			frame_system::CheckEra::from(Era::Immortal),
 			frame_system::CheckNonce::from(nonce),
 			frame_system::CheckWeight::new(),
-			/* crate::CheckCall::<Challenge1>::new(),
-			 * pallet_transaction_payment::ChargeTransactionPayment::from(fee), */
 		)
 	}
 
@@ -242,7 +229,7 @@ pub mod tests {
 		})
 	}
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Runtime::GenesisConfig https://docs.substrate.io/rustdocs/latest/node_runtime/struct.GenesisConfig.html
 		let mut t: sp_io::TestExternalities = GenesisConfig {
 			system: frame_system::GenesisConfig::default(),

@@ -14,6 +14,7 @@ readme = 'README.md'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.28" }
 ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len", ] }
 frame-election-provider-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
@@ -70,6 +71,7 @@ std = [
     "sp-std/std",
     "scale-info/std",
 ]
+
 try-runtime = ["frame-support/try-runtime"]
 
 

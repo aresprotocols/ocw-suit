@@ -11,16 +11,24 @@ use pallet_session::SessionManager;
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::vec::Vec;
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod mock;
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests;
 
 /// Modules that provide interface definitions.
 pub mod traits;
 /// Defines the underlying data types required by the Pallet but does not include storage.
 pub mod types;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+
+#[cfg(all(feature = "std", test))]
+mod test_tools;
+
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -35,6 +43,7 @@ pub mod pallet {
 	use sp_runtime::traits::Convert;
 	use sp_std::convert::TryFrom;
 	use sp_std::convert::TryInto;
+	use crate::weights::WeightInfo;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -72,6 +81,8 @@ pub mod pallet {
 		type HistoryDepth: Get<u32>;
 
 		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -262,7 +273,7 @@ pub mod pallet {
 		/// Earliest reward Era = Current-Era - T::HistoryDepth
 		///
 		/// - ask_era: Era number is a u32
-		#[pallet::weight(1000)]
+		#[pallet::weight(<T as Config>::WeightInfo::take_purchase_reward())]
 		pub fn take_purchase_reward(origin: OriginFor<T>, ask_era: EraIndex) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let who = T::ValidatorIdOf::convert(controller.clone());
@@ -274,6 +285,7 @@ pub mod pallet {
 			let who: T::AccountId = who.unwrap();
 
 			let take_balance: BalanceOf<T> = Self::take_reward(ask_era, who.clone())?;
+
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			// Emit an event.
 			Self::deposit_event(Event::PurchaseRewardToken {
@@ -294,7 +306,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_
 		///
 		/// Earliest reward Era = Current-Era - T::HistoryDepth
-		#[pallet::weight(1000)]
+		#[pallet::weight(<T as Config>::WeightInfo::take_all_purchase_reward())]
 		pub fn take_all_purchase_reward(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let who = T::ValidatorIdOf::convert(controller.clone());
@@ -309,7 +321,6 @@ pub mod pallet {
 				= RewardEra::<T>::get(who.clone());
 
 			ensure!(!reward_era_list.is_empty(), Error::<T>::NoRewardPoints);
-
 
 			let current_era_opt = CurrentEra::<T>::get();
 			let mut era_list = Vec::new();
@@ -505,7 +516,7 @@ impl<T: Config> IForReporter<T> for Pallet<T> {
 }
 
 impl<T: Config> IForBase<T> for Pallet<T> {
-	// TODO::
+
 	fn current_era_num() -> EraIndex {
 		// let param_bn: u64 = bn.try_into().unwrap_or(0);
 		// let ask_perio: u64 = T::AskPeriod::get().try_into().unwrap_or(0);

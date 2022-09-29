@@ -10,30 +10,11 @@ use sp_runtime::testing::UintAuthorityId;
 use sp_runtime::traits::Convert;
 use sp_runtime::{ testing::Header, traits::{BlakeTwo256, IdentityLookup, Zero}};
 use sp_std::convert::TryFrom;
+use crate::test_tools::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-// pub(crate) type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-pub(crate) type AccountId = u64;
-/// Balance of an account.
-pub type Balance = u64;
-pub type BlockNumber = u64;
-pub type SessionIndex = u32;
-pub const DOLLARS: u64 = 1_000_000_000_000;
 
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
-	}
-);
 
 // Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 pub struct BaseFilter;
@@ -86,6 +67,27 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
+	}
+);
+
+pub struct StashOf;
+impl Convert<AccountId, Option<AccountId>> for StashOf {
+	fn convert(controller: AccountId) -> Option<AccountId> {
+		Some(controller)
+	}
+}
+
 parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
@@ -105,6 +107,7 @@ impl oracle_finance::Config for Test {
 	type HistoryDepth = HistoryDepth;
 	type SessionManager = ();
 	type OnSlash = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -216,9 +219,3 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 }
 
 
-pub struct StashOf;
-impl Convert<AccountId, Option<AccountId>> for StashOf {
-	fn convert(controller: AccountId) -> Option<AccountId> {
-		Some(controller)
-	}
-}

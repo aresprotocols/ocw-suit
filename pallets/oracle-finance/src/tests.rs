@@ -2,6 +2,8 @@ use crate::{mock::*, Error, PaymentTrace, AskEraPayment, RewardTrace, AskEraPoin
 use frame_support::{assert_ok};
 use crate::traits::*;
 use crate::types::*;
+// use crate::test_tools::{Balance, BlockNumber, DOLLARS, HistoryDepth};
+use crate::test_tools::*;
 
 #[test]
 fn test_it_works_for_default_value() {
@@ -41,7 +43,7 @@ fn test_reserve_for_ask_quantity() {
 
 		// check storage status
 		let payment_trace = <PaymentTrace<Test>>::get(to_test_vec("Purchased_ID"), ACCOUNT_ID);
-		assert_eq!(payment_trace, PaidValue::<BlockNumber,Balance, EraIndex> {
+		assert_eq!(payment_trace, PaidValue::<BlockNumber, Balance, EraIndex> {
 			amount: calculate_result,
 			create_bn: <frame_system::Pallet<Test>>::block_number(),
 			is_income: true,
@@ -188,6 +190,7 @@ fn test_unreserve_ask() {
 #[test]
 fn test_record_submit_point() {
 	new_test_ext().execute_with(|| {
+
 
 		advance_session();
 		advance_session();

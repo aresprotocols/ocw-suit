@@ -1,6 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 mod tests;
 
+#[cfg(any(feature = "runtime-benchmarks"))]
+mod benchmarking;
+
+pub mod weights;
+
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
@@ -29,14 +34,6 @@ use sp_runtime::{
 	traits::{AccountIdConversion, Hash, IsMember, SaturatedConversion, StaticLookup},
 	RuntimeAppPublic,
 };
-// #[cfg(test)]
-// mod mock;
-//
-// #[cfg(test)]
-// mod tests;
-//
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
 
 type BalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -53,6 +50,7 @@ pub mod pallet {
 	use frame_support::dispatch::{GetDispatchInfo, PostDispatchInfo};
 	use frame_support::traits::IsSubType;
 	use sp_runtime::traits::Dispatchable;
+	use crate::weights::WeightInfo;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -101,7 +99,7 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ UncheckedFrom<[u8; 32]>;
 
-		// type FindAuthor: FindAuthor<Self::AuthorityId>;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::storage]
@@ -176,7 +174,8 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+
+		#[pallet::weight(0)]
 		pub fn new_challenge(
 			origin: OriginFor<T>,
 			delegatee: <T::Lookup as StaticLookup>::Source,
@@ -249,7 +248,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(0)]
 		pub fn challenge_success(
 			origin: OriginFor<T>,
 			challenge_hash: <T as frame_system::Config>::Hash,
@@ -296,8 +295,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000)]
-		pub fn reserve(origin: OriginFor<T>, #[pallet::compact] deposit: BalanceOf<T, I>) -> DispatchResult {
+		#[pallet::weight(<T as Config<I>>::WeightInfo::reserve())]
+		pub fn reserve(
+			origin: OriginFor<T>,
+			#[pallet::compact] deposit: BalanceOf<T, I>
+		) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
 			// ensure!(deposit >= T::BidderMinimumDeposit::get(), Error::<T, I>::DepositLow);
 			ensure!(

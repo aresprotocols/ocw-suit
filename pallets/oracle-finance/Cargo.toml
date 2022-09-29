@@ -38,7 +38,12 @@ pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-fe
 
 [features]
 default = ['std']
-runtime-benchmarks = ['frame-benchmarking']
+
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "pallet-balances/runtime-benchmarks",
+]
+
 std = [
     "log/std",
     "scale-info/std",

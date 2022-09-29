@@ -23,8 +23,6 @@ mod tests;
 pub mod data;
 pub mod elect;
 
-
-
 /// Implement the structure of IStakingNpos
 pub struct StakingNPOS<T: Config>(PhantomData<T>);
 

@@ -15,22 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::Encode;
 use super::Event as AresOcwEvent;
 use crate as ares_oracle;
-use crate::*;
-use staking_extend::IStakingNpos;
-use codec::Decode;
+use crate::mock::*;
+use crate::{AbnormalPriceDataVec, AresPrice, AresPriceDataVecOf, AuthorTraceData, BlockAuthorTrace, CALCULATION_KIND_AVERAGE, CALCULATION_KIND_MEDIAN, Error, PreCheckTaskList, PreCheckTaskListVec, PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE, PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE, PurchasedOrderPool, PurchasedPriceDataVec};
 use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types, traits::GenesisBuild, ConsensusEngineId, PalletId,
+	assert_ok, assert_noop,
 };
-// use frame_support::{
-//     assert_noop, assert_ok, ord_parameter_types, parameter_types,
-//     traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
-//     weights::Weight,
-//     PalletId,
-// };
-
-use pallet_session::historical as pallet_session_historical;
 use sp_core::{
 	offchain::{
 		testing::{self},
@@ -39,385 +31,435 @@ use sp_core::{
 	sr25519::Signature,
 	H256,
 };
-use std::sync::Arc;
-
-use frame_support::assert_noop;
-
-// use frame_system::InitKind;
 use sp_keystore::{
 	testing::KeyStore,
 	{KeystoreExt, SyncCryptoStore},
 };
-use std::cell::RefCell;
-
-use sp_runtime::{
-	testing::{Header, TestXt, UintAuthorityId},
-	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
-	Perbill,
-};
-
-use sp_core::sr25519::Public;
-// use pallet_session::historical as pallet_session_historical;
-use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
-// use pallet_authorship::SealVerify;
-use sp_runtime::traits::{Convert};
-use sp_staking::SessionIndex;
-
-use frame_system::{EnsureRoot, EnsureSignedBy};
-use sp_core::hexdisplay::HexDisplay;
-use std::convert::TryInto;
-// use lite_json::JsonValue::Null;
-use frame_support::sp_runtime::traits::IsMember;
-// use crate::sr25519::AuthorityId;
-use frame_support::sp_runtime::app_crypto::Ss58Codec;
-use frame_support::sp_runtime::testing::{Digest, DigestItem};
-use frame_support::sp_std::convert::TryFrom;
-use sp_application_crypto::Pair;
-use sp_consensus_aura::AURA_ENGINE_ID;
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
-pub type Balance = u64;
-pub type BlockNumber = u64;
-pub type AskPeriodNum = u64;
-pub const DOLLARS: u64 = 1_000_000_000_000;
-
-// use oracle_finance::types::*;
+use ares_oracle_provider_support::*;
 use oracle_finance::traits::*;
-
-// use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use crate::AuthorityId as AuraId;
+use sp_runtime::RuntimeAppPublic;
+use crate::{Authorities, AuthorityAresVec, AuthorityId as AuraId, Config, LocalXRay, PurchasedAvgPrice, PurchasedAvgTrace, PurchasedPricePool, PurchasedRequestPool, RequestBaseVecU8};
+use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
+use frame_system::offchain::{SendUnsignedTransaction, SignedPayload, Signer, SigningTypes};
+use lite_json::NumberValue;
 use sp_runtime::offchain::OffchainDbExt;
+use sp_std::sync::Arc;
+use sp_core::sr25519::Public;
+use crate::mock::{new_test_ext};
+use sp_core::hexdisplay::HexDisplay;
+use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_application_crypto::Pair;
+use sp_core::crypto::Ss58Codec;
+use sp_runtime::{BoundedVec, Percent};
+use sp_std::convert::{TryFrom, TryInto};
+use ares_oracle_provider_support::{JsonNumberValue, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
+use bound_vec_helper::BoundVecHelper;
+use oracle_finance::types::PurchaseId;
+use crate::traits::ValidatorCount;
+use codec::Decode;
+use crate::test_tools::{get_are_json_of_bulk, get_are_json_of_bulk_of_xxxusdt_is_0, get_bug_json_of_20220721, to_test_bounded_vec, to_test_vec};
+use crate::types::{AresPriceData, AvgPriceData, PricePayload, PricePayloadSubJumpBlockList, PricePayloadSubPrice, PricePayloadSubPriceList, PurchasedAvgPriceData, PurchasedDefaultData, PurchasedPricePayload, PurchasedRequestData, PurchasedSourceRawKeys};
+
+// use staking_extend::IStakingNpos;
+// use codec::Decode;
+// use frame_support::{
+// 	assert_ok, ord_parameter_types, parameter_types, traits::GenesisBuild, ConsensusEngineId, PalletId,
+// };
+// // use frame_support::{
+// //     assert_noop, assert_ok, ord_parameter_types, parameter_types,
+// //     traits::{Contains, GenesisBuild, OnInitialize, SortedMembers},
+// //     weights::Weight,
+// //     PalletId,
+// // };
+//
+// use pallet_session::historical as pallet_session_historical;
+// use sp_core::{
+// 	offchain::{
+// 		testing::{self},
+// 		OffchainWorkerExt, TransactionPoolExt,
+// 	},
+// 	sr25519::Signature,
+// 	H256,
+// };
+// use std::sync::Arc;
+//
+// use frame_support::assert_noop;
+//
+// // use frame_system::InitKind;
+// use sp_keystore::{
+// 	testing::KeyStore,
+// 	{KeystoreExt, SyncCryptoStore},
+// };
+// use std::cell::RefCell;
+//
+// use sp_runtime::{
+// 	testing::{Header, TestXt, UintAuthorityId},
+// 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
+// 	Perbill,
+// };
+//
+// use sp_core::sr25519::Public;
+// // use pallet_session::historical as pallet_session_historical;
+// use frame_support::traits::{ConstU32, Everything, ExtrinsicCall, FindAuthor, OnInitialize};
+// // use pallet_authorship::SealVerify;
+// use sp_runtime::traits::{Convert};
+// use sp_staking::SessionIndex;
+//
+// use frame_system::{EnsureRoot, EnsureSignedBy};
+// use sp_core::hexdisplay::HexDisplay;
+// use std::convert::TryInto;
+// // use lite_json::JsonValue::Null;
+// use frame_support::sp_runtime::traits::IsMember;
+// // use crate::sr25519::AuthorityId;
+// use frame_support::sp_runtime::app_crypto::Ss58Codec;
+// use frame_support::sp_runtime::testing::{Digest, DigestItem};
+// use frame_support::sp_std::convert::TryFrom;
+// use sp_application_crypto::Pair;
+// use sp_consensus_aura::AURA_ENGINE_ID;
+//
+// type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+// type Block = frame_system::mocking::MockBlock<Test>;
+//
+// pub type Balance = u64;
+// pub type BlockNumber = u64;
+// pub type AskPeriodNum = u64;
+// pub const DOLLARS: u64 = 1_000_000_000_000;
+//
+// // use oracle_finance::types::*;
+// use oracle_finance::traits::*;
+//
+// // use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+// use crate::AuthorityId as AuraId;
+// use sp_runtime::offchain::OffchainDbExt;
 // use crate::AuthorityId::ID as ;
 
-// For testing the module, we construct a mock runtime.
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		// Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Historical: pallet_session_historical::{Pallet},
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		AresOcw: ares_oracle::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
-	}
-);
-
-parameter_types! {
-	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
-	pub const BasicDollars: Balance = DOLLARS;
-	pub const AskPerEra: SessionIndex = 2;
-	pub const HistoryDepth: u32 = 2;
-}
-
-impl oracle_finance::Config for Test {
-	type Event = Event;
-	type PalletId = AresFinancePalletId;
-	type Currency = pallet_balances::Pallet<Self>;
-	type BasicDollars = BasicDollars;
-	type OnSlash = ();
-	type ValidatorId = AccountId;
-	type SessionManager = ();
-	type AskPerEra = AskPerEra;
-	type HistoryDepth = HistoryDepth;
-	type ValidatorIdOf = StashOf;
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: Balance = 100;
-	pub const MaxLocks: u32 = 10;
-}
-impl pallet_balances::Config for Test {
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	type MaxLocks = MaxLocks;
-	type Balance = Balance;
-	type Event = Event;
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = ();
-}
-
-#[cfg(feature = "historical")]
-impl crate::historical::Config for Test {
-	type FullIdentification = u64;
-	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
-}
-
-pub struct TestFindAuthor;
-impl FindAuthor<u32> for TestFindAuthor {
-	fn find_author<'a, I>(digests: I) -> Option<u32>
-	where
-		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-	{
-		Some(1)
-	}
-}
-
-parameter_types! {
-	pub const UncleGenerations: u32 = 5;
-}
-
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
-}
-
-parameter_types! {
-	pub const MinimumPeriod: u64 = 3;
-}
-
-impl pallet_timestamp::Config for Test {
-	type Moment = u64;
-	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
-	type WeightInfo = ();
-}
-
-impl frame_system::Config for Test {
-	type BaseCallFilter = Everything; //frame_support::traits::AllowAll;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = Public;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<Balance>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-type Extrinsic = TestXt<Call, ()>;
-type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
-impl frame_system::offchain::SigningTypes for Test {
-	type Public = <Signature as Verify>::Signer;
-	type Signature = Signature;
-}
-
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
-}
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: <Signature as Verify>::Signer,
-		_account: AccountId,
-		nonce: u64,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
-}
-
-parameter_types! {
-	// pub const GracePeriod: u64 = 5;
-	pub const UnsignedInterval: u64 = 128;
-	pub const UnsignedPriority: u64 = 1 << 20;
-	// pub const PriceVecMaxSize: u32 = 3;
-	pub const MaxCountOfPerRequest: u8 = 3;
-	// pub const NeedVerifierCheck: bool = false;
-	// pub const UseOnChainPriceRequest: bool = true;
-	pub const FractionLengthNum: u32 = 2;
-	pub const CalculationKind: u8 = 2;
-	pub const ErrLogPoolDepth: u32 = 5;
-}
-
-ord_parameter_types! {
-	pub const One: u64 = 1;
-	pub const Two: u64 = 2;
-	pub const Three: u64 = 3;
-	pub const Four: u64 = 4;
-	pub const Five: u64 = 5;
-	pub const Six: u64 = 6;
-}
-
-impl Config for Test {
-	type Event = Event;
-	type OffchainAppCrypto = crate::ares_crypto::AresCrypto<AuraId>;
-	type AuthorityAres = AuraId;
-	type Call = Call;
-	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
-	type UnsignedPriority = UnsignedPriority;
-	// type FindAuthor = TestFindAuthor;
-	type CalculationKind = CalculationKind;
-	type ErrLogPoolDepth = ErrLogPoolDepth;
-	type AuthorityCount = TestAuthorityCount;
-	type OracleFinanceHandler = OracleFinance;
-	type AresIStakingNpos = NoNpos<Self>;
-}
-
-pub struct NoNpos<T>(PhantomData<T>);
-impl <A,B,T:ares_oracle::Config> IStakingNpos<A, B> for NoNpos<T> {
-	type StashId = <T as frame_system::Config>::AccountId;
-
-	fn current_staking_era() -> u32 {
-		0
-	}
-
-	fn near_era_change(period_multiple: B) -> bool {
-		false
-	}
-
-	fn calculate_near_era_change(period_multiple: B, current_bn: B, session_length: B, per_era: B) -> bool {
-		false
-	}
-
-	fn old_npos() -> Vec<Self::StashId> {
-		Vec::new()
-	}
-
-	fn pending_npos() -> Vec<(Self::StashId, Option<A>)> {
-		Vec::new()
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct TestMember;
-impl IsMember<AccountId> for TestMember {
-	fn is_member(member_id: &AccountId) -> bool {
-		true
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct TestAuthorityCount;
-impl ValidatorCount for TestAuthorityCount {
-	fn get_validators_count() -> u64 {
-		4
-	}
-}
-
-impl pallet_authorship::Config for Test {
-	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, TestFindAuthor>;
-	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
-	type EventHandler = (AresOcw);
-}
-
-impl pallet_session::historical::Config for Test {
-	type FullIdentification = AccountId;
-	type FullIdentificationOf = TestHistoricalConvertInto<Self>;
-}
-
-thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<AccountId>>> = RefCell::new(Some(vec![
-		AccountId::from_raw([1;32]),
-		AccountId::from_raw([2;32]),
-		AccountId::from_raw([3;32]),
-	]));
-}
-
-pub struct TestSessionManager;
-impl pallet_session::SessionManager<AccountId> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<AccountId>> {
-		VALIDATORS.with(|l| l.borrow_mut().take())
-	}
-	fn end_session(_: SessionIndex) {}
-	fn start_session(_: SessionIndex) {}
-}
-
-impl pallet_session::historical::SessionManager<AccountId, AccountId> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<(AccountId, AccountId)>> {
-		VALIDATORS.with(|l| {
-			l.borrow_mut()
-				.take()
-				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
-		})
-	}
-	fn end_session(_: SessionIndex) {}
-	fn start_session(_: SessionIndex) {}
-}
-
-pub struct StashOf;
-impl Convert<AccountId, Option<AccountId>> for StashOf {
-	fn convert(controller: AccountId) -> Option<AccountId> {
-		Some(controller)
-	}
-}
-
-pub struct TestHistoricalConvertInto<T: pallet_session::historical::Config>(sp_std::marker::PhantomData<T>);
-// type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
-impl<T: pallet_session::historical::Config> sp_runtime::traits::Convert<T::ValidatorId, Option<T::FullIdentification>>
-	for TestHistoricalConvertInto<T>
-where
-	<T as pallet_session::historical::Config>::FullIdentification: From<<T as pallet_session::Config>::ValidatorId>,
-{
-	fn convert(a: T::ValidatorId) -> Option<T::FullIdentification> {
-		Some(a.into())
-	}
-}
-
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-}
-parameter_types! {
-	pub const Period: u64 = 1;
-	pub const Offset: u64 = 0;
-}
-impl pallet_session::Config for Test {
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, TestSessionManager>;
-	type SessionHandler = TestSessionHandler;
-	type ValidatorId = AccountId;
-	type ValidatorIdOf = TestSessionConvertInto<Self>;
-	type Keys = UintAuthorityId;
-	type Event = Event;
-	// type DisabledValidatorsThreshold = (); // pallet_session::PeriodicSessions<(), ()>;
-	type NextSessionRotation = (); //pallet_session::PeriodicSessions<(), ()>;
-	type WeightInfo = ();
-}
-
-pub struct TestSessionConvertInto<T>(sp_std::marker::PhantomData<T>);
-impl<T: pallet_session::Config> sp_runtime::traits::Convert<AccountId, Option<T::ValidatorId>>
-	for TestSessionConvertInto<T>
-where
-	<T as pallet_session::Config>::ValidatorId: From<sp_application_crypto::sr25519::Public>,
-{
-	fn convert(a: AccountId) -> Option<T::ValidatorId> {
-		Some(a.into())
-	}
-}
-
-pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
-
-	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
-
-	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(_: bool, _: &[(AccountId, Ks)], _: &[(AccountId, Ks)]) {}
-	fn on_disabled(_: u32) {}
-}
+// // For testing the module, we construct a mock runtime.
+// frame_support::construct_runtime!(
+// 	pub enum Test where
+// 		Block = Block,
+// 		NodeBlock = Block,
+// 		UncheckedExtrinsic = UncheckedExtrinsic,
+// 	{
+// 		// Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+// 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+// 		Historical: pallet_session_historical::{Pallet},
+// 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+// 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+// 		AresOcw: ares_oracle::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
+// 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+// 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+// 		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
+// 	}
+// );
+//
+// parameter_types! {
+// 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
+// 	pub const BasicDollars: Balance = DOLLARS;
+// 	pub const AskPerEra: SessionIndex = 2;
+// 	pub const HistoryDepth: u32 = 2;
+// }
+//
+// impl oracle_finance::Config for Test {
+// 	type Event = Event;
+// 	type PalletId = AresFinancePalletId;
+// 	type Currency = pallet_balances::Pallet<Self>;
+// 	type BasicDollars = BasicDollars;
+// 	type OnSlash = ();
+// 	type ValidatorId = AccountId;
+// 	type SessionManager = ();
+// 	type AskPerEra = AskPerEra;
+// 	type HistoryDepth = HistoryDepth;
+// 	type ValidatorIdOf = StashOf;
+// }
+//
+// parameter_types! {
+// 	pub const ExistentialDeposit: Balance = 100;
+// 	pub const MaxLocks: u32 = 10;
+// }
+// impl pallet_balances::Config for Test {
+// 	type MaxReserves = ();
+// 	type ReserveIdentifier = [u8; 8];
+// 	type MaxLocks = MaxLocks;
+// 	type Balance = Balance;
+// 	type Event = Event;
+// 	type DustRemoval = ();
+// 	type ExistentialDeposit = ExistentialDeposit;
+// 	type AccountStore = System;
+// 	type WeightInfo = ();
+// }
+//
+// #[cfg(feature = "historical")]
+// impl crate::historical::Config for Test {
+// 	type FullIdentification = u64;
+// 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
+// }
+//
+// pub struct TestFindAuthor;
+// impl FindAuthor<u32> for TestFindAuthor {
+// 	fn find_author<'a, I>(digests: I) -> Option<u32>
+// 	where
+// 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
+// 	{
+// 		Some(1)
+// 	}
+// }
+//
+// parameter_types! {
+// 	pub const UncleGenerations: u32 = 5;
+// }
+//
+// parameter_types! {
+// 	pub const BlockHashCount: u64 = 250;
+// 	pub BlockWeights: frame_system::limits::BlockWeights =
+// 		frame_system::limits::BlockWeights::simple_max(1024);
+// }
+//
+// parameter_types! {
+// 	pub const MinimumPeriod: u64 = 3;
+// }
+//
+// impl pallet_timestamp::Config for Test {
+// 	type Moment = u64;
+// 	type OnTimestampSet = ();
+// 	type MinimumPeriod = MinimumPeriod;
+// 	type WeightInfo = ();
+// }
+//
+// impl frame_system::Config for Test {
+// 	type BaseCallFilter = Everything; //frame_support::traits::AllowAll;
+// 	type BlockWeights = ();
+// 	type BlockLength = ();
+// 	type DbWeight = ();
+// 	type Origin = Origin;
+// 	type Call = Call;
+// 	type Index = u64;
+// 	type BlockNumber = u64;
+// 	type Hash = H256;
+// 	type Hashing = BlakeTwo256;
+// 	type AccountId = Public;
+// 	type Lookup = IdentityLookup<Self::AccountId>;
+// 	type Header = Header;
+// 	type Event = Event;
+// 	type BlockHashCount = BlockHashCount;
+// 	type Version = ();
+// 	type PalletInfo = PalletInfo;
+// 	type AccountData = pallet_balances::AccountData<Balance>;
+// 	type OnNewAccount = ();
+// 	type OnKilledAccount = ();
+// 	type SystemWeightInfo = ();
+// 	type SS58Prefix = ();
+// 	type OnSetCode = ();
+// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
+// }
+//
+// type Extrinsic = TestXt<Call, ()>;
+// type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+//
+// impl frame_system::offchain::SigningTypes for Test {
+// 	type Public = <Signature as Verify>::Signer;
+// 	type Signature = Signature;
+// }
+//
+// impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
+// where
+// 	Call: From<LocalCall>,
+// {
+// 	type OverarchingCall = Call;
+// 	type Extrinsic = Extrinsic;
+// }
+//
+// impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test
+// where
+// 	Call: From<LocalCall>,
+// {
+// 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+// 		call: Call,
+// 		_public: <Signature as Verify>::Signer,
+// 		_account: AccountId,
+// 		nonce: u64,
+// 	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+// 		Some((call, (nonce, ())))
+// 	}
+// }
+//
+// parameter_types! {
+// 	// pub const GracePeriod: u64 = 5;
+// 	pub const UnsignedInterval: u64 = 128;
+// 	pub const UnsignedPriority: u64 = 1 << 20;
+// 	// pub const PriceVecMaxSize: u32 = 3;
+// 	pub const MaxCountOfPerRequest: u8 = 3;
+// 	// pub const NeedVerifierCheck: bool = false;
+// 	// pub const UseOnChainPriceRequest: bool = true;
+// 	pub const FractionLengthNum: u32 = 2;
+// 	pub const CalculationKind: u8 = 2;
+// 	pub const ErrLogPoolDepth: u32 = 5;
+// }
+//
+// ord_parameter_types! {
+// 	pub const One: u64 = 1;
+// 	pub const Two: u64 = 2;
+// 	pub const Three: u64 = 3;
+// 	pub const Four: u64 = 4;
+// 	pub const Five: u64 = 5;
+// 	pub const Six: u64 = 6;
+// }
+//
+// impl Config for Test {
+// 	type Event = Event;
+// 	type OffchainAppCrypto = crate::ares_crypto::AresCrypto<AuraId>;
+// 	type AuthorityAres = AuraId;
+// 	type Call = Call;
+// 	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
+// 	type UnsignedPriority = UnsignedPriority;
+// 	// type FindAuthor = TestFindAuthor;
+// 	type CalculationKind = CalculationKind;
+// 	type ErrLogPoolDepth = ErrLogPoolDepth;
+// 	type AuthorityCount = TestAuthorityCount;
+// 	type OracleFinanceHandler = OracleFinance;
+// 	type AresIStakingNpos = NoNpos<Self>;
+// }
+//
+// pub struct NoNpos<T>(PhantomData<T>);
+// impl <A,B,T:ares_oracle::Config> IStakingNpos<A, B> for NoNpos<T> {
+// 	type StashId = <T as frame_system::Config>::AccountId;
+//
+// 	fn current_staking_era() -> u32 {
+// 		0
+// 	}
+//
+// 	fn near_era_change(period_multiple: B) -> bool {
+// 		false
+// 	}
+//
+// 	fn calculate_near_era_change(period_multiple: B, current_bn: B, session_length: B, per_era: B) -> bool {
+// 		false
+// 	}
+//
+// 	fn old_npos() -> Vec<Self::StashId> {
+// 		Vec::new()
+// 	}
+//
+// 	fn pending_npos() -> Vec<(Self::StashId, Option<A>)> {
+// 		Vec::new()
+// 	}
+// }
+//
+// #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+// pub struct TestMember;
+// impl IsMember<AccountId> for TestMember {
+// 	fn is_member(member_id: &AccountId) -> bool {
+// 		true
+// 	}
+// }
+//
+// #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+// pub struct TestAuthorityCount;
+// impl ValidatorCount for TestAuthorityCount {
+// 	fn get_validators_count() -> u64 {
+// 		4
+// 	}
+// }
+//
+// impl pallet_authorship::Config for Test {
+// 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, TestFindAuthor>;
+// 	type UncleGenerations = UncleGenerations;
+// 	type FilterUncle = ();
+// 	type EventHandler = (AresOcw);
+// }
+//
+// impl pallet_session::historical::Config for Test {
+// 	type FullIdentification = AccountId;
+// 	type FullIdentificationOf = TestHistoricalConvertInto<Self>;
+// }
+//
+// thread_local! {
+// 	pub static VALIDATORS: RefCell<Option<Vec<AccountId>>> = RefCell::new(Some(vec![
+// 		AccountId::from_raw([1;32]),
+// 		AccountId::from_raw([2;32]),
+// 		AccountId::from_raw([3;32]),
+// 	]));
+// }
+//
+// pub struct TestSessionManager;
+// impl pallet_session::SessionManager<AccountId> for TestSessionManager {
+// 	fn new_session(_new_index: SessionIndex) -> Option<Vec<AccountId>> {
+// 		VALIDATORS.with(|l| l.borrow_mut().take())
+// 	}
+// 	fn end_session(_: SessionIndex) {}
+// 	fn start_session(_: SessionIndex) {}
+// }
+//
+// impl pallet_session::historical::SessionManager<AccountId, AccountId> for TestSessionManager {
+// 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(AccountId, AccountId)>> {
+// 		VALIDATORS.with(|l| {
+// 			l.borrow_mut()
+// 				.take()
+// 				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+// 		})
+// 	}
+// 	fn end_session(_: SessionIndex) {}
+// 	fn start_session(_: SessionIndex) {}
+// }
+//
+// pub struct StashOf;
+// impl Convert<AccountId, Option<AccountId>> for StashOf {
+// 	fn convert(controller: AccountId) -> Option<AccountId> {
+// 		Some(controller)
+// 	}
+// }
+//
+// pub struct TestHistoricalConvertInto<T: pallet_session::historical::Config>(sp_std::marker::PhantomData<T>);
+// // type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
+// impl<T: pallet_session::historical::Config> sp_runtime::traits::Convert<T::ValidatorId, Option<T::FullIdentification>>
+// 	for TestHistoricalConvertInto<T>
+// where
+// 	<T as pallet_session::historical::Config>::FullIdentification: From<<T as pallet_session::Config>::ValidatorId>,
+// {
+// 	fn convert(a: T::ValidatorId) -> Option<T::FullIdentification> {
+// 		Some(a.into())
+// 	}
+// }
+//
+// parameter_types! {
+// 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+// }
+// parameter_types! {
+// 	pub const Period: u64 = 1;
+// 	pub const Offset: u64 = 0;
+// }
+// impl pallet_session::Config for Test {
+// 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+// 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, TestSessionManager>;
+// 	type SessionHandler = TestSessionHandler;
+// 	type ValidatorId = AccountId;
+// 	type ValidatorIdOf = TestSessionConvertInto<Self>;
+// 	type Keys = UintAuthorityId;
+// 	type Event = Event;
+// 	// type DisabledValidatorsThreshold = (); // pallet_session::PeriodicSessions<(), ()>;
+// 	type NextSessionRotation = (); //pallet_session::PeriodicSessions<(), ()>;
+// 	type WeightInfo = ();
+// }
+//
+// pub struct TestSessionConvertInto<T>(sp_std::marker::PhantomData<T>);
+// impl<T: pallet_session::Config> sp_runtime::traits::Convert<AccountId, Option<T::ValidatorId>>
+// 	for TestSessionConvertInto<T>
+// where
+// 	<T as pallet_session::Config>::ValidatorId: From<sp_application_crypto::sr25519::Public>,
+// {
+// 	fn convert(a: AccountId) -> Option<T::ValidatorId> {
+// 		Some(a.into())
+// 	}
+// }
+//
+// pub struct TestSessionHandler;
+// impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+// 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+//
+// 	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+//
+// 	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(_: bool, _: &[(AccountId, Ks)], _: &[(AccountId, Ks)]) {}
+// 	fn on_disabled(_: u32) {}
+// }
 
 mod test_IAresOraclePreCheck;
 mod test_RuntimeUpgrade;
@@ -1148,7 +1190,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		}
 
 		// println!("|{:?}|", System::events());
-		System::assert_last_event(tests::Event::AresOcw(
+		System::assert_last_event(Event::AresOcw(
 			AresOcwEvent::InsufficientCountOfValidators{purchase_id: PurchaseId::try_from(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()}
 		));
 
@@ -4697,130 +4739,130 @@ fn test_debug_20220721_JsonNumberValue_new () {
 	assert_eq!(result_bulk_parse.len(), 51)
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	// let mut t = sp_io::TestExternalities::default();
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(AccountId::from_raw([1; 32]), 100000_000000000000)],
-	}
-	.assimilate_storage(&mut t)
-	.unwrap();
+// pub fn new_test_ext() -> sp_io::TestExternalities {
+// 	// let mut t = sp_io::TestExternalities::default();
+// 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+// 	pallet_balances::GenesisConfig::<Test> {
+// 		balances: vec![(AccountId::from_raw([1; 32]), 100000_000000000000)],
+// 	}
+// 	.assimilate_storage(&mut t)
+// 	.unwrap();
+//
+// 	oracle_finance::GenesisConfig::<Test> {
+// 		_pt: Default::default(),
+// 	}
+// 	.assimilate_storage(&mut t)
+// 	.unwrap();
+//
+// 	crate::GenesisConfig::<Test>{
+//         _phantom: Default::default(),
+//         request_base: "http://127.0.0.1:5566".as_bytes().to_vec()  ,
+//         price_allowable_offset: Percent::from_percent(10),
+//         price_pool_depth: 3u32,
+//         price_requests: vec![
+//             // price , key sign, version, fraction_length, request interval.
+//             (to_test_vec("btc_price"), to_test_vec("btc"), 2u32, 4u32, 1u8),
+//             (to_test_vec("eth_price"), to_test_vec("eth"), 2u32, 4u32, 2u8),
+//             (to_test_vec("dot_price"), to_test_vec("dot"), 2u32, 4u32, 3u8),
+//             (to_test_vec("xrp_price"), to_test_vec("xrp"), 2u32, 4u32, 4u8),
+//         ],
+//         authorities:  vec![
+//             (AccountId::from_raw([1;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter1").into()),
+//             (AccountId::from_raw([2;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter2").into()),
+//             (AccountId::from_raw([3;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter3").into()),
+//             (AccountId::from_raw([4;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter4").into()),
+//         ],
+// 		data_submission_interval: 100u32,
+//     }
+// 	.assimilate_storage(&mut t)
+// 	.unwrap();
+//
+// 	t.into()
+// }
 
-	oracle_finance::GenesisConfig::<Test> {
-		_pt: Default::default(),
-	}
-	.assimilate_storage(&mut t)
-	.unwrap();
-
-	crate::GenesisConfig::<Test>{
-        _phantom: Default::default(),
-        request_base: "http://127.0.0.1:5566".as_bytes().to_vec()  ,
-        price_allowable_offset: Percent::from_percent(10),
-        price_pool_depth: 3u32,
-        price_requests: vec![
-            // price , key sign, version, fraction_length, request interval.
-            (to_test_vec("btc_price"), to_test_vec("btc"), 2u32, 4u32, 1u8),
-            (to_test_vec("eth_price"), to_test_vec("eth"), 2u32, 4u32, 2u8),
-            (to_test_vec("dot_price"), to_test_vec("dot"), 2u32, 4u32, 3u8),
-            (to_test_vec("xrp_price"), to_test_vec("xrp"), 2u32, 4u32, 4u8),
-        ],
-        authorities:  vec![
-            (AccountId::from_raw([1;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter1").into()),
-            (AccountId::from_raw([2;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter2").into()),
-            (AccountId::from_raw([3;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter3").into()),
-            (AccountId::from_raw([4;32]).try_into().unwrap(), get_account_id_from_seed::<AuraId>("hunter4").into()),
-        ],
-		data_submission_interval: 100u32,
-    }
-	.assimilate_storage(&mut t)
-	.unwrap();
-
-	t.into()
-}
-
-/// Generate an account ID from seed.
-pub fn get_account_id_from_seed<TPublic: sp_core::Public>(seed: &str) -> AccountId
-where
-	<Signature as Verify>::Signer: From<<TPublic::Pair as Pair>::Public>,
-{
-	<Signature as Verify>::Signer::from(get_from_seed::<TPublic>(seed)).into_account()
-}
-
-const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
-
-/// Generate a crypto pair from seed.
-pub fn get_from_seed<TPublic: sp_core::Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-	TPublic::Pair::from_string(&format!("{}/{}", PHRASE, seed), None)
-		.expect("static values are valid; qed")
-		.public()
-}
-
-fn ares_price_data_from_tuple(
-	param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue, u64, BlockNumber),
-) -> AresPriceData<AccountId, BlockNumber> {
-	AresPriceData {
-		price: param.0,
-		account_id: param.1,
-		create_bn: param.2,
-		fraction_len: param.3,
-		raw_number: param.4,
-		timestamp: param.5,
-		update_bn: param.6,
-	}
-}
-
-fn init_aura_enging_digest() {
-	use sp_consensus_aura::Slot;
-	let slot = Slot::from(1);
-	let pre_digest = Digest {
-		logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())],
-	};
-	System::initialize(&42, &System::parent_hash(), &pre_digest);
-}
-
-fn to_test_vec(input: &str) -> Vec<u8> {
-	input.as_bytes().to_vec()
-}
-
-pub fn to_test_bounded_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {
-	to_str.as_bytes().to_vec().try_into().unwrap()
-}
-
-fn get_bug_json_of_20220721() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"algousdt\":{\"price\":0.3395,\"timestamp\":1658390392,\"infos\":[{\"price\":0.3395,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"axsusdt\":{\"price\":15.294,\"timestamp\":1658390345,\"infos\":[{\"price\":15.302,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":15.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":15.28,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"batusdt\":{\"price\":0.38925,\"timestamp\":1658390376,\"infos\":[{\"price\":0.3894,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.3891,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bntusdt\":{\"price\":0.5016,\"timestamp\":1658390339,\"infos\":[{\"price\":0.502,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.5012,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bttusdt\":{\"price\":8.934e-7,\"timestamp\":1658390367,\"infos\":[{\"price\":8.94e-7,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":8.928e-7,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"celousdt\":{\"price\":0.9415,\"timestamp\":1658390392,\"infos\":[{\"price\":0.9415,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"chzusdt\":{\"price\":0.107811,\"timestamp\":1658390370,\"infos\":[{\"price\":0.107893,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.1078,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.10774,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"crvusdt\":{\"price\":1.163,\"timestamp\":1658390393,\"infos\":[{\"price\":1.163,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.163,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"dcrusdt\":{\"price\":24.2783,\"timestamp\":1658390358,\"infos\":[{\"price\":24.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":24.2566,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"egldusdt\":{\"price\":54.79,\"timestamp\":1658390393,\"infos\":[{\"price\":54.79,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"enjusdt\":{\"price\":0.590397,\"timestamp\":1658390371,\"infos\":[{\"price\":0.5907,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.5903,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.59019,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"fetusdt\":{\"price\":0.0818,\"timestamp\":1658390345,\"infos\":[{\"price\":0.0818,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"ftmusdt\":{\"price\":0.30523,\"timestamp\":1658390364,\"infos\":[{\"price\":0.30526,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.3052,\"weight\":1,\"exchangeName\":\"binance\"}]},\"fttusdt\":{\"price\":28.2704,\"timestamp\":1658390364,\"infos\":[{\"price\":28.2808,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":28.26,\"weight\":1,\"exchangeName\":\"binance\"}]},\"grtusdt\":{\"price\":0.104105,\"timestamp\":1658390356,\"infos\":[{\"price\":0.104179,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.10403,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"hbarusdt\":{\"price\":0.0698,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0698,\"weight\":1,\"exchangeName\":\"binance\"}]},\"icpusdt\":{\"price\":6.7438,\"timestamp\":1658390338,\"infos\":[{\"price\":6.75,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6.7414,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":6.74,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"icxusdt\":{\"price\":0.28865,\"timestamp\":1658390360,\"infos\":[{\"price\":0.289,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.2883,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iostusdt\":{\"price\":0.013583,\"timestamp\":1658390393,\"infos\":[{\"price\":0.013583,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iotausdt\":{\"price\":0.2901,\"timestamp\":1658390391,\"infos\":[{\"price\":0.2901,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"iotxusdt\":{\"price\":0.03337,\"timestamp\":1658390344,\"infos\":[{\"price\":0.03337,\"weight\":1,\"exchangeName\":\"binance\"}]},\"kavausdt\":{\"price\":1.7587,\"timestamp\":1658390392,\"infos\":[{\"price\":1.7587,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"kncusdt\":{\"price\":1.40765,\"timestamp\":1658390348,\"infos\":[{\"price\":1.4083,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1.407,\"weight\":1,\"exchangeName\":\"binance\"}]},\"ksmusdt\":{\"price\":59.3564,\"timestamp\":1658390365,\"infos\":[{\"price\":59.4047,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":59.3081,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"lrcusdt\":{\"price\":0.417533,\"timestamp\":1658390357,\"infos\":[{\"price\":0.4177,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.4176,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.4173,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"manausdt\":{\"price\":0.90396,\"timestamp\":1658390392,\"infos\":[{\"price\":0.90396,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"mkrusdt\":{\"price\":962.05,\"timestamp\":1658390377,\"infos\":[{\"price\":962.1,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":962,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nanousdt\":{\"price\":2.224,\"timestamp\":1658390393,\"infos\":[{\"price\":2.224,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nearusdt\":{\"price\":4.174,\"timestamp\":1658390391,\"infos\":[{\"price\":4.174,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"neousdt\":{\"price\":9.56265,\"timestamp\":1658390345,\"infos\":[{\"price\":9.5653,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":9.56,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"omgusdt\":{\"price\":1.87565,\"timestamp\":1658390354,\"infos\":[{\"price\":1.876,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.8753,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"ontusdt\":{\"price\":0.2452,\"timestamp\":1658390392,\"infos\":[{\"price\":0.2452,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"qtumusdt\":{\"price\":3.0403,\"timestamp\":1658390358,\"infos\":[{\"price\":3.0406,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":3.04,\"weight\":1,\"exchangeName\":\"binance\"}]},\"renusdt\":{\"price\":0.146223,\"timestamp\":1658390392,\"infos\":[{\"price\":0.146223,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"sandusdt\":{\"price\":1.32313,\"timestamp\":1658390389,\"infos\":[{\"price\":1.32316,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.3231,\"weight\":1,\"exchangeName\":\"binance\"}]},\"scusdt\":{\"price\":0.004251,\"timestamp\":1658390359,\"infos\":[{\"price\":0.004252,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.00425,\"weight\":1,\"exchangeName\":\"binance\"}]},\"srmusdt\":{\"price\":0.9985,\"timestamp\":1658390391,\"infos\":[{\"price\":0.999,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.998,\"weight\":1,\"exchangeName\":\"binance\"}]},\"stxusdt\":{\"price\":0.423,\"timestamp\":1658390345,\"infos\":[{\"price\":0.423,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"sushiusdt\":{\"price\":1.3205,\"timestamp\":1658390385,\"infos\":[{\"price\":1.3205,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"thetausdt\":{\"price\":1.2205,\"timestamp\":1658390392,\"infos\":[{\"price\":1.2205,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"umausdt\":{\"price\":2.6182,\"timestamp\":1658390392,\"infos\":[{\"price\":2.6182,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"vetusdt\":{\"price\":0.024886,\"timestamp\":1658390343,\"infos\":[{\"price\":0.02489,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.024882,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"wavesusdt\":{\"price\":5.537,\"timestamp\":1658390392,\"infos\":[{\"price\":5.537,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xemusdt\":{\"price\":0.0472,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0472,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"xlmusdt\":{\"price\":0.111627,\"timestamp\":1658390355,\"infos\":[{\"price\":0.11166,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":0.11162,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.1116,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xmrusdt\":{\"price\":151.605,\"timestamp\":1658390364,\"infos\":[{\"price\":151.61,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":151.6,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xtzusdt\":{\"price\":1.604765,\"timestamp\":1658390345,\"infos\":[{\"price\":1.60553,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.604,\"weight\":1,\"exchangeName\":\"binance\"}]},\"yfiusdt\":{\"price\":6385.405,\"timestamp\":1658390392,\"infos\":[{\"price\":6387.18,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6383.63,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"zecusdt\":{\"price\":60.97,\"timestamp\":1658390394,\"infos\":[{\"price\":61,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":60.94,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"zenusdt\":{\"price\":16.6615,\"timestamp\":1658390343,\"infos\":[{\"price\":16.663,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":16.66,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zilusdt\":{\"price\":0.040255,\"timestamp\":1658390374,\"infos\":[{\"price\":0.04026,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.04025,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zrxusdt\":{\"price\":0.3115,\"timestamp\":1658390356,\"infos\":[{\"price\":0.3115,\"weight\":1,\"exchangeName\":\"binance\"}]}}}"
-}
-
-fn get_are_json_of_btc() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":50261.372,\"timestamp\":1629699168,\"infos\":[{\"price\":50244.79,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":50243.16,\"weight\":1,\"exchangeName\":\"cryptocompare\"},{\"price\":50274,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":50301.59,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":50243.32,\"weight\":1,\"exchangeName\":\"huobi\"}]}}"
-}
-
-fn get_are_json_of_eth() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":3107.71,\"timestamp\":1630055777,\"infos\":[{\"price\":3107,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":3106.56,\"weight\":1,\"exchangeName\":\"cryptocompare\"},{\"price\":3106.68,\"weight\":1,\"exchangeName\":\"ok\"},{\"price\":3107,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":3111.31,\"weight\":1,\"exchangeName\":\"bitstamp\"}]}}"
-}
-
-fn get_are_json_of_dot() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":35.9921,\"timestamp\":1631497660,\"infos\":[{\"price\":36.0173,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":36.012,\"weight\":1,\"exchangeName\":\"coinbase\"},{\"price\":35.947,\"weight\":1,\"exchangeName\":\"bitfinex\"}]}}"
-}
-
-fn get_are_json_of_xrp() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":1.09272,\"timestamp\":1631497987,\"infos\":[{\"price\":1.09319,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1.0922,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":1.09277,\"weight\":1,\"exchangeName\":\"ok\"}]}}"
-}
-
-// {"code":0,"message":"OK","data":{"btcusdt":{"price":50261.372,"timestamp":1629699168},"ethusdt":
-// {"price":3107.71,"timestamp":1630055777},"dotusdt":{"price":35.9921,"timestamp":1631497660},"
-// xrpusdt":{"price":1.09272,"timestamp":1631497987}}}
-fn get_are_json_of_bulk() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":50261.372,\"timestamp\":1629699168},\"ethusdt\":{\"price\":3107.71,\"timestamp\":1630055777},\"dotusdt\":{\"price\":35.9921,\"timestamp\":1631497660},\"xrpusdt\":{\"price\":1.09272,\"timestamp\":1631497987}}}"
-}
-
-fn get_are_dot_eth_btc() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":23286.141429,\"timestamp\":1658479119,\"infos\":[{\"price\":23289.23,\"weight\":2,\"exchangeName\":\"huobi\"},{\"price\":23287.4,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":23285.01,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":23284.04,\"weight\":3,\"exchangeName\":\"coinbase\"}]},\"dotusdt\":{\"price\":7.741333,\"timestamp\":1658479124,\"infos\":[{\"price\":7.7443,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":7.7417,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":7.738,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"ethusdt\":{\"price\":1609.2625,\"timestamp\":1658479144,\"infos\":[{\"price\":1609.45,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1609.38,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1609.18,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":1609.04,\"weight\":1,\"exchangeName\":\"coinbase\"}]}}}"
-}
-
-// {"code":0,"message":"OK","data":{"btcusdt":{"price":50261.372,"timestamp":1629699168},"ethusdt":
-// {"price":3107.71,"timestamp":1630055777},"dotusdt":{"price":35.9921,"timestamp":1631497660},"
-// xrpusdt":{"price":1.09272,"timestamp":1631497987},"xxxusdt":{"price":1.09272,"timestamp":
-// 1631497987}}}
-fn get_are_json_of_bulk_of_xxxusdt_is_0() -> &'static str {
-	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":50261.372,\"timestamp\":1629699168},\"ethusdt\":{\"price\":3107.71,\"timestamp\":1630055777},\"dotusdt\":{\"price\":35.9921,\"timestamp\":1631497660},\"xrpusdt\":{\"price\":1.09272,\"timestamp\":1631497987},\"xxxusdt\":{\"price\":0,\"timestamp\":1631497987}}}"
-}
+// /// Generate an account ID from seed.
+// pub fn get_account_id_from_seed<TPublic: sp_core::Public>(seed: &str) -> AccountId
+// where
+// 	<Signature as Verify>::Signer: From<<TPublic::Pair as Pair>::Public>,
+// {
+// 	<Signature as Verify>::Signer::from(get_from_seed::<TPublic>(seed)).into_account()
+// }
+//
+// const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+//
+// /// Generate a crypto pair from seed.
+// pub fn get_from_seed<TPublic: sp_core::Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+// 	TPublic::Pair::from_string(&format!("{}/{}", PHRASE, seed), None)
+// 		.expect("static values are valid; qed")
+// 		.public()
+// }
+//
+// fn ares_price_data_from_tuple(
+// 	param: (u64, AccountId, BlockNumber, FractionLength, JsonNumberValue, u64, BlockNumber),
+// ) -> AresPriceData<AccountId, BlockNumber> {
+// 	AresPriceData {
+// 		price: param.0,
+// 		account_id: param.1,
+// 		create_bn: param.2,
+// 		fraction_len: param.3,
+// 		raw_number: param.4,
+// 		timestamp: param.5,
+// 		update_bn: param.6,
+// 	}
+// }
+//
+// fn init_aura_enging_digest() {
+// 	use sp_consensus_aura::Slot;
+// 	let slot = Slot::from(1);
+// 	let pre_digest = Digest {
+// 		logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())],
+// 	};
+// 	System::initialize(&42, &System::parent_hash(), &pre_digest);
+// }
+//
+// fn to_test_vec(input: &str) -> Vec<u8> {
+// 	input.as_bytes().to_vec()
+// }
+//
+// pub fn to_test_bounded_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {
+// 	to_str.as_bytes().to_vec().try_into().unwrap()
+// }
+//
+// fn get_bug_json_of_20220721() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"algousdt\":{\"price\":0.3395,\"timestamp\":1658390392,\"infos\":[{\"price\":0.3395,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"axsusdt\":{\"price\":15.294,\"timestamp\":1658390345,\"infos\":[{\"price\":15.302,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":15.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":15.28,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"batusdt\":{\"price\":0.38925,\"timestamp\":1658390376,\"infos\":[{\"price\":0.3894,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.3891,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bntusdt\":{\"price\":0.5016,\"timestamp\":1658390339,\"infos\":[{\"price\":0.502,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.5012,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"bttusdt\":{\"price\":8.934e-7,\"timestamp\":1658390367,\"infos\":[{\"price\":8.94e-7,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":8.928e-7,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"celousdt\":{\"price\":0.9415,\"timestamp\":1658390392,\"infos\":[{\"price\":0.9415,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"chzusdt\":{\"price\":0.107811,\"timestamp\":1658390370,\"infos\":[{\"price\":0.107893,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.1078,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.10774,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"crvusdt\":{\"price\":1.163,\"timestamp\":1658390393,\"infos\":[{\"price\":1.163,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.163,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"dcrusdt\":{\"price\":24.2783,\"timestamp\":1658390358,\"infos\":[{\"price\":24.3,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":24.2566,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"egldusdt\":{\"price\":54.79,\"timestamp\":1658390393,\"infos\":[{\"price\":54.79,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"enjusdt\":{\"price\":0.590397,\"timestamp\":1658390371,\"infos\":[{\"price\":0.5907,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.5903,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.59019,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"fetusdt\":{\"price\":0.0818,\"timestamp\":1658390345,\"infos\":[{\"price\":0.0818,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"ftmusdt\":{\"price\":0.30523,\"timestamp\":1658390364,\"infos\":[{\"price\":0.30526,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.3052,\"weight\":1,\"exchangeName\":\"binance\"}]},\"fttusdt\":{\"price\":28.2704,\"timestamp\":1658390364,\"infos\":[{\"price\":28.2808,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":28.26,\"weight\":1,\"exchangeName\":\"binance\"}]},\"grtusdt\":{\"price\":0.104105,\"timestamp\":1658390356,\"infos\":[{\"price\":0.104179,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.10403,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"hbarusdt\":{\"price\":0.0698,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0698,\"weight\":1,\"exchangeName\":\"binance\"}]},\"icpusdt\":{\"price\":6.7438,\"timestamp\":1658390338,\"infos\":[{\"price\":6.75,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6.7414,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":6.74,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"icxusdt\":{\"price\":0.28865,\"timestamp\":1658390360,\"infos\":[{\"price\":0.289,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.2883,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iostusdt\":{\"price\":0.013583,\"timestamp\":1658390393,\"infos\":[{\"price\":0.013583,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"iotausdt\":{\"price\":0.2901,\"timestamp\":1658390391,\"infos\":[{\"price\":0.2901,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"iotxusdt\":{\"price\":0.03337,\"timestamp\":1658390344,\"infos\":[{\"price\":0.03337,\"weight\":1,\"exchangeName\":\"binance\"}]},\"kavausdt\":{\"price\":1.7587,\"timestamp\":1658390392,\"infos\":[{\"price\":1.7587,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"kncusdt\":{\"price\":1.40765,\"timestamp\":1658390348,\"infos\":[{\"price\":1.4083,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1.407,\"weight\":1,\"exchangeName\":\"binance\"}]},\"ksmusdt\":{\"price\":59.3564,\"timestamp\":1658390365,\"infos\":[{\"price\":59.4047,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":59.3081,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"lrcusdt\":{\"price\":0.417533,\"timestamp\":1658390357,\"infos\":[{\"price\":0.4177,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.4176,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.4173,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"manausdt\":{\"price\":0.90396,\"timestamp\":1658390392,\"infos\":[{\"price\":0.90396,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"mkrusdt\":{\"price\":962.05,\"timestamp\":1658390377,\"infos\":[{\"price\":962.1,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":962,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nanousdt\":{\"price\":2.224,\"timestamp\":1658390393,\"infos\":[{\"price\":2.224,\"weight\":1,\"exchangeName\":\"binance\"}]},\"nearusdt\":{\"price\":4.174,\"timestamp\":1658390391,\"infos\":[{\"price\":4.174,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"neousdt\":{\"price\":9.56265,\"timestamp\":1658390345,\"infos\":[{\"price\":9.5653,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":9.56,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"omgusdt\":{\"price\":1.87565,\"timestamp\":1658390354,\"infos\":[{\"price\":1.876,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1.8753,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"ontusdt\":{\"price\":0.2452,\"timestamp\":1658390392,\"infos\":[{\"price\":0.2452,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"qtumusdt\":{\"price\":3.0403,\"timestamp\":1658390358,\"infos\":[{\"price\":3.0406,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":3.04,\"weight\":1,\"exchangeName\":\"binance\"}]},\"renusdt\":{\"price\":0.146223,\"timestamp\":1658390392,\"infos\":[{\"price\":0.146223,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"sandusdt\":{\"price\":1.32313,\"timestamp\":1658390389,\"infos\":[{\"price\":1.32316,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.3231,\"weight\":1,\"exchangeName\":\"binance\"}]},\"scusdt\":{\"price\":0.004251,\"timestamp\":1658390359,\"infos\":[{\"price\":0.004252,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":0.00425,\"weight\":1,\"exchangeName\":\"binance\"}]},\"srmusdt\":{\"price\":0.9985,\"timestamp\":1658390391,\"infos\":[{\"price\":0.999,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.998,\"weight\":1,\"exchangeName\":\"binance\"}]},\"stxusdt\":{\"price\":0.423,\"timestamp\":1658390345,\"infos\":[{\"price\":0.423,\"weight\":1,\"exchangeName\":\"coinbase\"}]},\"sushiusdt\":{\"price\":1.3205,\"timestamp\":1658390385,\"infos\":[{\"price\":1.3205,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"thetausdt\":{\"price\":1.2205,\"timestamp\":1658390392,\"infos\":[{\"price\":1.2205,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"umausdt\":{\"price\":2.6182,\"timestamp\":1658390392,\"infos\":[{\"price\":2.6182,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"vetusdt\":{\"price\":0.024886,\"timestamp\":1658390343,\"infos\":[{\"price\":0.02489,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":0.024882,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"wavesusdt\":{\"price\":5.537,\"timestamp\":1658390392,\"infos\":[{\"price\":5.537,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xemusdt\":{\"price\":0.0472,\"timestamp\":1658390392,\"infos\":[{\"price\":0.0472,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"xlmusdt\":{\"price\":0.111627,\"timestamp\":1658390355,\"infos\":[{\"price\":0.11166,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":0.11162,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.1116,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xmrusdt\":{\"price\":151.605,\"timestamp\":1658390364,\"infos\":[{\"price\":151.61,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":151.6,\"weight\":1,\"exchangeName\":\"binance\"}]},\"xtzusdt\":{\"price\":1.604765,\"timestamp\":1658390345,\"infos\":[{\"price\":1.60553,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":1.604,\"weight\":1,\"exchangeName\":\"binance\"}]},\"yfiusdt\":{\"price\":6385.405,\"timestamp\":1658390392,\"infos\":[{\"price\":6387.18,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":6383.63,\"weight\":1,\"exchangeName\":\"kucoin\"}]},\"zecusdt\":{\"price\":60.97,\"timestamp\":1658390394,\"infos\":[{\"price\":61,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":60.94,\"weight\":1,\"exchangeName\":\"huobi\"}]},\"zenusdt\":{\"price\":16.6615,\"timestamp\":1658390343,\"infos\":[{\"price\":16.663,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":16.66,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zilusdt\":{\"price\":0.040255,\"timestamp\":1658390374,\"infos\":[{\"price\":0.04026,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":0.04025,\"weight\":1,\"exchangeName\":\"binance\"}]},\"zrxusdt\":{\"price\":0.3115,\"timestamp\":1658390356,\"infos\":[{\"price\":0.3115,\"weight\":1,\"exchangeName\":\"binance\"}]}}}"
+// }
+//
+// fn get_are_json_of_btc() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":50261.372,\"timestamp\":1629699168,\"infos\":[{\"price\":50244.79,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":50243.16,\"weight\":1,\"exchangeName\":\"cryptocompare\"},{\"price\":50274,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":50301.59,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":50243.32,\"weight\":1,\"exchangeName\":\"huobi\"}]}}"
+// }
+//
+// fn get_are_json_of_eth() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":3107.71,\"timestamp\":1630055777,\"infos\":[{\"price\":3107,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":3106.56,\"weight\":1,\"exchangeName\":\"cryptocompare\"},{\"price\":3106.68,\"weight\":1,\"exchangeName\":\"ok\"},{\"price\":3107,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":3111.31,\"weight\":1,\"exchangeName\":\"bitstamp\"}]}}"
+// }
+//
+// fn get_are_json_of_dot() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":35.9921,\"timestamp\":1631497660,\"infos\":[{\"price\":36.0173,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":36.012,\"weight\":1,\"exchangeName\":\"coinbase\"},{\"price\":35.947,\"weight\":1,\"exchangeName\":\"bitfinex\"}]}}"
+// }
+//
+// fn get_are_json_of_xrp() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"price\":1.09272,\"timestamp\":1631497987,\"infos\":[{\"price\":1.09319,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1.0922,\"weight\":1,\"exchangeName\":\"bitfinex\"},{\"price\":1.09277,\"weight\":1,\"exchangeName\":\"ok\"}]}}"
+// }
+//
+// // {"code":0,"message":"OK","data":{"btcusdt":{"price":50261.372,"timestamp":1629699168},"ethusdt":
+// // {"price":3107.71,"timestamp":1630055777},"dotusdt":{"price":35.9921,"timestamp":1631497660},"
+// // xrpusdt":{"price":1.09272,"timestamp":1631497987}}}
+// fn get_are_json_of_bulk() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":50261.372,\"timestamp\":1629699168},\"ethusdt\":{\"price\":3107.71,\"timestamp\":1630055777},\"dotusdt\":{\"price\":35.9921,\"timestamp\":1631497660},\"xrpusdt\":{\"price\":1.09272,\"timestamp\":1631497987}}}"
+// }
+//
+// fn get_are_dot_eth_btc() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":23286.141429,\"timestamp\":1658479119,\"infos\":[{\"price\":23289.23,\"weight\":2,\"exchangeName\":\"huobi\"},{\"price\":23287.4,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":23285.01,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":23284.04,\"weight\":3,\"exchangeName\":\"coinbase\"}]},\"dotusdt\":{\"price\":7.741333,\"timestamp\":1658479124,\"infos\":[{\"price\":7.7443,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":7.7417,\"weight\":1,\"exchangeName\":\"kucoin\"},{\"price\":7.738,\"weight\":1,\"exchangeName\":\"bitfinex\"}]},\"ethusdt\":{\"price\":1609.2625,\"timestamp\":1658479144,\"infos\":[{\"price\":1609.45,\"weight\":1,\"exchangeName\":\"huobi\"},{\"price\":1609.38,\"weight\":1,\"exchangeName\":\"binance\"},{\"price\":1609.18,\"weight\":1,\"exchangeName\":\"bitstamp\"},{\"price\":1609.04,\"weight\":1,\"exchangeName\":\"coinbase\"}]}}}"
+// }
+//
+// // {"code":0,"message":"OK","data":{"btcusdt":{"price":50261.372,"timestamp":1629699168},"ethusdt":
+// // {"price":3107.71,"timestamp":1630055777},"dotusdt":{"price":35.9921,"timestamp":1631497660},"
+// // xrpusdt":{"price":1.09272,"timestamp":1631497987},"xxxusdt":{"price":1.09272,"timestamp":
+// // 1631497987}}}
+// fn get_are_json_of_bulk_of_xxxusdt_is_0() -> &'static str {
+// 	"{\"code\":0,\"message\":\"OK\",\"data\":{\"btcusdt\":{\"price\":50261.372,\"timestamp\":1629699168},\"ethusdt\":{\"price\":3107.71,\"timestamp\":1630055777},\"dotusdt\":{\"price\":35.9921,\"timestamp\":1631497660},\"xrpusdt\":{\"price\":1.09272,\"timestamp\":1631497987},\"xxxusdt\":{\"price\":0,\"timestamp\":1631497987}}}"
+// }

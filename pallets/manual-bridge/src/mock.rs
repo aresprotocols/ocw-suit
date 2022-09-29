@@ -82,7 +82,7 @@ impl manual_bridge::Config for Test {
 	type Currency = pallet_balances::Pallet<Self>;
 	type Event = Event;
 	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
-	// type MinimumBalanceThreshold = MinimumBalanceThreshold;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

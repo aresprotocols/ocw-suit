@@ -5,16 +5,18 @@
 /// <https://docs.substrate.io/v3/runtime/frame>
 pub use pallet::*;
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod mock;
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
 
-mod types;
+pub mod types;
+
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -23,6 +25,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
+	use crate::weights::WeightInfo;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -33,6 +36,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// RequestOrigin
 		type RequestOrigin: EnsureOrigin<Self::Origin>;
+
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -146,7 +151,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
-		#[pallet::weight(1_000)]
+		#[pallet::weight(0)]
 		pub fn update_waiter(origin: OriginFor<T>, waiter: T::AccountId) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			WaiterAccout::<T>::set(Some(waiter.clone()));
@@ -155,7 +160,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(1_000)]
+		#[pallet::weight(0)]
 		pub fn update_stash(origin: OriginFor<T>, stash: T::AccountId) -> DispatchResult {
 			T::RequestOrigin::ensure_origin(origin)?;
 			StashAccout::<T>::set(Some(stash.clone()));
@@ -164,7 +169,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(1_000)]
+		#[pallet::weight(0)]
 		pub fn update_minimum_balance_threshold(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -176,7 +181,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(1_000)]
+		#[pallet::weight(0)]
 		pub fn set_up_completed_list(origin: OriginFor<T>, sender: T::AccountId ,  list: CrossChainInfoList<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -225,7 +230,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(1_000)]
+		#[pallet::weight(<T as Config>::WeightInfo::transfer_to())]
 		pub fn transfer_to(
 			origin: OriginFor<T>,
 			chain_kind: CrossChainKind,

@@ -1,9 +1,18 @@
-use super::*;
 use ares_oracle_provider_support::*;
 use sp_runtime::Percent;
 use sp_application_crypto::UncheckedFrom;
-// use crate::crypto2::AuraAuthId;
-// use frame_support::weights::Pays::No;
+use sp_core::offchain::TransactionPoolExt;
+use sp_keystore::KeystoreExt;
+use sp_keystore::testing::KeyStore;
+use sp_runtime::offchain::{OffchainWorkerExt, testing};
+use sp_runtime::traits::IdentifyAccount;
+use crate::mock::*;
+use crate::{AresAvgPrice, AuthorityId as AuraId, FinalPerCheckResult, PreCheckTaskList};
+use sp_std::sync::Arc;
+use bound_vec_helper::BoundVecHelper;
+use sp_keystore::SyncCryptoStore;
+use sp_runtime::RuntimeAppPublic;
+use crate::test_tools::{get_are_dot_eth_btc, get_are_json_of_bulk, to_test_vec};
 
 #[test]
 fn test_create_pre_check_task() {

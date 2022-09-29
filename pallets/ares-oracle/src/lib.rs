@@ -103,8 +103,19 @@ pub const PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE: u8 = 2;
 
 
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests;
+
+#[cfg(all(feature = "std", test))]
+mod mock;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod test_tools;
+
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -121,6 +132,7 @@ pub mod pallet {
 	// use sp_consensus_aura::ConsensusLog::AuthoritiesChange;
 	use sp_core::crypto::UncheckedFrom;
 	use staking_extend::IStakingNpos;
+	use crate::weights::WeightInfo;
 
 	#[pallet::error]
 	#[derive(PartialEq, Eq)]
@@ -194,6 +206,8 @@ pub mod pallet {
 			Self::BlockNumber,
 			StashId = <Self as frame_system::Config>::AccountId,
 		>;
+
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -481,7 +495,7 @@ pub mod pallet {
 		///
 		/// - max_fee: The highest asking fee accepted by the signer.
 		/// - request_keys: A list of `Trading pairs`, separated by commas if multiple, such as: `eth-usdt, dot-sudt`, etc.
-		#[pallet::weight(1000)]
+		#[pallet::weight(<T as Config>::WeightInfo::submit_ask_price())]
 		pub fn submit_ask_price(
 			origin: OriginFor<T>,
 			#[pallet::compact] max_fee: BalanceOf<T>,
@@ -1934,9 +1948,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear the stored data corresponding to a `purchase-id`.
 	fn purchased_storage_clean(p_id: PurchaseId) {
-		<PurchasedPricePool<T>>::remove_prefix(p_id.clone(), None);
+		<PurchasedPricePool<T>>::clear_prefix(p_id.clone(), u32::MAX, None);
 		<PurchasedRequestPool<T>>::remove(p_id.clone());
-		<PurchasedOrderPool<T>>::remove_prefix(p_id.clone(), None);
+		<PurchasedOrderPool<T>>::clear_prefix(p_id.clone(), u32::MAX, None);
 	}
 
 	/// Find those requests that have exceeded the `max_duration` limit,

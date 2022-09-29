@@ -1,6 +1,6 @@
-use super::*;
 use frame_support::pallet_prelude::Hooks;
 use sp_runtime::Percent;
+use crate::mock::*;
 
 #[test]
 fn test_upgrade_v2() {

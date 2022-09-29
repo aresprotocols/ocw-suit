@@ -183,6 +183,7 @@ impl pallet_price_estimates::Config for Test {
 	// type AuthorityId = ares_oracle::ares_crypto::AresCrypto<AresId>;
 	type MaxQuotationDelay = MaxQuotationDelay;
 	type MaximumKeepLengthOfOldData = MaximumKeepLengthOfOldData;
+	type WeightInfo = ();
 }
 
 pub struct TestSymbolInfo ;
@@ -200,7 +201,7 @@ impl SymbolInfo<BlockNumber> for TestSymbolInfo {
 
 
 pub(crate) fn run_to_block(n: BlockNumber) {
-	println!("System::block_number() {:?} < n {:?}", System::block_number(), n);
+	// println!("System::block_number() {:?} < n {:?}", System::block_number(), n);
 	assert!(System::block_number() < n);
 	Estimates::on_finalize(System::block_number());
 	for b in (System::block_number() + 1)..=n {

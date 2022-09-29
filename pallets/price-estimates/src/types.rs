@@ -71,6 +71,20 @@ pub enum EstimatesType {
 	RANGE,
 }
 
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum ChooseType<AccountId> {
+	DEVIATION {
+		low_price: u64,
+		high_price: u64,
+		check_list: Vec<(AccountId, Option<u64>)>
+	},
+	RANGE {
+		range: BoundedVec<u64, MaximumOptions>,
+		check_list: Vec<(AccountId, Option<u8>)>
+	}
+}
+
+
 impl EstimatesType {
 	pub fn get_type_number(self)-> u8 {
 		match self {
