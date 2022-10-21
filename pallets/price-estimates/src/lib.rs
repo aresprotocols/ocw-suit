@@ -134,7 +134,11 @@ pub mod pallet {
 						// let mut config = config.as_mut().unwrap();
 						config.state = EstimatesState::Active;
 						PreparedEstimates::<T>::remove(&symbol);
-						ActiveEstimates::<T>::insert(&symbol, config)
+						ActiveEstimates::<T>::insert(&symbol, config.clone());
+
+						Self::deposit_event(Event::ActiveEstimates {
+							estimate: config,
+						});
 					}
 				}
 			});
@@ -824,6 +828,10 @@ pub mod pallet {
 		NewEstimates {
 			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
 			who: T::AccountId,
+		},
+
+		ActiveEstimates {
+			estimate: SymbolEstimatesConfig<T::BlockNumber, BalanceOf<T>>,
 		},
 
 		ParticipateEstimates {
