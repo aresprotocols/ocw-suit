@@ -353,7 +353,7 @@ impl<T: Config> Pallet<T> {
                     log::error!(
                         target: "pallet::ocw::ares_price_worker",
                         "⛔ The data submission interval is too long and data pool will be reset. price_key = {:?}, last = {:?}, current = {:?}",
-                        key_str, last_update_bn, current_block
+                        sp_std::str::from_utf8(&key_str), last_update_bn, current_block
                     );
                     let mut new_price = AresPriceDataVecOf::<T::AccountId, T::BlockNumber>::default();
                     let _res = new_price.try_push(new_ares_price_data);
