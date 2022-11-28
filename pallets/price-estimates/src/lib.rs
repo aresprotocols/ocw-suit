@@ -32,9 +32,9 @@ pub mod migrations;
 pub mod weights;
 
 pub use pallet::*;
-use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, ChainPrice, ChooseTrigerPayload, ChooseType, ChooseWinnersPayload, ConvertChainPrice, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
+use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, ChooseTrigerPayload, ChooseType, ChooseWinnersPayload, EstimatesState, EstimatesType, MaximumOptions, MaximumParticipants, MultiplierOption, SymbolEstimatesConfig};
 use frame_support::{BoundedVec, ensure};
-use ares_oracle_provider_support::FractionLength;
+use ares_oracle_provider_support::{ChainPrice, ConvertChainPrice, FractionLength};
 use sp_runtime::traits::{AccountIdConversion, CheckedDiv};
 use sp_runtime::traits::Saturating;
 use sp_core::hexdisplay::HexDisplay;
@@ -56,8 +56,8 @@ pub mod pallet {
 	use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 	use sp_runtime::traits::{StaticLookup, ValidateUnsigned};
 	use sp_runtime::transaction_validity::TransactionValidityError;
-	use ares_oracle::traits::SymbolInfo;
 	use ares_oracle::types::OffchainSignature;
+	use ares_oracle_provider_support::{ChainPrice, ConvertChainPrice, PriceKey, SymbolInfo};
 	use bound_vec_helper::BoundVecHelper;
 
 	use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfAdmins, BoundedVecOfBscAddress, BoundedVecOfChooseWinnersPayload, BoundedVecOfCompletedEstimates, MaximumAdmins, MaximumEstimatesPerSymbol, MaximumParticipants, MaximumWinners, StringLimit, SymbolEstimatesConfig, Releases, ChooseType};
@@ -249,8 +249,10 @@ pub mod pallet {
 			ensure!(members.contains(&caller), Error::<T>::NotMember);
 
 			// Get estimates config
-			let symbol: BoundedVec<u8, StringLimit> =
-				symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
+			// let symbol: BoundedVec<u8, StringLimit> =
+			// 		symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
+
+			let symbol = PriceKey::create_on_vec(symbol);
 			let storage_key=(symbol.clone(), estimates_type.clone());
 
 			let config = UnresolvedEstimates::<T>::get(&storage_key);
@@ -319,6 +321,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(Self::is_active(), Error::<T>::PalletInactive);
 
+			let symbol = PriceKey::create_on_vec(symbol);
 			let caller = ensure_signed(origin.clone())?;
 			let members: BoundedVec<T::AccountId, MaximumAdmins> = Self::admins();
 			ensure!(members.contains(&caller), Error::<T>::NotMember);
@@ -356,8 +359,8 @@ pub mod pallet {
 			// let symbol: BoundedVec<u8, StringLimit> =
 			// 	symbol.clone().try_into().map_err(|_| Error::<T>::BadMetadata)?;
 
-			let symbol = BoundedVecOfSymbol::try_create_on_vec(symbol.clone())
-				.map_err(|_| Error::<T>::BadMetadata)?;
+			// let symbol = BoundedVecOfSymbol::try_create_on_vec(symbol.clone())
+			// 	.map_err(|_| Error::<T>::BadMetadata)?;
 
 			let storage_key = (symbol.clone(), estimates_type.clone());
 
@@ -472,6 +475,7 @@ pub mod pallet {
 			multiplier: MultiplierOption,
 			_bsc_address: Option<Vec<u8>>,
 		) -> DispatchResult {
+			let symbol = PriceKey::create_on_vec(symbol);
 			ensure!(Self::is_active(), Error::<T>::PalletInactive);
 			let caller = ensure_signed(origin)?;
 
@@ -835,7 +839,7 @@ pub mod pallet {
 		},
 
 		ParticipateEstimates {
-			symbol: BoundedVec<u8, StringLimit>,
+			symbol: PriceKey,
 			id: u64,
 			estimate: AccountParticipateEstimates<T::AccountId, T::BlockNumber>,
 			who: T::AccountId,

@@ -7,7 +7,7 @@ name = 'oracle-finance'
 readme = 'README.md'
 homepage = "https://github.com/aresprotocols"
 repository = "https://github.com/aresprotocols/ocw-suit"
-version = '3.1.2'
+version = '4.0.1'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
@@ -16,6 +16,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
     "derive",
     "max-encoded-len",
 ] }
+ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
 frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.28" }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
@@ -45,6 +46,7 @@ runtime-benchmarks = [
 ]
 
 std = [
+    "ares-oracle-provider-support/std",
     "log/std",
     "scale-info/std",
     'codec/std',

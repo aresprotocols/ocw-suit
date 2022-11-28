@@ -2,7 +2,7 @@ use crate as oracle_finance;
 
 use crate::types::{EraIndex};
 use frame_support::sp_std::convert::TryInto;
-use frame_support::{parameter_types, traits::{Get, Contains, GenesisBuild, Hooks}, PalletId, BoundedVec};
+use frame_support::{parameter_types, traits::{Get, Contains, GenesisBuild, Hooks, LockIdentifier}, PalletId, BoundedVec};
 use frame_system as system;
 use pallet_balances;
 use sp_core::H256;
@@ -10,11 +10,26 @@ use sp_runtime::testing::UintAuthorityId;
 use sp_runtime::traits::Convert;
 use sp_runtime::{ testing::Header, traits::{BlakeTwo256, IdentityLookup, Zero}};
 use sp_std::convert::TryFrom;
+use ares_oracle_provider_support::{OrderIdEnum};
 use crate::test_tools::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Session: pallet_session,
+		Balances: pallet_balances,
+		OracleFinance: crate::<Instance1>,
+	}
+);
 
 // Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 pub struct BaseFilter;
@@ -67,20 +82,6 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
-	}
-);
-
 pub struct StashOf;
 impl Convert<AccountId, Option<AccountId>> for StashOf {
 	fn convert(controller: AccountId) -> Option<AccountId> {
@@ -94,19 +95,24 @@ parameter_types! {
 	// pub const AskPeriod: BlockNumber = 10;
 	pub const AskPerEra: SessionIndex = 2;
 	pub const HistoryDepth: u32 = 2;
+	pub const TestFinanceLockIdentifier : LockIdentifier = *b"testing ";
 }
 
-impl oracle_finance::Config for Test {
-	type Event = Event;
-	type PalletId = AresFinancePalletId;
-	type Currency = pallet_balances::Pallet<Self>;
+type OracleFinanceInstance = oracle_finance::Instance1;
+impl oracle_finance::Config<OracleFinanceInstance> for Test {
+	type AskPerEra = AskPerEra;
 	type BasicDollars = BasicDollars;
+	type Currency = pallet_balances::Pallet<Self>;
+	type Event = Event;
+	type HistoryDepth = HistoryDepth;
+	type LockIdentifier = TestFinanceLockIdentifier;
+	type OnSlash = ();
+	type PalletId = AresFinancePalletId;
+	type SessionManager = ();
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = StashOf;
-	type AskPerEra = AskPerEra;
-	type HistoryDepth = HistoryDepth;
-	type SessionManager = ();
-	type OnSlash = ();
+	// type OrderId = PurchaseId;
+	// type OrderId2 = OrderIdEnum::String(PurchaseId);
 	type WeightInfo = ();
 }
 
@@ -158,7 +164,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	crate::GenesisConfig::<Test> {
+	crate::GenesisConfig::<Test, crate::Instance1> {
 		_pt: Default::default()
 	}.assimilate_storage(&mut t).unwrap();
 	
@@ -169,6 +175,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 pub fn to_test_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {
 	to_str.as_bytes().to_vec().try_into().unwrap()
+}
+
+pub fn to_enum_id(to_str: &str) -> OrderIdEnum {
+	OrderIdEnum::String(to_test_vec(to_str))
 }
 
 // -------------- Session Management.

@@ -11,21 +11,21 @@ use crate::{BalanceOf};
 // use oracle_finance::Pallet as OracleFinance;
 use core::convert::TryInto;
 use sp_std::marker::PhantomData;
-use ares_oracle::traits::SymbolInfo;
 use bound_vec_helper::BoundVecHelper;
 use crate::Config;
 use crate::types::BoundedVecOfMultiplierOption;
 use sp_std::vec;
+use ares_oracle_provider_support::{PriceKey, SymbolInfo};
 
 pub struct BenchmarkingSymbolInfo<T>(PhantomData<T>) ;
 
 impl <T :Config>SymbolInfo<T::BlockNumber> for BenchmarkingSymbolInfo<T> {
-	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength, T::BlockNumber), ()> {
+	fn price(symbol: &PriceKey) -> Result<(u64, FractionLength, T::BlockNumber), ()> {
 		Ok(
 			(23164822300, BenchmarkingSymbolInfo::<T>::fraction(symbol).unwrap(), 50u32.into())
 		)
 	}
-	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
+	fn fraction(symbol: &PriceKey) -> Option<FractionLength> {
 		Some(6)
 	}
 }
@@ -70,7 +70,7 @@ fn init_mock<T: Config> (caller: &T::AccountId) {
 		id: 0,
 		ticket_price: 1000u32.into(),
 		symbol_completed_price: 0,
-		symbol_fraction: BenchmarkingSymbolInfo::<T>::fraction(&symbol.clone()).unwrap(),
+		symbol_fraction: BenchmarkingSymbolInfo::<T>::fraction(&PriceKey::try_create_on_vec(symbol.clone()).unwrap()).unwrap(),
 		start,
 		end,
 		distribute,

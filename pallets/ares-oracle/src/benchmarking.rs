@@ -39,9 +39,9 @@ fn init_mock<T: Config> () {
 benchmarks! {
 	submit_ask_price {
 		init_mock::<T>();
-		let balance: BalanceOf<T> = BalanceOf::<T>::max_value();
+		let balance: BalanceOf<T, T::FinanceInstance> = BalanceOf::<T, T::FinanceInstance>::max_value();
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T, T::FinanceInstance>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), balance, "btc_price,eth_price".as_bytes().to_vec())
 	verify {
 		assert_eq!(<PurchasedRequestPool<T>>::iter().count(), 1);

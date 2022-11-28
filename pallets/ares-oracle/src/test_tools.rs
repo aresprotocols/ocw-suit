@@ -2,9 +2,15 @@ use sp_runtime::BoundedVec;
 use sp_runtime::traits::Get;
 use sp_std::convert::TryInto;
 use sp_std::vec::Vec;
+use ares_oracle_provider_support::{OrderIdEnum, PurchaseId};
 
 pub fn to_test_vec(input: &str) -> Vec<u8> {
     input.as_bytes().to_vec()
+}
+
+pub fn to_purchase_id(input: &str) -> OrderIdEnum {
+    let purchase_id: PurchaseId = to_test_bounded_vec(input);
+    OrderIdEnum::String(purchase_id)
 }
 
 pub fn to_test_bounded_vec<MaxLen: Get<u32>>(to_str: &str) -> BoundedVec<u8, MaxLen> {

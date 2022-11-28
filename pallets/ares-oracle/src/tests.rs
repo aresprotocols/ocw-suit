@@ -54,10 +54,10 @@ use sp_runtime::{BoundedVec, Percent};
 use sp_std::convert::{TryFrom, TryInto};
 use ares_oracle_provider_support::{JsonNumberValue, PriceKey, PriceToken, RawSourceKeys, RequestKeys};
 use bound_vec_helper::BoundVecHelper;
-use oracle_finance::types::PurchaseId;
 use crate::traits::ValidatorCount;
 use codec::Decode;
-use crate::test_tools::{get_are_json_of_bulk, get_are_json_of_bulk_of_xxxusdt_is_0, get_bug_json_of_20220721, to_test_bounded_vec, to_test_vec};
+use frame_support::instances::Instance1;
+use crate::test_tools::{get_are_json_of_bulk, get_are_json_of_bulk_of_xxxusdt_is_0, get_bug_json_of_20220721, to_purchase_id, to_test_bounded_vec, to_test_vec};
 use crate::types::{AresPriceData, AvgPriceData, PricePayload, PricePayloadSubJumpBlockList, PricePayloadSubPrice, PricePayloadSubPriceList, PurchasedAvgPriceData, PurchasedDefaultData, PurchasedPricePayload, PurchasedRequestData, PurchasedSourceRawKeys};
 
 // use staking_extend::IStakingNpos;
@@ -464,6 +464,18 @@ use crate::types::{AresPriceData, AvgPriceData, PricePayload, PricePayloadSubJum
 mod test_IAresOraclePreCheck;
 mod test_RuntimeUpgrade;
 
+// #[test]
+// fn test_finance_order() {
+// 	new_test_ext().execute_with(|| {
+// 		// let a = FinanceOrder::<OracleFinance, Instance1>::default();
+// 		let a: <Test as Config>::OrderId2 = <Test as Config>::OrderId2::default() ;
+// 		let b: <Test as Config>::OrderId2 = to_test_vec("Purchased_ID").try_into().unwrap();
+//
+// 		println!("a === {:?}", &a);
+// 		println!("b === {:?}", &b);
+// 	});
+// }
+
 #[test]
 fn test_check_and_clear_expired_purchased_average_price_storage() {
 	let mut t = new_test_ext();
@@ -478,8 +490,8 @@ fn test_check_and_clear_expired_purchased_average_price_storage() {
 			price_data: (10000, 4),
 		};
 
-		PurchasedAvgPrice::<Test>::insert(PurchaseId::create_on_vec(to_test_vec("p_id")), PriceKey::create_on_vec(to_test_vec("btc_price")), avg_price);
-		PurchasedAvgTrace::<Test>::insert(PurchaseId::create_on_vec(to_test_vec("p_id")), 1);
+		PurchasedAvgPrice::<Test>::insert(to_purchase_id("p_id"), PriceKey::create_on_vec(to_test_vec("btc_price")), avg_price);
+		PurchasedAvgTrace::<Test>::insert(to_purchase_id("p_id"), 1);
 
 		assert_eq!(
 			AresOcw::check_and_clear_expired_purchased_average_price_storage(100),
@@ -711,7 +723,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 	offchain_state.write().expect_request(padding_request);
 
-	let mut pub_purchase_id = PurchaseId::default();
+	let mut pub_purchase_id = OrderIdEnum::String(PurchaseId::default());
 	t.execute_with(|| {
 		System::set_block_number(1);
 
@@ -721,6 +733,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		let purchase_id =
 			AresOcw::make_purchase_price_id(<Test as SigningTypes>::Public::from(public_key_1.clone()), 0);
 		pub_purchase_id = purchase_id.clone();
+
 		let price_payload_b1 = PurchasedPricePayload {
 			block_number: 1, // type is BlockNumber
 			auth: public_key_1.clone(),
@@ -754,7 +767,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 
 		// TODO:: remove under line.
 		let _result =
-			OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+			OracleFinance::reserve_fee(&request_acc, &purchase_id, request_keys.len() as u32);
 
 		assert_ok!(AresOcw::ask_price(
 			request_acc.clone(),
@@ -765,7 +778,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 			request_keys.clone()
 		));
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -791,16 +804,16 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 				<PurchasedPricePayload<
 					<Test as SigningTypes>::Public,
 					<Test as frame_system::Config>::BlockNumber,
-					AuraId,
+					AuraId, OrderIdEnum,
 				> as SignedPayload<Test>>::verify::<crate::ares_crypto::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
 			assert!(signature_valid);
 
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -831,11 +844,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -868,11 +881,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone());
 			assert!(purchased_key_option.is_none());
 		}
@@ -880,24 +893,24 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
@@ -907,8 +920,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
@@ -955,11 +968,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_4.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_4.clone());
 			assert!(purchased_key_option.is_none());
 		}
@@ -967,32 +980,32 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_threshold() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_1).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_1).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_2).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_2).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_3).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_3).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_4).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_4).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
@@ -1061,9 +1074,9 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 		// check finance pallet status.
 		assert_eq!(Balances::free_balance(request_acc.into_account()), 100000000000000000);
 		let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
-		OracleFinance::reserve_for_ask_quantity(
-			request_acc.into_account(),
-			purchase_id.clone(),
+		OracleFinance::reserve_fee(
+			&request_acc.into_account(),
+			&purchase_id,
 			request_keys.len() as u32,
 		);
 		assert_eq!(
@@ -1080,7 +1093,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 			RequestKeys::create_on_vec(request_keys.clone().into_iter().map(|x|{ PriceKey::create_on_vec(x) }).collect())
 		));
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_1.into());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -1104,11 +1117,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone().into());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone().into());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1191,7 +1204,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_an_er
 
 		// println!("|{:?}|", System::events());
 		System::assert_last_event(Event::AresOcw(
-			AresOcwEvent::InsufficientCountOfValidators{purchase_id: PurchaseId::try_from(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()}
+			AresOcwEvent::InsufficientCountOfValidators{purchase_id: OrderIdEnum::String(PurchaseId::try_from(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()) }
 		));
 
 		let price_pool = <PurchasedPricePool<Test>>::iter().collect::<Vec<_>>();
@@ -1275,7 +1288,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 		assert_eq!(Balances::free_balance(request_acc), 100000_000000000000);
 		let purchase_id = AresOcw::make_purchase_price_id(request_acc.into_account(), 0);
 		let _result =
-			OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+			OracleFinance::reserve_fee(&request_acc, &purchase_id, request_keys.len() as u32);
 		assert_ok!(AresOcw::ask_price(
 			request_acc.clone(),
 			offer,
@@ -1285,7 +1298,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			RequestKeys::create_on_vec(request_keys.clone().into_iter().map(|x|{PriceKey::create_on_vec(x)}).collect())
 		));
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_1.into());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -1309,11 +1322,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.into());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.into());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1354,7 +1367,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 	t.execute_with(|| {
 		System::set_block_number(2);
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_2.into());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -1377,11 +1390,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone().into());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone().into());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1422,7 +1435,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 	t.execute_with(|| {
 		System::set_block_number(2);
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_3.into());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -1445,11 +1458,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_duration_with_force
 			tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone().into());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone().into());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1591,7 +1604,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 
 	offchain_state.write().expect_request(padding_request);
 
-	let mut pub_purchase_id = PurchaseId::default();
+	let mut pub_purchase_id = OrderIdEnum::String(PurchaseId::default());
 	t.execute_with(|| {
 		System::set_block_number(1);
 
@@ -1634,7 +1647,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 
 		// TODO:: remove under line.
 		let result =
-			OracleFinance::reserve_for_ask_quantity(request_acc, purchase_id.clone(), request_keys.len() as u32);
+			OracleFinance::reserve_fee(&request_acc, &purchase_id, request_keys.len() as u32);
 		assert_eq!(Balances::free_balance(request_acc), 99998000000000000);
 
 		assert_ok!(AresOcw::ask_price(
@@ -1646,7 +1659,7 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 			RequestKeys::create_on_vec(request_keys.clone().into_iter().map(|x|{PriceKey::create_on_vec(x)}).collect())
 		));
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(
@@ -1671,16 +1684,16 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 				<PurchasedPricePayload<
 					<Test as SigningTypes>::Public,
 					<Test as frame_system::Config>::BlockNumber,
-					AuraId,
+					AuraId, OrderIdEnum,
 				> as SignedPayload<Test>>::verify::<crate::ares_crypto::AresCrypto<AuraId>>(&price_payload_b1, signature.clone());
 			assert!(signature_valid);
 
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_1.clone());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1711,11 +1724,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_2.clone());
 			assert!(purchased_key_option.is_none());
 			assert_eq!(TestAuthorityCount::get_validators_count(), 4);
@@ -1748,11 +1761,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_3.clone());
 			assert!(purchased_key_option.is_none());
 		}
@@ -1760,24 +1773,24 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_1.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_2.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_3.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
@@ -1787,8 +1800,8 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				888,
-				AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_4.clone()).unwrap(),
+				&pub_purchase_id,
 			),
 			None
 		);
@@ -1835,11 +1848,11 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		tx.call
 		{
 			// Test purchased submit call
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_4.clone());
 			assert!(purchased_key_option.is_some());
 			AresOcw::submit_purchased_price_unsigned_with_signed_payload(Origin::none(), body, signature);
-			let purchased_key_option: Option<PurchasedSourceRawKeys> =
+			let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 				AresOcw::fetch_purchased_request_keys(public_key_4.clone());
 			assert!(purchased_key_option.is_none());
 		}
@@ -1847,32 +1860,32 @@ fn save_fetch_purchased_price_and_send_payload_signed_end_to_part_success() {
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_1).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_1).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_2).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_2).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_3).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_3).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
 		assert_eq!(
 			OracleFinance::get_record_point(
 				OracleFinance::current_era_num(),
-				AresOcw::get_stash_id(&public_key_4).unwrap(),
-				pub_purchase_id.clone(),
+				&AresOcw::get_stash_id(&public_key_4).unwrap(),
+				&pub_purchase_id,
 			),
 			Some(1)
 		);
@@ -1913,7 +1926,7 @@ fn test_submit_ask_price() {
 		// let (_, authority_1) = <Authorities<Test>>::get()[0].clone();
 		let (_, authority_1) = <Authorities<Test>>::get().unwrap()[0].clone();
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(authority_1.clone());
 
 		let purchased_key = purchased_key_option.unwrap();
@@ -1979,7 +1992,7 @@ fn update_purchase_avg_price_storage() {
 
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			to_test_bounded_vec("abc"),
+			to_purchase_id("abc"),
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
@@ -1992,7 +2005,7 @@ fn update_purchase_avg_price_storage() {
 		);
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			to_test_bounded_vec("bcd"),
+			to_purchase_id("bcd"),
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0; 32]),
 				offer: 0,
@@ -2006,7 +2019,7 @@ fn update_purchase_avg_price_storage() {
 
 		// add price on purchased_id = abc
 		PurchasedPricePool::<Test>::insert(
-			PurchaseId::create_on_vec(to_test_vec("abc")),
+			to_purchase_id("abc"),
 			PriceKey::create_on_vec("btc_price".encode()),
 			PurchasedPriceDataVec::<AccountId, BlockNumber>::create_on_vec(vec![
 				AresPriceData {
@@ -2041,7 +2054,7 @@ fn update_purchase_avg_price_storage() {
 
 		// add price on purchased_id = bcd
 		PurchasedPricePool::<Test>::insert(
-			PurchaseId::create_on_vec(to_test_vec("bcd")),
+			to_purchase_id("bcd"),
 			PriceKey::create_on_vec("btc_price".encode()),
 			PurchasedPriceDataVec::<AccountId, BlockNumber>::create_on_vec(vec![
 				AresPriceData {
@@ -2076,16 +2089,16 @@ fn update_purchase_avg_price_storage() {
 
 		// check store status
 		let price_pool = <PurchasedPricePool<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("abc")),
+			to_purchase_id("abc"),
 			PriceKey::create_on_vec("btc_price".encode())
 		).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("abc")), PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE);
-		AresOcw::purchased_storage_clean(PurchaseId::create_on_vec(to_test_vec("abc")));
+		AresOcw::update_purchase_avg_price_storage(to_purchase_id("abc"), PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE);
+		AresOcw::purchased_storage_clean(to_purchase_id("abc"));
 		// Get avg
 		let avg_price = <PurchasedAvgPrice<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("abc")),
+			to_purchase_id("abc"),
 			PriceKey::create_on_vec("btc_price".encode())
 		);
 		assert_eq!(
@@ -2097,7 +2110,7 @@ fn update_purchase_avg_price_storage() {
 			}
 		);
 		let price_pool = <PurchasedPricePool<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("abc")),
+			to_purchase_id("abc"),
 			PriceKey::create_on_vec("btc_price".encode())
 		).unwrap_or(Default::default());
 		assert_eq!(price_pool.len(), 0);
@@ -2105,16 +2118,16 @@ fn update_purchase_avg_price_storage() {
 		// -----------------
 
 		let price_pool = <PurchasedPricePool<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("bcd")),
+			to_purchase_id("bcd"),
 			PriceKey::create_on_vec("btc_price".encode())
 		).unwrap();
 		assert_eq!(price_pool.len(), 3);
 		// update
-		AresOcw::update_purchase_avg_price_storage(PurchaseId::create_on_vec(to_test_vec("bcd")), PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE);
-		AresOcw::purchased_storage_clean(PurchaseId::create_on_vec(to_test_vec("bcd")));
+		AresOcw::update_purchase_avg_price_storage(to_purchase_id("bcd"), PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE);
+		AresOcw::purchased_storage_clean(to_purchase_id("bcd"));
 		// Get avg
 		let avg_price = <PurchasedAvgPrice<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("bcd")),
+			to_purchase_id("bcd"),
 			PriceKey::create_on_vec("btc_price".encode())
 		);
 		assert_eq!(
@@ -2126,7 +2139,7 @@ fn update_purchase_avg_price_storage() {
 			}
 		);
 		let price_pool = <PurchasedPricePool<Test>>::get(
-			PurchaseId::create_on_vec(to_test_vec("bcd")),
+			to_purchase_id("bcd"),
 			PriceKey::create_on_vec("btc_price".encode())
 		).unwrap_or(Default::default());
 		assert_eq!(price_pool.len(), 0);
@@ -2141,10 +2154,10 @@ fn test_is_validator_purchased_threshold_up_on() {
 	let (offchain, _state) = testing::TestOffchainExt::new();
 	t.register_extension(OffchainWorkerExt::new(offchain));
 	t.execute_with(|| {
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_purchase_id("abc")));
 		// add ask
 		PurchasedRequestPool::<Test>::insert(
-			to_test_bounded_vec("abc"),
+			to_purchase_id("abc"),
 			PurchasedRequestData {
 				account_id: AccountId::from_raw([0;32]),
 				offer: 0,
@@ -2156,7 +2169,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 			},
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_purchase_id("abc")));
 
 		// Get authority ids.
 
@@ -2166,7 +2179,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 		let (stash_4, authority_4) = <Authorities<Test>>::get().unwrap()[3].clone();
 
 		AresOcw::add_purchased_price(
-			to_test_bounded_vec("abc"),
+			to_purchase_id("abc"),
 			stash_1.clone(),
 			1,
 			PricePayloadSubPriceList::create_on_vec(vec![PricePayloadSubPrice(
@@ -2178,10 +2191,10 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)]),
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_purchase_id("abc")));
 
 		AresOcw::add_purchased_price(
-			to_test_bounded_vec("abc"),
+			to_purchase_id("abc"),
 			stash_2.clone(),
 			1,
 			PricePayloadSubPriceList::create_on_vec(vec![PricePayloadSubPrice(
@@ -2193,10 +2206,10 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)]),
 		);
 		// check
-		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec("abc")));
+		assert_eq!(false, AresOcw::is_validator_purchased_threshold_up_on(to_purchase_id("abc")));
 
 		AresOcw::add_purchased_price(
-			to_test_bounded_vec("abc"),
+			to_purchase_id("abc"),
 			stash_3.clone(),
 			1,
 			PricePayloadSubPriceList::create_on_vec(vec![PricePayloadSubPrice(
@@ -2208,7 +2221,7 @@ fn test_is_validator_purchased_threshold_up_on() {
 			)]),
 		);
 		// check
-		assert_eq!(true, AresOcw::is_validator_purchased_threshold_up_on(to_test_bounded_vec(("abc"))));
+		assert_eq!(true, AresOcw::is_validator_purchased_threshold_up_on(to_purchase_id(("abc"))));
 	});
 }
 
@@ -2238,14 +2251,21 @@ fn test_ask_price() {
 			RequestKeys::create_on_vec(request_keys.clone().into_iter().map(|x|{PriceKey::create_on_vec(x)}).collect() ),
 		);
 		assert!(result.is_ok());
-		let purchase_id = result.unwrap();
+		let purchase_id = if let OrderIdEnum::String(order_str) = result.unwrap() {
+			Some(order_str)
+		}else{
+			None
+		};
+		assert!(purchase_id.is_some());
+		let purchase_id = purchase_id.unwrap();
+
 		// println!("{:?}", &hex::encode(purchase_id.clone()));
 		assert_eq!(
 			&hex::encode(purchase_id.clone()),
 			"0101010101010101010101010101010101010101010101010101010101010101010000000000000000"
 		);
 		assert_eq!(
-			AresOcw::purchased_request_pool(purchase_id).unwrap(),
+			AresOcw::purchased_request_pool(OrderIdEnum::String(purchase_id)).unwrap(),
 			PurchasedRequestData {
 				account_id: account_id1.clone(),
 				offer,
@@ -2266,14 +2286,21 @@ fn test_ask_price() {
 			RequestKeys::create_on_vec(request_keys.clone().into_iter().map(|x|{PriceKey::create_on_vec(x)}).collect() ),
 		);
 		assert!(result.is_ok());
-		let purchase_id = result.unwrap();
-		assert_eq!(purchase_id.clone(), test_purchase_price_id);
+		assert_eq!(&result, &Ok(test_purchase_price_id));
+		let purchase_id = if let OrderIdEnum::String(order_str) = result.unwrap() {
+			Some(order_str)
+		}else{
+			None
+		};
+		assert!(purchase_id.is_some());
+		let purchase_id = purchase_id.unwrap();
+
 		assert_eq!(
 			&hex::encode(purchase_id.clone()),
 			"0101010101010101010101010101010101010101010101010101010101010101010000000000000001"
 		);
 		assert_eq!(
-			AresOcw::purchased_request_pool(purchase_id).unwrap(),
+			AresOcw::purchased_request_pool(OrderIdEnum::String(purchase_id)).unwrap(),
 			PurchasedRequestData {
 				account_id: account_id1.clone(),
 				offer,
@@ -2323,11 +2350,18 @@ fn test_fetch_purchased_request_keys() {
 		expect_format.try_push((PriceKey::create_on_vec("btc_price".as_bytes().to_vec()), PriceToken::create_on_vec("btc".as_bytes().to_vec()), 4));
 		expect_format.try_push((PriceKey::create_on_vec("eth_price".as_bytes().to_vec()), PriceToken::create_on_vec("eth".as_bytes().to_vec()), 4));
 
-		let purchased_key_option: Option<PurchasedSourceRawKeys> =
+		let purchased_key_option: Option<PurchasedSourceRawKeys<OrderIdEnum>> =
 			AresOcw::fetch_purchased_request_keys(authority_1.clone());
 		let purchased_key = purchased_key_option.unwrap();
 		assert_eq!(purchased_key.raw_source_keys, expect_format);
 		let purchased_id = purchased_key.purchase_id;
+		let purchased_id = if let OrderIdEnum::String(order_id) = purchased_id {
+			Some(order_id)
+		}else{
+			None
+		};
+		assert!(purchased_id.is_some());
+		let purchased_id = purchased_id.unwrap();
 		assert_eq!(
 			&hex::encode(purchased_id),
 			"0101010101010101010101010101010101010101010101010101010101010101010000000000000000"

@@ -13,9 +13,9 @@ fn get_earliest_reward_era() -> Option<EraIndex>
 ```
 Get the earliest reward era.
 
-### calculate_fee_of_ask_quantity
+### calculate_fee
 ```rust
-fn calculate_fee_of_ask_quantity(price_count: u32) -> BalanceOf<T>
+fn calculate_fee(price_count: u32) -> BalanceOf<T>
 ```
 Input in a price_count to calculate the cost of the purchase.
 
@@ -24,9 +24,9 @@ Input in a price_count to calculate the cost of the purchase.
 price_count: Expected count of aggregate trade-paris.
 ```
 
-### reserve_for_ask_quantity
+### reserve_fee
 ```rust
-fn reserve_for_ask_quantity(
+fn reserve_fee(
     who: T::AccountId,
     p_id: PurchaseId,
     price_count: u32
@@ -40,9 +40,9 @@ p_id: Purchase order id.
 price_count: Expected count of aggregate trade-paris.
 ```
 
-### unreserve_ask
+### unreserve_fee
 ```rust
-fn unreserve_ask(p_id: PurchaseId) -> Result<(), Error<T>>
+fn unreserve_fee(p_id: PurchaseId) -> Result<(), Error<T>>
 ```
 
 Release the funds reserved for the purchase, which occurs after the failure of the ask-price.
@@ -51,9 +51,9 @@ Release the funds reserved for the purchase, which occurs after the failure of t
 p_id: Purchase order id.
 ```
 
-### pay_to_ask
+### pay_to
 ```rust
-fn pay_to_ask(p_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>>
+fn pay_to(p_id: PurchaseId, agg_count: usize) -> Result<(), Error<T>>
 ```
 
 Execute the payment, which will transfer the user’s balance to the Pallet
@@ -178,13 +178,13 @@ Earliest reward Era = Current-Era - T::HistoryDepth
 
 ### Reward Generation
 
-1. Payment is through the `Trait` provided by `IForPrice`. It is necessary to call `reserve_for_ask_quantity`
+1. Payment is through the `Trait` provided by `IForPrice`. It is necessary to call `reserve_fee`
    to reserve the part balance of asker and associate it with the order-id.
 
 2. Through the Trait implementation provided by `IForReporter`, call `record_submit_point` to save the point.
    The block height needs to be passed in, and the pallet will convert it to the corresponding era and record it under an order-id.
 
-3. After the price-response is successful, call `pay_to_ask` to release the Balance reserved above,
+3. After the price-response is successful, call `pay_to` to release the Balance reserved above,
    and pay the actual ask fee to the oracle-finance pallet.
 
 ### Claim Reward

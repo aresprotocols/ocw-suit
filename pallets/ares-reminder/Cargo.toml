@@ -1,0 +1,66 @@
+[package]
+name = "ares-reminder"
+version = "1.0.1"
+description = "Used to record user data to be cross-chain>"
+authors = ["Substrate DevHub <https://github.com/aresprotocols>"]
+homepage = "https://github.com/aresprotocols"
+repository = "https://github.com/aresprotocols/ocw-suit"
+edition = "2021"
+license = "Unlicense"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+md-5 = "0.10.5"
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+ares-oracle = { default-features = false, path = "../../pallets/ares-oracle" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
+bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len", ] }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28", optional = true }
+frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+oracle-finance = { default-features = false, path = "../oracle-finance" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+rustc-hex = { version = "2.1.0", default-features = false }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+serde = { version = '1.0.143', default-features = false, features = ['derive'] }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", optional = true, branch = "polkadot-v0.9.28" }
+
+[dev-dependencies]
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+
+[features]
+default = ["std"]
+std = [
+	"ares-oracle/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-application-crypto/std",
+	"ares-oracle-provider-support/std",
+	"bound-vec-helper/std",
+	"codec/std",
+	"sp-keystore",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"oracle-finance/std",
+	"pallet-balances/std",
+	"rustc-hex/std",
+	"scale-info/std",
+	"sp-std/std",
+]
+
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
+]
+
+try-runtime = ["frame-support/try-runtime"]

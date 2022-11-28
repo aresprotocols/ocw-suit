@@ -3,12 +3,12 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
 use frame_support::traits::{ConstU32};
 use frame_support::BoundedVec;
-use oracle_finance::types::PurchaseId;
 use scale_info::TypeInfo;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
+use sp_std::fmt::Debug;
 // use sp_std::fmt::Debug;
-use ares_oracle_provider_support::{MaximumPoolSize, PriceKey, RawSourceKeys, RequestKeys};
+use ares_oracle_provider_support::{MaximumPoolSize, OrderIdEnum, PriceKey, PurchaseId, RawSourceKeys, RequestKeys};
 
 pub type FractionLength = u32;
 pub type RequestInterval = u8;
@@ -103,22 +103,22 @@ impl Default for PurchasedDefaultData {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
-pub struct PurchasedSourceRawKeys {
-	pub purchase_id: PurchaseId,
+pub struct PurchasedSourceRawKeys<OrderId> {
+	pub purchase_id: OrderId,
 	pub raw_source_keys: RawSourceKeys,
 }
 
-impl Default for PurchasedSourceRawKeys {
+impl <OrderId: Default> Default for PurchasedSourceRawKeys<OrderId> {
 	fn default() -> Self {
 		Self {
-			purchase_id: BoundedVec::default(),
+			purchase_id: OrderId::default(),
 			raw_source_keys: Default::default(),
 		}
 	}
 }
 
 // Impl debug.
-impl fmt::Debug for PurchasedSourceRawKeys {
+impl <OrderId: Debug> fmt::Debug for PurchasedSourceRawKeys<OrderId> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let raw_keys: Vec<_> = self
 			.raw_source_keys
@@ -134,9 +134,9 @@ impl fmt::Debug for PurchasedSourceRawKeys {
 		write!(
 			f,
 			"{{( purchase_id: {:?}, raw_source_keys: {:?} )}}",
-			HexDisplay::from(&self.purchase_id.as_ref()),
+			&self.purchase_id,
 			// str::from_utf8(&self.0).map_err(|_| fmt::Error)?,
-			raw_keys,
+			&raw_keys,
 		)
 	}
 }
@@ -256,15 +256,15 @@ impl<T: SigningTypes + Config> SignedPayload<T> for PricePayload<T::Public, T::B
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct PurchasedForceCleanPayload<Public, BlockNumber, AuthorityId> {
+pub struct PurchasedForceCleanPayload<Public, BlockNumber, AuthorityId, OrderId> {
 	pub block_number: BlockNumber,
-	pub purchase_id_list: Vec<PurchaseId>,
+	pub purchase_id_list: Vec<OrderId>,
 	pub auth: AuthorityId,
 	pub public: Public,
 }
 
 impl<T: SigningTypes + Config> SignedPayload<T>
-	for PurchasedForceCleanPayload<T::Public, T::BlockNumber, T::AuthorityAres>
+	for PurchasedForceCleanPayload<T::Public, T::BlockNumber, T::AuthorityAres, OrderIdEnum>
 {
 	fn public(&self) -> T::Public {
 		self.public.clone()
@@ -272,15 +272,15 @@ impl<T: SigningTypes + Config> SignedPayload<T>
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct PurchasedPricePayload<Public, BlockNumber, AuthorityId> {
+pub struct PurchasedPricePayload<Public, BlockNumber, AuthorityId, OrderId> {
 	pub block_number: BlockNumber,
-	pub purchase_id: PurchaseId,
+	pub purchase_id: OrderId,
 	pub price: PricePayloadSubPriceList,
 	pub auth: AuthorityId,
 	pub public: Public,
 }
 
-impl<T: SigningTypes + Config> SignedPayload<T> for PurchasedPricePayload<T::Public, T::BlockNumber, T::AuthorityAres> {
+impl<T: SigningTypes + Config> SignedPayload<T> for PurchasedPricePayload<T::Public, T::BlockNumber, T::AuthorityAres, OrderIdEnum> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}

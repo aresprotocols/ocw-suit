@@ -1,6 +1,12 @@
+use ares_oracle_provider_support::{IStashAndAuthority, OrderIdEnum, PurchaseId};
+use oracle_finance::types::BalanceOf;
+use frame_support::{BoundedVec, RuntimeDebug};
+use frame_support::dispatch::EncodeLike;
 use super::*;
 
-impl<T: Config> Pallet<T> {
+impl<T: Config> Pallet<T>
+    where PurchaseId: EncodeLike<>,
+{
 
     /// Calculates the median for the given `prices`.
     pub fn calculation_average_price(mut prices: Vec<u64>, kind: u8) -> Option<u64> {
@@ -62,7 +68,7 @@ impl<T: Config> Pallet<T> {
 
     ///
     pub(crate) fn add_purchased_price(
-        purchase_id: PurchaseId,
+        purchase_id: OrderIdEnum,
         account_id: T::AccountId,
         create_bn: T::BlockNumber,
         price_list: PricePayloadSubPriceList,
@@ -103,7 +109,7 @@ impl<T: Config> Pallet<T> {
     ///
     /// Offset setting parameters are stored in `PriceAllowableOffset<T>`
     pub(crate) fn handler_purchase_avg_price_storage (
-        purchase_id: PurchaseId,
+        purchase_id: OrderIdEnum,
         price_key: PriceKey,
         mut prices_info: PurchasedPriceDataVec<T::AccountId, T::BlockNumber>,
         reached_type: u8,
@@ -188,7 +194,7 @@ impl<T: Config> Pallet<T> {
     /// - purchase_id: `ask-price` order id.
     /// - reached_type: Take the value of [PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_ALL_PARTICIPATE)
     /// or [PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE](PURCHASED_FINAL_TYPE_IS_PART_PARTICIPATE).
-    pub(crate) fn update_purchase_avg_price_storage(purchase_id: PurchaseId, reached_type: u8) -> usize {
+    pub(crate) fn update_purchase_avg_price_storage(purchase_id: OrderIdEnum, reached_type: u8) -> usize {
         // Get purchase price pool
         let price_key_list = <PurchasedPricePool<T>>::iter_key_prefix(purchase_id.clone()).collect::<Vec<_>>();
         //
@@ -216,7 +222,11 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Generate an order ID
-    pub(crate) fn make_purchase_price_id(who: T::AccountId, add_up: u8) -> PurchaseId {
+    pub(crate) fn make_purchase_price_id(who: T::AccountId, add_up: u8)
+        -> OrderIdEnum
+        // where <T as oracle_finance::Config<<T as pallet::Config>::FinanceInstance>>::OrderId: From<PurchaseId>,
+        //       PurchaseId: EncodeLike<<T as oracle_finance::Config<<T as pallet::Config>::FinanceInstance>>::OrderId>
+    {
         // check add up
         if add_up == u8::MAX {
             panic!("⛔ Add up number too large.");
@@ -231,7 +241,9 @@ impl<T: Config> Pallet<T> {
         let mut add_u8_vec: Vec<u8> = add_up.encode();
         account_vec.append(&mut add_u8_vec);
 
+        // // TODO:: DEBUG BEGIN.
         let purchase_id: PurchaseId = account_vec.clone().try_into().expect("`PurchaseId` BoundLength Error.");
+        let purchase_id = OrderIdEnum::String(purchase_id);
         // Check id exists.
         if PurchasedRequestPool::<T>::contains_key(&purchase_id) {
             return Self::make_purchase_price_id(who, add_up.saturating_add(1));
@@ -249,12 +261,12 @@ impl<T: Config> Pallet<T> {
     /// request_keys: `Trading pairs` list,
     pub(crate) fn ask_price(
         who: T::AccountId,
-        offer: BalanceOf<T>,
+        offer: BalanceOf<T, T::FinanceInstance>,
         submit_threshold: Percent,
         max_duration: u64,
-        purchase_id: PurchaseId,
+        purchase_id: OrderIdEnum,
         request_keys: RequestKeys,
-    ) -> Result<PurchaseId, Error<T>> {
+    ) -> Result<OrderIdEnum, Error<T>> {
         // if 0 >= submit_threshold || 100 < submit_threshold {
         if submit_threshold == Zero::zero() {
             return Err(Error::<T>::SubmitThresholdRangeError);
@@ -466,10 +478,10 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Get a list of purchase-order tasks to be performed by the validator
-    pub(crate) fn fetch_purchased_request_keys(who: T::AuthorityAres) -> Option<PurchasedSourceRawKeys> // Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>
+    pub(crate) fn fetch_purchased_request_keys(who: T::AuthorityAres) -> Option<PurchasedSourceRawKeys<OrderIdEnum>> // Vec<(Vec<u8>, Vec<u8>, FractionLength, RequestInterval)>
     {
         let mut raw_source_keys = Vec::new();
-        let mut raw_purchase_id: PurchaseId = PurchaseId::default();
+        let mut raw_purchase_id: OrderIdEnum = OrderIdEnum::String(PurchaseId::default());
 
         let stash_id = Self::get_stash_id(&who).unwrap();
         // Iter

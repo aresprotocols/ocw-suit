@@ -1,6 +1,8 @@
+use frame_support::dispatch::EncodeLike;
 use super::*;
 
-impl<T: Config> Pallet<T> {
+impl<'a, T: Config> Pallet<T>
+{
 
     /// Given a set of `PriceKey, PriceToken`, the corresponding offchain-http request address is generated.
     pub fn make_bulk_price_request_url(format: RawSourceKeys) -> (Vec<u8>, Vec<u8>) {
@@ -50,13 +52,6 @@ impl<T: Config> Pallet<T> {
 				e
 			);
         });
-
-        // -------------
-
-
-
-        // ------------
-
 
         if response.is_err() {
             return Err(HttpError::TimeOut(DataTipVec::try_create_on_vec(request_url_vu8.clone()).unwrap_or(Default::default())));

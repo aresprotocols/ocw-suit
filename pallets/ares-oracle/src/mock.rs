@@ -4,16 +4,12 @@ use crate::*;
 use staking_extend::IStakingNpos;
 use codec::Decode;
 use frame_support::{
-    assert_ok, ord_parameter_types, parameter_types, traits::GenesisBuild, ConsensusEngineId, PalletId,
+    assert_ok, ord_parameter_types, parameter_types, traits::{GenesisBuild, LockIdentifier}, ConsensusEngineId, PalletId,
 };
 
 use pallet_session::historical as pallet_session_historical;
 // use frame_system::InitKind;
 use sp_core::{
-    // offchain::{
-    //     // testing::{self},
-    //     OffchainWorkerExt, TransactionPoolExt,
-    // },
     sr25519::Signature,
     H256,
 };
@@ -35,6 +31,7 @@ use sp_staking::SessionIndex;
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::hexdisplay::HexDisplay;
 use std::convert::TryInto;
+use frame_support::instances::Instance1;
 // use lite_json::JsonValue::Null;
 use frame_support::sp_runtime::traits::IsMember;
 // use crate::sr25519::AuthorityId;
@@ -52,12 +49,15 @@ pub type BlockNumber = u64;
 pub type AskPeriodNum = u64;
 pub const DOLLARS: u64 = 1_000_000_000_000;
 
+type OracleFinanceInstance = oracle_finance::Instance1;
+
 // use oracle_finance::types::*;
 use oracle_finance::traits::*;
 
 // use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use crate::AuthorityId as AuraId;
 use sp_runtime::offchain::OffchainDbExt;
+use ares_oracle_provider_support::PurchaseId;
 use crate::test_tools::to_test_vec;
 
 // For testing the module, we construct a mock runtime.
@@ -75,27 +75,59 @@ frame_support::construct_runtime!(
 		AresOcw: ares_oracle::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		OracleFinance: oracle_finance::{Pallet, Call, Storage, Event<T>},
+		OracleFinance: oracle_finance::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
+
+parameter_types! {
+	pub const UnsignedInterval: u64 = 128;
+	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MaxCountOfPerRequest: u8 = 3;
+	pub const FractionLengthNum: u32 = 2;
+	pub const CalculationKind: u8 = 2;
+	pub const ErrLogPoolDepth: u32 = 5;
+}
+
+impl crate::Config for Test {
+    type Event = Event;
+    type OffchainAppCrypto = crate::ares_crypto::AresCrypto<AuraId>;
+    type AuthorityAres = AuraId;
+    type Call = Call;
+    type RequestOrigin = frame_system::EnsureRoot<AccountId>;
+    type UnsignedPriority = UnsignedPriority;
+    // type Currency = pallet_balances::Pallet<Self>;
+    type CalculationKind = CalculationKind;
+    type ErrLogPoolDepth = ErrLogPoolDepth;
+    type AuthorityCount = TestAuthorityCount;
+    type FinanceInstance = OracleFinanceInstance;
+    type OracleFinanceHandler = OracleFinance;
+    // type OracleFinanceHandler = oracle_finance::Pallet<Self, OracleFinanceInstance>;
+    type AresIStakingNpos = NoNpos<Self>;
+    type IOracleAvgPriceEvents = ();
+    // type OrderId2 = PurchaseId;
+    type WeightInfo = ();
+
+}
 
 parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
 	pub const AskPerEra: SessionIndex = 2;
 	pub const HistoryDepth: u32 = 2;
+    pub const TestFinanceLockIdentifier : LockIdentifier = *b"testing ";
 }
 
-impl oracle_finance::Config for Test {
-    type Event = Event;
-    type PalletId = AresFinancePalletId;
-    type Currency = pallet_balances::Pallet<Self>;
-    type BasicDollars = BasicDollars;
-    type OnSlash = ();
-    type ValidatorId = AccountId;
-    type SessionManager = ();
+impl oracle_finance::Config<OracleFinanceInstance> for Test {
     type AskPerEra = AskPerEra;
+    type BasicDollars = BasicDollars;
+    type Currency = pallet_balances::Pallet<Self>;
+    type Event = Event;
     type HistoryDepth = HistoryDepth;
+    type LockIdentifier = TestFinanceLockIdentifier;
+    type OnSlash = ();
+    type PalletId = AresFinancePalletId;
+    type SessionManager = ();
+    type ValidatorId = AccountId;
     type ValidatorIdOf = StashOf;
     type WeightInfo = ();
 }
@@ -210,43 +242,14 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for T
     }
 }
 
-parameter_types! {
-	// pub const GracePeriod: u64 = 5;
-	pub const UnsignedInterval: u64 = 128;
-	pub const UnsignedPriority: u64 = 1 << 20;
-	// pub const PriceVecMaxSize: u32 = 3;
-	pub const MaxCountOfPerRequest: u8 = 3;
-	// pub const NeedVerifierCheck: bool = false;
-	// pub const UseOnChainPriceRequest: bool = true;
-	pub const FractionLengthNum: u32 = 2;
-	pub const CalculationKind: u8 = 2;
-	pub const ErrLogPoolDepth: u32 = 5;
-}
-
-ord_parameter_types! {
-	pub const One: u64 = 1;
-	pub const Two: u64 = 2;
-	pub const Three: u64 = 3;
-	pub const Four: u64 = 4;
-	pub const Five: u64 = 5;
-	pub const Six: u64 = 6;
-}
-
-impl Config for Test {
-    type Event = Event;
-    type OffchainAppCrypto = crate::ares_crypto::AresCrypto<AuraId>;
-    type AuthorityAres = AuraId;
-    type Call = Call;
-    type RequestOrigin = frame_system::EnsureRoot<AccountId>;
-    type UnsignedPriority = UnsignedPriority;
-    // type FindAuthor = TestFindAuthor;
-    type CalculationKind = CalculationKind;
-    type ErrLogPoolDepth = ErrLogPoolDepth;
-    type AuthorityCount = TestAuthorityCount;
-    type OracleFinanceHandler = OracleFinance;
-    type AresIStakingNpos = NoNpos<Self>;
-    type WeightInfo = ();
-}
+// ord_parameter_types! {
+// 	pub const One: u64 = 1;
+// 	pub const Two: u64 = 2;
+// 	pub const Three: u64 = 3;
+// 	pub const Four: u64 = 4;
+// 	pub const Five: u64 = 5;
+// 	pub const Six: u64 = 6;
+// }
 
 pub struct NoNpos<T>(PhantomData<T>);
 impl <A,B,T:ares_oracle::Config> IStakingNpos<A, B> for NoNpos<T> {
@@ -293,7 +296,7 @@ impl pallet_authorship::Config for Test {
     type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, TestFindAuthor>;
     type UncleGenerations = UncleGenerations;
     type FilterUncle = ();
-    type EventHandler = (AresOcw);
+    type EventHandler = AresOcw;
 }
 
 impl pallet_session::historical::Config for Test {
@@ -399,10 +402,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         .assimilate_storage(&mut t)
         .unwrap();
 
-    oracle_finance::GenesisConfig::<Test> {
+    oracle_finance::GenesisConfig::<Test, Instance1> {
         _pt: Default::default(),
-    }
-        .assimilate_storage(&mut t)
+    }.assimilate_storage(&mut t)
         .unwrap();
 
     crate::GenesisConfig::<Test>{

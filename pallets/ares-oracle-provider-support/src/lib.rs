@@ -9,6 +9,10 @@ use frame_support::{BoundedVec, RuntimeDebug};
 use lite_json::NumberValue;
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+use sp_std::fmt::Debug;
+use frame_support::traits::tokens::Balance;
+use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::convert::TryInto;
 
 pub const LOCAL_STORAGE_PRICE_REQUEST_MAKE_POOL: &[u8] = b"are-ocw::make_price_request_pool";
 pub const LOCAL_STORAGE_PRICE_REQUEST_LIST: &[u8] = b"are-ocw::price_request_list";
@@ -35,6 +39,16 @@ pub type RequestKeys = BoundedVec<PriceKey, MaximumPoolSize>;
 
 pub type PreCheckList = BoundedVec<PreCheckStruct, MaximumPoolSize>;
 pub type TokenList = BoundedVec<PriceToken, MaximumPoolSize>;
+
+pub type MaximumPIDLength = ConstU32<100>;
+pub type PurchaseId = BoundedVec<u8, MaximumPIDLength>;
+
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum OrderIdEnum {
+	Integer(u64),
+	String(PurchaseId),
+}
 
 // A wrapper structure for NumberValue that handles the conversion of precision to u64
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -192,7 +206,6 @@ pub trait IAresOraclePreCheck<AccountId, AuthorityId, BlockNumber> {
 	fn create_pre_check_task(stash: AccountId, auth: AuthorityId, bn: BlockNumber) -> bool;
 }
 
-
 impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	fn has_pre_check_task(_stash: AC) -> bool {
 		false
@@ -212,6 +225,97 @@ impl<AC, AU, B> IAresOraclePreCheck<AC, AU, B> for () {
 	}
 	fn clean_pre_check_status(_stash: AC) {}
 	fn create_pre_check_task(_stash: AC, _auth: AU, _bn: B) -> bool {
+		false
+	}
+}
+
+pub trait SymbolInfo<BlockNumber> {
+	fn price(symbol: &PriceKey) -> Result<(u64, FractionLength, BlockNumber), ()>;
+
+	fn fraction(symbol: &PriceKey) -> Option<FractionLength>;
+}
+
+
+pub trait ConvertChainPrice<B, F> {
+	fn try_to_price(self, fraction: F) -> Option<B>;
+	fn convert_to_json_number_value(self) -> JsonNumberValue;
+}
+
+#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct ChainPrice {
+	number: u64,
+	fraction_length: u32,
+}
+
+impl ChainPrice {
+	pub fn new(info: (u64, u32)) -> Self {
+		Self {
+			number: info.0,
+			fraction_length: info.1
+		}
+	}
+}
+
+impl <B: Balance, F: AtLeast32BitUnsigned + Debug> ConvertChainPrice<B, F> for ChainPrice {
+	fn try_to_price(self, to_fraction: F) -> Option<B> {
+		let to_fraction: Option<u8> = to_fraction.try_into().ok();
+		if let Some(to_fraction) = to_fraction {
+			// let new_number = self.convert_to_json_number_value().to_price(to_fraction as u32);
+			let new_number = ConvertChainPrice::<B,F>::convert_to_json_number_value(self).to_price(to_fraction as u32);
+			return new_number.try_into().ok();
+		}
+		None
+	}
+
+	fn convert_to_json_number_value(self) -> JsonNumberValue {
+		let integer = self.number / 10u64.pow(self.fraction_length);
+		let fraction: u64 = self.number - integer.saturating_mul(10u64.pow(self.fraction_length));
+		JsonNumberValue {
+			integer: integer,
+			fraction: fraction,
+			fraction_length: self.fraction_length ,
+			exponent: 0
+		}
+	}
+}
+
+/// Send out notifications of average price changes.
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+pub trait IOracleAvgPriceEvents<BlockNumber, PriceKey, FractionLength> {
+	fn avg_price_update(symbol: PriceKey, bn: BlockNumber, price: u64, fraction_length: FractionLength) ;
+}
+
+pub trait IStashAndAuthority<StashAcc, AuthroityAcc> {
+	fn get_auth_id(stash: &StashAcc) -> Option<AuthroityAcc>;
+	fn get_stash_id(auth: &AuthroityAcc) -> Option<StashAcc>;
+	fn get_authority_list_of_local() -> Vec<AuthroityAcc>;
+	fn get_list_of_storage() -> Vec<(StashAcc, AuthroityAcc)>;
+	fn check_block_author_and_sotre_key_the_same(block_author: &AuthroityAcc) -> bool;
+}
+
+impl <StashAcc, AuthroityAcc> IStashAndAuthority <StashAcc, AuthroityAcc> for () {
+
+	/// Get the `ares-authority` through `stash-id`
+	fn get_auth_id(stash: &StashAcc) -> Option<AuthroityAcc> {
+		None
+	}
+
+	/// Get the `stash-id` through `ares-authority`
+	fn get_stash_id(auth: &AuthroityAcc) -> Option<StashAcc> {
+		None
+	}
+
+	/// Get all `ares-authorities` users in keystore.
+	fn get_authority_list_of_local() -> Vec<AuthroityAcc> {
+		Vec::new()
+	}
+
+	fn get_list_of_storage() -> Vec<(StashAcc, AuthroityAcc)> {
+		Vec::new()
+	}
+
+	/// Check whether the authority of the current block author has a private key on the local node.
+	fn check_block_author_and_sotre_key_the_same(block_author: &AuthroityAcc) -> bool {
 		false
 	}
 }

@@ -40,10 +40,10 @@ use crate::*;
 use frame_system::offchain::{SignedPayload, SigningTypes};
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
 use sp_runtime::{testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentityLookup, Verify}, RuntimeAppPublic, Permill, print};
-
+use ares_oracle_provider_support::SymbolInfo;
 use sp_runtime::traits::{AppVerify, ValidateUnsigned};
 use sp_runtime::transaction_validity::TransactionSource;
-use ares_oracle::traits::SymbolInfo;
+use ares_oracle_provider_support::{ChainPrice, ConvertChainPrice};
 use bound_vec_helper::BoundVecHelper;
 use crate::{ActiveEstimates, Admins, BalanceOf, CompletedEstimates, Error, LockedEstimates, MinimumInitReward, MinimumTicketPrice, PreparedEstimates, UnresolvedEstimates};
 use crate::types::{AccountParticipateEstimates, BoundedVecOfSymbol, BoundedVecOfChooseWinnersPayload, ChooseTrigerPayload, EstimatesState, EstimatesType, MultiplierOption};
@@ -234,15 +234,17 @@ fn test_call_new_estimates_with_DEVIATION_no_palyer() {
             ));
 		}
 
+		let symbol = BoundedVecOfSymbol::create_on_vec(symbol.clone());
+
 		// Estimate will to end without WINNER.
 		assert!(!ActiveEstimates::<Test>::contains_key(
-			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
+			(symbol.clone(), estimates_type.clone())
 		));
 		assert!(CompletedEstimates::<Test>::contains_key(
-			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
+			(symbol.clone(), estimates_type.clone())
 		));
 		let completed = CompletedEstimates::<Test>::get(
-			(BoundedVecOfSymbol::create_on_vec(symbol.clone()),estimates_type.clone())
+			(symbol.clone(), estimates_type.clone())
 		);
 		assert_eq!(completed.len(), 1);
 		estimate_config.state = EstimatesState::Completed;

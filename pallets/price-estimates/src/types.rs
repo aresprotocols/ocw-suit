@@ -6,16 +6,18 @@ use frame_system::offchain::{SignedPayload, SigningTypes};
 // use ares_oracle::types::FractionLength;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::BoundedVec;
-use frame_support::traits::ConstU32;
-use frame_support::traits::tokens::Balance;
+
+
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	Permill,
 };
+use frame_support::traits::ConstU32;
+use frame_support::traits::tokens::Balance;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::str;
-use ares_oracle_provider_support::{FractionLength, JsonNumberValue};
+use ares_oracle_provider_support::{FractionLength, JsonNumberValue, PriceKey};
 
 pub type StringLimit = ConstU32<50>;
 
@@ -103,7 +105,7 @@ impl Default for EstimatesType {
 
 // pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
 // pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
-pub(crate) type BoundedVecOfSymbol = BoundedVec<u8, StringLimit>;
+pub(crate) type BoundedVecOfSymbol = PriceKey;
 
 pub(crate) type BoundedVecOfAdmins<Account> = BoundedVec<Account, MaximumAdmins>;
 pub(crate) type BoundedVecOfMultiplierOption = BoundedVec<MultiplierOption, MaximumOptions>;
@@ -178,48 +180,5 @@ pub struct ChooseTrigerPayload<Public> {
 impl<T: SigningTypes> SignedPayload<T> for ChooseTrigerPayload<T::Public> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
-	}
-}
-
-pub trait ConvertChainPrice<B, F> {
-	fn try_to_price(self, fraction: F) -> Option<B>;
-	fn convert_to_json_number_value(self) -> JsonNumberValue;
-}
-
-#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct ChainPrice {
-	number: u64,
-	fraction_length: u32,
-}
-
-impl ChainPrice {
-	pub fn new(info: (u64, u32)) -> Self {
-		Self {
-			number: info.0,
-			fraction_length: info.1
-		}
-	}
-}
-
-impl <B: Balance, F: AtLeast32BitUnsigned + Debug> ConvertChainPrice<B, F> for ChainPrice {
-	fn try_to_price(self, to_fraction: F) -> Option<B> {
-		let to_fraction: Option<u8> = to_fraction.try_into().ok();
-		if let Some(to_fraction) = to_fraction {
-			// let new_number = self.convert_to_json_number_value().to_price(to_fraction as u32);
-			let new_number = ConvertChainPrice::<B,F>::convert_to_json_number_value(self).to_price(to_fraction as u32);
-			return new_number.try_into().ok();
-		}
-		None
-	}
-
-	fn convert_to_json_number_value(self) -> JsonNumberValue {
-		let integer = self.number / 10u64.pow(self.fraction_length);
-		let fraction: u64 = self.number - integer.saturating_mul(10u64.pow(self.fraction_length));
-		JsonNumberValue {
-			integer: integer,
-			fraction: fraction,
-			fraction_length: self.fraction_length ,
-			exponent: 0
-		}
 	}
 }

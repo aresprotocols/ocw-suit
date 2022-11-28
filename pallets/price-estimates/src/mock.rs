@@ -16,7 +16,6 @@ use sp_core::{
 	H256,
 };
 use sp_runtime::{testing::{Header, TestXt, UintAuthorityId}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}, Perbill, MultiSignature, DigestItem, Digest, Permill};
-use ares_oracle::traits::SymbolInfo;
 use ares_oracle::types::FractionLength;
 
 use sp_keystore::{
@@ -24,6 +23,7 @@ use sp_keystore::{
 	{KeystoreExt, SyncCryptoStore},
 };
 use ares_oracle::ares_crypto;
+use ares_oracle_provider_support::{PriceKey, SymbolInfo};
 use crate::types::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -187,14 +187,13 @@ impl pallet_price_estimates::Config for Test {
 }
 
 pub struct TestSymbolInfo ;
-
 impl SymbolInfo<BlockNumber> for TestSymbolInfo {
-	fn price(symbol: &Vec<u8>) -> Result<(u64, FractionLength, BlockNumber), ()> {
+	fn price(symbol: &PriceKey) -> Result<(u64, FractionLength, BlockNumber), ()> {
 		Ok(
 			(23164822300, TestSymbolInfo::fraction(symbol).unwrap(), 50)
 		)
 	}
-	fn fraction(symbol: &Vec<u8>) -> Option<FractionLength> {
+	fn fraction(symbol: &PriceKey) -> Option<FractionLength> {
 		Some(6)
 	}
 }
@@ -283,7 +282,7 @@ pub(crate) fn helper_create_new_estimates_with_deviation(
 			id: inc_id-1,
 			ticket_price: price,
 			symbol_completed_price: 0,
-			symbol_fraction: TestSymbolInfo::fraction(&symbol.clone()).unwrap(),
+			symbol_fraction: TestSymbolInfo::fraction(& PriceKey::try_create_on_vec(symbol.clone()).unwrap() ).unwrap(),
 			start,
 			end,
 			distribute,

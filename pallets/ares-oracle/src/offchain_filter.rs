@@ -4,6 +4,7 @@ use super::*;
 use sp_runtime::generic::UncheckedExtrinsic;
 use frame_support::traits::ExtrinsicCall;
 use sp_std::fmt::Debug;
+use ares_oracle_provider_support::IStashAndAuthority;
 use crate::AuthorTraceData;
 
 pub struct AresOracleFilter<T, Address, Call, Signature, Extra>{
@@ -14,7 +15,7 @@ pub struct AresOracleFilter<T, Address, Call, Signature, Extra>{
 	_e: PhantomData<Extra>,
 }
 
-impl <T: Config, Address, Call, Signature, Extra> AresOracleFilter<T, Address, Call, Signature, Extra,>
+impl <'a, T: Config, Address, Call, Signature, Extra> AresOracleFilter<T, Address, Call, Signature, Extra,>
 	where T: Config,
 		  Extra: sp_runtime::traits::SignedExtension + Debug,
 		Address: Debug,

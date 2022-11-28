@@ -1,6 +1,8 @@
+use frame_support::dispatch::EncodeLike;
 use super::*;
 
-impl<T: Config> Pallet<T> {
+impl<'a, T: Config> Pallet<T>
+{
     /// Use to filter out those `format_data` of price that need to jump block.
     pub fn filter_jump_block_data (
         format_data: Vec<(PriceKey, PriceToken, FractionLength, RequestInterval)>,

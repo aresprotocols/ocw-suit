@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
     "derive",
     "max-encoded-len",
 ] }
+impl-trait-for-tuples = "0.2.2"
 lite-json = { version = "0.1", default-features = false }
 #scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
@@ -25,6 +26,7 @@ sp-io = { git = "https://github.com/paritytech/substrate", default-features = fa
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 
 #ares-common = {path="../../common", default-features = false}
 
@@ -33,6 +35,7 @@ default = ["std"]
 
 std = [
     "codec/std",
+    "sp-runtime/std",
     "scale-info/std",
     "sp-application-crypto/std",
     "sp-io/std",

@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "pallets/ares-oracle",
     "pallets/ares-oracle-provider-support",
+    "pallets/ares-reminder",
     "pallets/oracle-finance",
     "pallets/staking-extend",
     "pallets/challenge",
