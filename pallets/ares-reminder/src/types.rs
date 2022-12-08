@@ -14,9 +14,9 @@ pub type ReminderIden = u64;
 pub type RepeatCount = u32;
 pub type MaximumReminderListSize = ConstU32<10000>;
 pub type ReminderIdenList = BoundedVec<ReminderIden, MaximumReminderListSize>; // Vec<u8>;
-pub type MaximumUrlLenthSize = ConstU32<500>;
+pub type MaximumUrlLenthSize = ConstU32<265>;
 pub type ReminderCallBackUrl = BoundedVec<u8, MaximumUrlLenthSize>;
-pub type MaximumUrlSignSize = ConstU32<100>;
+pub type MaximumUrlSignSize = ConstU32<32>;
 pub type ReminderCallBackSign = BoundedVec<u8, MaximumUrlSignSize>;
 pub type MaximumTimSignSize = ConstU32<100>;
 pub type ReminderTriggerTip = BoundedVec<u8, MaximumTimSignSize>;
@@ -54,6 +54,11 @@ pub struct PriceTrigger<Account, Price, BlockNumber, RepeatCount, Condition, Rec
     pub tip: Option<ReminderTriggerTip>,
 }
 
+pub struct ReminderRequestOptions {
+    pub(crate) request_url: Vec<u8>,
+    pub(crate) sign_message: (Vec<u8>, Vec<u8>),
+}
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ReminderCondition <Symbol, Price> {
     TargetPriceModel {
@@ -75,6 +80,13 @@ pub struct CompletePayload<RID, ResponseMark, ResponseStatus, AuthorityId, Publi
     pub reminder: (RID, Bn),
     pub response_mark: Option<ResponseMark>,
     pub status: Option<ResponseStatus>,
+    pub auth: AuthorityId,
+    pub public: Public,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct DispatchPayload<AuthorityId, Public, Bn> {
+    pub bn: Bn,
     pub auth: AuthorityId,
     pub public: Public,
 }

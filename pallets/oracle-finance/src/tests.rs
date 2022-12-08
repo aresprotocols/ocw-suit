@@ -35,11 +35,18 @@ fn test_pay_half_to() {
 		assert_eq!(payment_trace.amount , 1000000000000);
 		assert_eq!(OracleFinance::get_reserve_fee(&pid), payment_trace.amount) ;
 
-		// Try to clean reserve balance.
-		let res = OracleFinance::unreserve_fee(&pid);
-		assert_ok!(res);
-		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 2000000000100);
+		assert_ok!(OracleFinance::pay_to(&pid, 1));
+		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
+		assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 1000000000100);
+		let payment_trace = PaymentTrace::<Test, Instance1>::get(&pid, ACCOUNT_ID_3);
+		assert_eq!(payment_trace.amount , 0);
 		assert_eq!(OracleFinance::get_reserve_fee(&pid), 0) ;
+
+		// Try to clean reserve balance.
+		// let res = OracleFinance::unreserve_fee(&pid);
+		// assert_ok!(res);
+		// assert_eq!(Balances::free_balance(ACCOUNT_ID_3), 2000000000100);
+		// assert_eq!(OracleFinance::get_reserve_fee(&pid), 0) ;
 
 	});
 }
@@ -506,8 +513,11 @@ fn test_check_and_slash_expired_rewards() {
 
 		OracleFinance::reserve_fee(&ACCOUNT_ID_2, &to_enum_id("Purchased_ID_BN_55"), 2);
 		assert_ok!(OracleFinance::record_submit_point(&ACCOUNT_ID_1, &to_enum_id("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+		assert!(<PaymentTrace<Test, crate::Instance1>>::contains_key(to_enum_id("Purchased_ID_BN_55"), ACCOUNT_ID_2));
 		assert_ok!(OracleFinance::record_submit_point(&ACCOUNT_ID_3, &to_enum_id("Purchased_ID_BN_55"), <frame_system::Pallet<Test>>::block_number() ,2 ));
+		assert!(<PaymentTrace<Test, crate::Instance1>>::contains_key(to_enum_id("Purchased_ID_BN_55"), ACCOUNT_ID_2));
 		assert_ok!(OracleFinance::pay_to(&to_enum_id("Purchased_ID_BN_55"), 2));
+		assert!(!<PaymentTrace<Test, crate::Instance1>>::contains_key(to_enum_id("Purchased_ID_BN_55"), ACCOUNT_ID_2));
 		// check pot
 		assert_eq!(OracleFinance::pot(),Some((OracleFinance::account_id().unwrap(), 2000000000000)));
 
@@ -540,7 +550,7 @@ fn test_check_and_slash_expired_rewards() {
 
 
 		// check storage struct.
-		assert!(<PaymentTrace<Test, crate::Instance1>>::contains_key(to_enum_id("Purchased_ID_BN_55"), ACCOUNT_ID_2));
+		// assert!(<PaymentTrace<Test, crate::Instance1>>::contains_key(to_enum_id("Purchased_ID_BN_55"), ACCOUNT_ID_2));
 		assert!(<AskEraPayment<Test, crate::Instance1>>::contains_key(3, (ACCOUNT_ID_2, to_enum_id("Purchased_ID_BN_55"))));
 
 		assert_eq!(false, <RewardTrace<Test, crate::Instance1>>::contains_key(3, ACCOUNT_ID_1));

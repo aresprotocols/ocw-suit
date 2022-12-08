@@ -64,9 +64,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type BasicDollars: Get<BalanceOf<Self, I>>;
 
-		// #[pallet::constant]
-		// type AskPeriod: Get<Self::BlockNumber>;
-
 		#[pallet::constant]
 		type AskPerEra: Get<SessionIndex>;
 
@@ -91,13 +88,6 @@ pub mod pallet {
 
 		type WeightInfo: WeightInfo;
 
-		// TODO: will to delete.
-		// For storage key
-		// type OrderId: Clone + Eq + PartialEq + Encode + Decode + TypeInfo + Debug + FullCodec + MaxEncodedLen + Default;
-		// type OrderId: FinanceOrder ;
-
-		// // For storage key
-		// type OrderId2: IsType<OrderIdEnum>;
 	}
 
 	#[pallet::pallet]
@@ -252,7 +242,26 @@ pub mod pallet {
 			era_points: AskPointNum,
 			session_index: SessionIndex,
 		},
-
+		ReserveFee {
+			order_id: OrderIdEnum,
+			who: T::AccountId,
+			amount: BalanceOf<T, I>,
+		},
+		UnreserveFee {
+			order_id: OrderIdEnum,
+			who: T::AccountId,
+			amount: BalanceOf<T, I>,
+		},
+		LockDeposit {
+			order_id: OrderIdEnum,
+			who: T::AccountId,
+			amount: BalanceOf<T, I>,
+		},
+		UnlockDeposit {
+			order_id: OrderIdEnum,
+			who: T::AccountId,
+			amount: BalanceOf<T, I>,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -419,10 +428,17 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 			PaidValue {
 				create_bn: current_block_number,
 				paid_era: Self::current_era_num(),
-				amount: reserve_balance,
+				amount: reserve_balance.clone(),
 				is_income: true,
 			},
 		);
+
+		Self::deposit_event(Event::ReserveFee {
+			order_id: p_id.clone(),
+			who: who.clone(),
+			amount: reserve_balance,
+		});
+
 		OcwPaymentResult::Success(p_id.clone(), reserve_balance)
 	}
 
@@ -438,6 +454,12 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 
 				let res = T::Currency::unreserve(&who, paid_value.amount);
 
+				Self::deposit_event(Event::UnreserveFee {
+					order_id: p_id.clone(),
+					who: who.clone(),
+					amount: paid_value.amount,
+				});
+
 				if res.is_zero() {
 					<PaymentTrace<T, I>>::remove(p_id, &who);
 					// let ask_era = Self::current_era_num(paid_value.create_bn);
@@ -449,12 +471,14 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 		});
 
 		if is_success {
+
 			return Ok(());
 		}
 
 		if false == find_pid {
 			return Err(Error::NotFoundPaymentRecord);
 		}
+
 		Err(Error::RefundFailed)
 	}
 
@@ -522,6 +546,13 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 		// Update storage
 		<AccountLockedDeposit<T, I>>::insert(who, all_deposit);
 		<OrderLockedDeposit<T, I>>::insert(pid, (who, order_deposit));
+
+		Self::deposit_event(Event::LockDeposit {
+			order_id: pid.clone(),
+			who: who.clone(),
+			amount: order_deposit,
+		});
+
 		Ok(())
 	}
 
@@ -539,9 +570,17 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 				T::Currency::remove_lock(T::LockIdentifier::get(), &locked_data.0);
 			}else{
 				<AccountLockedDeposit<T, I>>::insert(&locked_data.0, new_all_deposit);
+				T::Currency::remove_lock(T::LockIdentifier::get(), &locked_data.0);
 				T::Currency::extend_lock(T::LockIdentifier::get(), &locked_data.0, new_all_deposit, WithdrawReasons::all());
 			}
 			<OrderLockedDeposit<T, I>>::remove(&pid);
+
+			Self::deposit_event(Event::UnlockDeposit {
+				order_id: pid.clone(),
+				who: locked_data.0.clone(),
+				amount: locked_data.1.clone(),
+			});
+
 			return Ok(());
 		}
 		return Err(Error::<T, I>::NotFoundLockedDeposit)
@@ -610,6 +649,11 @@ impl<T: Config<I>, I: 'static> IForPrice<T, I> for Pallet<T, I> {
 					amount: paid_value.amount.saturating_sub(actual_amount),
 					is_income: true,
 				},
+			);
+		}else{
+			<PaymentTrace<T, I>>::remove(
+				p_id.clone(),
+				who.clone(),
 			);
 		}
 

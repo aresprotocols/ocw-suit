@@ -86,6 +86,7 @@ impl system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 100;
 	pub const MaxLocks: u32 = 10;
+	pub const UnsignedPriority: u64 = 10;
 }
 
 impl pallet_balances::Config for Test {
@@ -121,6 +122,7 @@ impl ares_reminder::Config for Test {
 	type PriceProvider = TestSymbolInfo;
 	type RequestOrigin = frame_system::EnsureRoot<AccountId>;
 	type StashAndAuthorityPort = TestAresAuthority;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 parameter_types! {
@@ -303,12 +305,14 @@ pub fn get_from_seed<TPublic: sp_core::Public>(seed: &str) -> <TPublic::Pair as 
 		.public()
 }
 
-pub fn payload_response(state: &mut testing::OffchainState, url: &str) {
+pub fn payload_response(state: &mut testing::OffchainState, url: &str, body: Vec<u8>) {
 	state.expect_request(testing::PendingRequest {
 		method: "GET".into(),
 		uri: url.into(),
 		response: Some(br#"{"status": "OK"}"#.to_vec()),
 		sent: true,
+		headers: vec![("reminder-acc".to_string(), "".to_string()), ("reminder-sign".to_string(), "".to_string())],
+		body: body,
 		..Default::default()
 	});
 }

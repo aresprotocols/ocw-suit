@@ -121,11 +121,24 @@ fn test_remove_reminder() {
 			max_fee.clone(),
 		));
 
+		let mut reminder_list = ReminderIdenList::default();
+		reminder_list.try_push(0);
+
+		// Check storage status
+		assert_eq!(Balances::free_balance(ACCOUNT_6), (58 * DOLLARS + 100) );
+		assert_eq!(ReminderCount::<Test>::get(), Some(1));
+		assert!(ReminderList::<Test>::get(0).is_some());
+		assert_eq!(SymbolList::<Test>::get(to_bound_vec("btc-usdt")), Some(reminder_list.clone()));
+		assert_eq!(OwnerList::<Test>::get(ACCOUNT_6), Some(reminder_list));
+		assert_eq!(OracleFinance::get_reserve_fee(&OrderIdEnum::Integer(0)), 2 * DOLLARS);
+		assert_eq!(OracleFinance::get_locked_deposit(&OrderIdEnum::Integer(0)), 1 * DOLLARS);
+		assert_eq!(OracleFinance::get_all_locked_deposit_with_acc(&ACCOUNT_6), 1 * DOLLARS);
+
 		// remove that reminder
 		assert_eq!(AresReminder::remove_reminder(
 			Origin::signed(ACCOUNT_5),
 			0
-		), DispatchResult::Err(crate::Error::<Test>::NotTheOwnerOfReminder.into()));
+		), DispatchResult::Err(crate::Error::<Test>::NotTheReminderOwner.into()));
 
 
 		// remove that reminder
@@ -656,7 +669,7 @@ fn test_got_to_pending_list() {
 			data.0
 		}).collect();
 		//
-		AresReminder::dispatch_waiting_list(validator_list.clone());
+		AresReminder::dispatch_waiting_list();
 
 		// &((0+2)%6 = &((idx+blocknumber)%length
 	    assert_eq!(PendingSendList::<Test>::get(&validator_list[0], &((0+2)%3+0*3, 1)), Some(2)); // Reminder(2,1) *
@@ -806,7 +819,7 @@ fn test_got_to_pending_list() {
 			println!("PendingSendList foreach iter B : {:?}", x);
 		});
 
-		AresReminder::dispatch_waiting_list(validator_list.clone());
+		AresReminder::dispatch_waiting_list();
 
 		assert_eq!(PendingSendList::<Test>::get(&validator_list[0], &((0+3)%3+0*3, 2)), Some(3)); 	// Reminder(0,2)
 		assert_eq!(PendingSendList::<Test>::get(&validator_list[1], &((1+3)%3+0*3, 2)), Some(3)); 	// Reminder(1,2)
@@ -891,7 +904,6 @@ fn test_http_request() {
 	let (pool, pool_state) = TestTransactionPoolExt::new();
 	new_test_ext(Some(offchain), Some(pool)).execute_with(|| {
 
-
 		let validator_list: Vec<AccountId> = TestAresAuthority::get_list_of_storage().iter().map(|data|{
 			data.0
 		}).collect();
@@ -903,8 +915,8 @@ fn test_http_request() {
 			anchor_price: ChainPrice::new((153333, 4)),
 		};
 		let receiver: ReminderReceiver = ReminderReceiver::HttpCallBack{
-			url: to_bound_vec("http://localhost/http_call/?sender=1"),
-			sign: Default::default()
+			url: to_bound_vec("http://localhost/http_call/"),
+			sign: to_bound_vec("abc"),
 		};
 		let interval: BlockNumber = 100;
 		let repeat_count = 2;
@@ -936,9 +948,9 @@ fn test_http_request() {
 		ReminderCount::<Test>::put(rid+1);
 		PendingSendList::<Test>::insert(validator_list[0], (rid, 10),10);
 
-		payload_response(&mut offchain_state.write(),"http://localhost/http_call/?sender=1&sign=");
+		payload_response(&mut offchain_state.write(),"http://localhost/http_call/?_s_=abc&_rid_=0&_rbn_=10&_lbn_=10&_acc_=0606060606060606060606060606060606060606060606060606060606060606", vec![]);
 
-		AresReminder::call_reminder();
+		AresReminder::call_reminder(false);
 
 		let tx = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();

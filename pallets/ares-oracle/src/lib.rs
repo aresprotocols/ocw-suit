@@ -742,7 +742,7 @@ pub mod pallet {
 					results: agg_result_list.clone(),
 				});
 
-				agg_result_list.into_iter().map(|agg_data| {
+				agg_result_list.into_iter().for_each(|agg_data| {
 					// symbol: PriceKey, bn: BlockNumber, price: u64, fraction_length: FractionLength
 					T::IOracleAvgPriceEvents::avg_price_update(
 						agg_data.0.clone(),
@@ -751,7 +751,6 @@ pub mod pallet {
 						agg_data.2.clone(),
 					);
 				});
-
 			}
 
 			log::debug!("🚅 Submit price list on chain, count = {:?}", price_key_list.len());

@@ -1,7 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+
 use ares_oracle_provider_support::{ChainPrice, PriceKey};
 pub use pallet::*;
+use sp_std::vec::Vec;
 use crate::types::{PriceTrigger, ReminderCondition, ReminderIden, ReminderIdenList, ReminderReceiver, RepeatCount};
 
 #[cfg(all(feature = "std", test))]
@@ -35,13 +37,22 @@ pub mod pallet {
 	use ares_oracle_provider_support::IAresOraclePreCheck;
 	use oracle_finance::traits::{IForPrice, IForReporter, IForReward};
 	use oracle_finance::types::{BalanceOf, OcwPaymentResult};
-	use crate::types::{CompletePayload, OffchainSignature, PriceTrigger, ReminderCondition, ReminderIden, ReminderIdenList, ReminderReceiver, ReminderSendList, ReminderTriggerTip, RepeatCount};
+	use crate::types::{CompletePayload, DispatchPayload, OffchainSignature, PriceTrigger, ReminderCondition, ReminderIden, ReminderIdenList, ReminderReceiver, ReminderSendList, ReminderTriggerTip, RepeatCount};
 	use crate::weights::WeightInfo;
+	use sp_std::vec::Vec;
 
 	pub const DEBUG_TARGET: &str = "ares-reminder";
 
 	impl<T: SigningTypes + Config> SignedPayload<T>
 	for CompletePayload<ReminderIden, Vec<u8>, u32, T::AuthorityAres, T::Public, T::BlockNumber>
+	{
+		fn public(&self) -> T::Public {
+			self.public.clone()
+		}
+	}
+
+	impl<T: SigningTypes + Config> SignedPayload<T>
+	for DispatchPayload<T::AuthorityAres, T::Public, T::BlockNumber>
 	{
 		fn public(&self) -> T::Public {
 			self.public.clone()
@@ -57,6 +68,8 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		type UnsignedPriority: Get<TransactionPriority>;
 
 		type FinanceInstance: Clone + Copy + PartialEq + Eq ;
 
@@ -165,17 +178,100 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::submit_dispatch_action {
+				dispatch_payload: ref payload,
+				ref signature,
+			} = call
+			{
+				log::info!( target: DEBUG_TARGET, "Validate unsigned: submit_dispatch_action",);
+				let stash_infos =  T::StashAndAuthorityPort::get_stash_id(&payload.auth.clone());
+				if stash_infos.is_none() {
+					log::error!( target: DEBUG_TARGET, "Error: Submitter must be a validator of submit_dispatch_action!",);
+					return InvalidTransaction::BadProof.into();
+				}
+
+				let current_bn = <frame_system::Pallet<T>>::block_number();
+
+				let priority_num: u64 = T::UnsignedPriority::get();
+
+				ValidTransaction::with_tag_prefix("ares-reminder::validate::submit_dispatch_action")
+					.priority(priority_num.saturating_add(1))
+					.and_provides(current_bn)
+					.longevity(5)
+					.propagate(true)
+					.build()
+
+			} else if let Call::submit_complete_reminder {
+				complete_payload: ref payload,
+				ref signature,
+			} = call
+			{
+				log::info!( target: DEBUG_TARGET, "Validate unsigned: submit_complete_reminder",);
+
+				let stash_id =  T::StashAndAuthorityPort::get_stash_id(&payload.auth.clone());
+				if stash_id.is_none() {
+					log::error!( target: DEBUG_TARGET, "Error: Submitter must be a validator of submit_complete_reminder!",);
+					return InvalidTransaction::BadProof.into();
+				}
+				let stash_id = stash_id.unwrap();
+
+				// Get reminder
+				let reminder_create_bn = PendingSendList::<T>::get(&stash_id, &payload.reminder);
+				if reminder_create_bn.is_none() {
+					log::error!( target: DEBUG_TARGET, "Error: Submitter must be a validator of submit_complete_reminder!",);
+					return InvalidTransaction::BadProof.into();
+				}
+
+				let current_bn = <frame_system::Pallet<T>>::block_number();
+				let priority_num: u64 = T::UnsignedPriority::get();
+
+				log::info!( target: DEBUG_TARGET, "Will return ValidTransaction::build() {:?}", (payload.public.clone(), current_bn, payload.reminder.clone()));
+				ValidTransaction::with_tag_prefix("ares-reminder::validate::submit_complete_reminder")
+					.priority(priority_num.saturating_add(1))
+					.and_provides((payload.public.clone(), current_bn, payload.reminder.clone()))
+					// .and_provides(current_bn)
+					.longevity(5)
+					.propagate(true)
+					.build()
+
+			} else {
+				InvalidTransaction::Call.into()
+			}
+		}
+	}
+
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/v3/runtime/events-and-errors
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		CreateReminder {
+			rid: ReminderIden,
+			symbol: PriceKey,
+			trigger: PriceTrigger<
+				T::AccountId,
+				ChainPrice,
+				T::BlockNumber,
+				RepeatCount,
+				ReminderCondition<PriceKey, ChainPrice>,
+				ReminderReceiver,
+			>,
+		},
 		ReminderMsg {
 			rid: ReminderIden,
+			remaining_count: u32,
 			update_bn: T::BlockNumber,
 			submitter: T::AccountId,
 			response_mark: Option<Vec<u8>>,
 			status: Option<u32>,
+		},
+		ReminderReleased {
+			rid: ReminderIden,
+			release_bn: T::BlockNumber,
 		}
 	}
 
@@ -193,7 +289,7 @@ pub mod pallet {
 		///
 		ReminderIdNotExists,
 		///
-		NotTheOwnerOfReminder,
+		NotTheReminderOwner,
 		///
 		PendingReminderNotExists,
 		///
@@ -205,8 +301,12 @@ pub mod pallet {
 		where <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
 	{
 		/// Offchain Worker entry point.
-		fn offchain_worker(block_number: T::BlockNumber) {
-			Self::call_reminder();
+		fn offchain_worker(_block_number: T::BlockNumber) {
+			Self::call_reminder(true);
+			let waiting_list = WaitingSendList::<T>::get().unwrap_or(ReminderSendList::default());
+			if waiting_list.len() > 0 {
+				Self::save_dispatch_action();
+			}
 		}
 	}
 
@@ -229,13 +329,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let current_bn = <frame_system::Pallet<T>>::block_number();
-			// println!("add_reminder RUN A0");
 			//
 			let estimate_fee = T::OracleFinanceHandler::calculate_fee(repeat_count.clone());
 			ensure!(estimate_fee <= max_fee, Error::<T>::EstimatedCostExceedsMaximumFee);
-			// println!("add_reminder RUN A1 = estimate_fee {:?} <= {:?}", &estimate_fee, T::Currency::free_balance(&who));
 			ensure!(estimate_fee <= T::Currency::free_balance(&who), Error::<T>::InsufficientBalance);
-			// println!("add_reminder RUN A2");
 
 			let symbol = match condition.clone() {
 				ReminderCondition::TargetPriceModel {
@@ -252,7 +349,6 @@ pub mod pallet {
 
 			// Get security deposit fee because must be do the deposit fee first.
 			let deposit_fee = SecurityDeposit::<T>::get().unwrap_or(0u32.into());
-			// println!("add_reminder RUN A3 deposit_fee = {:?}", &deposit_fee);
 
 			// Try to deposit some balance for security.
 			// params: Who, pid, and deposit.
@@ -394,38 +490,21 @@ pub mod pallet {
 			T::OracleFinanceHandler::unlock_deposit(&OrderIdEnum::Integer(rid.clone()))?;
 			T::OracleFinanceHandler::unreserve_fee(&OrderIdEnum::Integer(rid.clone()))?;
 
-			// let symbol = match trigger.trigger_condition.clone() {
-			// 	ReminderCondition::TargetPriceModel {
-			// 		price_key, anchor_price
-			// 	} => {price_key}
-			// };
-			//
-			// let mut old_symbol_list = SymbolList::<T>::get(&symbol).unwrap_or(ReminderIdenList::default());
-			// old_symbol_list.retain(|reminder_id| {
-			// 	reminder_id != &rid
-			// });
-			//
-			// let mut old_owner_list = OwnerList::<T>::get(&who).unwrap_or(ReminderIdenList::default());
-			// old_owner_list.retain(|reminder_id| {
-			// 	reminder_id != &rid
-			// });
-			//
-			// SymbolList::<T>::insert(&symbol, old_symbol_list);
-			// OwnerList::<T>::insert(&who, old_owner_list);
-			// ReminderList::<T>::remove(&rid);
-			//
-			// // Unlock deposit
-			// T::OracleFinanceHandler::unlock_deposit(&OrderIdEnum::Integer(rid.clone()));
-			// T::OracleFinanceHandler::unreserve_fee(&OrderIdEnum::Integer(rid.clone()));
-
 			Ok(())
 		}
 
-		// #[pallet::weight(0)]
-		// pub fn sense_trigger(origin: OriginFor<T>) -> DispatchResult {
-		// 	ensure_none(origin)?;
-		// 	todo!()
-		// }
+
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn submit_dispatch_action(
+			origin: OriginFor<T>,
+			dispatch_payload: DispatchPayload<T::AuthorityAres, T::Public, T::BlockNumber>,
+			_signature: OffchainSignature<T>,
+		) -> DispatchResult {
+			ensure_none(origin)?;
+			Self::dispatch_waiting_list();
+			Ok(())
+		}
 
 		#[pallet::weight(0)]
 		#[transactional]
@@ -435,8 +514,6 @@ pub mod pallet {
 			_signature: OffchainSignature<T>,
 		) -> DispatchResult {
 			ensure_none(origin)?;
-
-			println!("complete_payload = {:?}", &complete_payload) ;
 
 			//TODO 先要合适验证人身份，validator 必须是一个 Ares 验证人
 			let stash_id = T::StashAndAuthorityPort::get_stash_id(&complete_payload.auth);
@@ -479,6 +556,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::ReminderMsg {
 				rid,
+				remaining_count: trigger.repeat_count,
 				update_bn: complete_payload.reminder.1,
 				submitter: stash_id ,
 				response_mark: complete_payload.response_mark,
@@ -509,10 +587,16 @@ pub mod pallet {
 			ensure!(old_owner_list.try_push(current_reminder_id.clone()).is_ok(), Error::<T>::ReminderListExceedsMaximumLimit);
 			OwnerList::<T>::insert(who, old_owner_list);
 
-			ReminderList::<T>::insert(current_reminder_id.clone(), trigger);
+			ReminderList::<T>::insert(current_reminder_id.clone(), trigger.clone());
 
 			// upgrade reminder id.
 			ReminderCount::<T>::put(current_reminder_id.saturating_add(1));
+
+			Self::deposit_event(Event::CreateReminder {
+				rid: current_reminder_id,
+				symbol: symbol.clone(),
+				trigger,
+			});
 
 			Ok(())
 		}
@@ -563,7 +647,7 @@ pub mod pallet {
 			// let trigger = ReminderList::<T>::get(rid);
 			// ensure!(trigger.is_some(), Error::<T>::ReminderIdNotExists);
 			// let trigger = trigger.unwrap();
-			ensure!(&trigger.owner == who, Error::<T>::NotTheOwnerOfReminder);
+			ensure!(&trigger.owner == who, Error::<T>::NotTheReminderOwner);
 			Ok(())
 		}
 
@@ -588,8 +672,6 @@ pub mod pallet {
 				} => {price_key}
 			};
 
-
-
 			let mut old_symbol_list = SymbolList::<T>::get(&symbol).unwrap_or(ReminderIdenList::default());
 			old_symbol_list.retain(|reminder_id| {
 				reminder_id != rid
@@ -603,13 +685,26 @@ pub mod pallet {
 			SymbolList::<T>::insert(&symbol, old_symbol_list);
 			OwnerList::<T>::insert(&trigger.owner, old_owner_list);
 			ReminderList::<T>::remove(rid);
+
+			let current_bn = <frame_system::Pallet<T>>::block_number();
+
+			Self::deposit_event(Event::ReminderReleased {
+				rid: rid.clone(),
+				release_bn: current_bn
+			});
+
 		}
 
-		pub fn dispatch_waiting_list(validator_list: Vec<T::AccountId>) {
+		pub fn dispatch_waiting_list() {
+
 			let validator_list = T::StashAndAuthorityPort::get_list_of_storage();
 			let waiting_list = WaitingSendList::<T>::get().unwrap_or(ReminderSendList::default());
 			let current_bn = <frame_system::Pallet<T>>::block_number();
+
+			log::info!( target: DEBUG_TARGET, "Pallet::dispatch_waiting_list {:?},{:?},{:?}", &waiting_list, &validator_list, &waiting_list,);
+
 			for round_idx in 0usize..Self::get_round(waiting_list.len(), validator_list.len()) {
+				log::info!(target: DEBUG_TARGET, "round_idx == {:?}", &round_idx);
 				validator_list.iter().enumerate().for_each(|(idx, validator_data)| {
 					let round_idx: T::BlockNumber = (round_idx as u32).into();
 					let mod_base = current_bn.saturating_add((idx as u32).into());
@@ -624,7 +719,6 @@ pub mod pallet {
 						PendingSendList::<T>::insert(validator_data.0.clone(), data.clone().unwrap(), current_bn);
 					}
 				});
-				// PendingSendList::<T>::insert((), (), ());
 			}
 			WaitingSendList::<T>::put(ReminderSendList::default());
 		}
@@ -632,6 +726,7 @@ pub mod pallet {
 
 	impl <T: Config> IOracleAvgPriceEvents<T::BlockNumber, PriceKey, FractionLength> for Pallet<T> {
 		fn avg_price_update(symbol: PriceKey, bn: T::BlockNumber, price: u64, fraction_length: FractionLength) {
+			log::info!( target: DEBUG_TARGET, "IOracleAvgPriceEvents::avg_price_update {:?},{:?},{:?},{:?}", &symbol, &bn, &price, &fraction_length);
 
 			let push_wait_list = |rid: ReminderIden, bn: T::BlockNumber| {
 				let mut send_list = WaitingSendList::<T>::get().unwrap_or(ReminderSendList::default());
