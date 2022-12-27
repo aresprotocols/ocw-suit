@@ -164,7 +164,7 @@ pub mod pallet {
 			GenesisConfig {
 				security_deposit: 0u32.into(),
 				max_pending_keep_bn: 60u32.into(),
-				max_waiting_keep_bn: 180u32.into(),
+				max_waiting_keep_bn: 5u32.into(),
 			}
 		}
 	}
@@ -261,6 +261,20 @@ pub mod pallet {
 				ReminderReceiver,
 			>,
 		},
+		UpdateReminder {
+			rid: ReminderIden,
+			symbol: PriceKey,
+			trigger: PriceTrigger<
+				T::AccountId,
+				ChainPrice,
+				T::BlockNumber,
+				RepeatCount,
+				ReminderCondition<PriceKey, ChainPrice>,
+				ReminderReceiver,
+			>,
+			repeat_increase: RepeatCount,
+			repeat_reduce: RepeatCount,
+		},
 		ReminderMsg {
 			rid: ReminderIden,
 			remaining_count: u32,
@@ -305,7 +319,7 @@ pub mod pallet {
 			Self::call_reminder(true);
 			let waiting_list = WaitingSendList::<T>::get().unwrap_or(ReminderSendList::default());
 			if waiting_list.len() > 0 {
-				Self::save_dispatch_action();
+				Self::execute_dispatch_action();
 			}
 		}
 	}
@@ -439,7 +453,7 @@ pub mod pallet {
 				},
 				OcwPaymentResult::Success(_, _) => {},
 			}
-			// ------
+			//
 			let symbol = match condition.clone() {
 				ReminderCondition::TargetPriceModel {
 					price_key, anchor_price
@@ -502,6 +516,7 @@ pub mod pallet {
 			_signature: OffchainSignature<T>,
 		) -> DispatchResult {
 			ensure_none(origin)?;
+			Self::review_waiting_list();
 			Self::dispatch_waiting_list();
 			Ok(())
 		}
@@ -605,13 +620,14 @@ pub mod pallet {
 
 			let old_reminder_tigger = ReminderList::<T>::get(&rid);
 			ensure!(old_reminder_tigger.is_some(), Error::<T>::ReminderIdNotExists);
-			let old_trigger_condition = old_reminder_tigger.unwrap().trigger_condition;
+			let old_trigger_condition = old_reminder_tigger.clone().unwrap().trigger_condition;
 
 			let old_symbol = match old_trigger_condition {
 				ReminderCondition::TargetPriceModel {
 					price_key, anchor_price
 				} => {price_key}
 			};
+
 
 			// Check and update old_symbol_list
 			let mut old_symbol_list = SymbolList::<T>::get(&old_symbol).unwrap_or(ReminderIdenList::default());
@@ -637,7 +653,18 @@ pub mod pallet {
 				SymbolList::<T>::insert(new_symbol, new_symbol_list);
 			}
 
-			ReminderList::<T>::insert(rid.clone(), trigger);
+			ReminderList::<T>::insert(rid.clone(), trigger.clone());
+
+			let old_repeat = old_reminder_tigger.unwrap().repeat_count;
+			let new_repeat = trigger.repeat_count;
+
+			Self::deposit_event(Event::UpdateReminder {
+				rid: rid,
+				symbol: new_symbol.clone(),
+				trigger,
+				repeat_increase: new_repeat.checked_sub(old_repeat).unwrap_or(0),
+				repeat_reduce: old_repeat.checked_sub(new_repeat).unwrap_or(0)
+			});
 
 			Ok(())
 		}
@@ -693,6 +720,21 @@ pub mod pallet {
 				release_bn: current_bn
 			});
 
+		}
+
+		pub fn review_waiting_list() {
+			let current_bn = <frame_system::Pallet<T>>::block_number();
+			PendingSendList::<T>::iter().for_each(|(k1, k2, vbn)|{
+				if current_bn.saturating_sub(MaxWaitingKeepBn::<T>::get().unwrap_or(10u32.into())) > vbn {
+					PendingSendList::<T>::remove(&k1, &k2);
+					let mut waiting_list = WaitingSendList::<T>::get().unwrap_or(Default::default());
+					waiting_list.try_push(k2.clone());
+					WaitingSendList::<T>::put(waiting_list);
+					let mut offence_list = OffenceSender::<T>::get(&k1).unwrap_or(Default::default());
+					offence_list.try_push(k2);
+					OffenceSender::<T>::insert(k1, offence_list);
+				}
+			});
 		}
 
 		pub fn dispatch_waiting_list() {

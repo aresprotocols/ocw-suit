@@ -371,6 +371,7 @@ pub(crate) enum Releases {
 	V1_0_1_HttpErrUpgrade,
 	V1_1_0_HttpErrUpgrade,
 	V1_2_0,
+	V2,
 }
 
 impl Default for Releases {

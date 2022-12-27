@@ -35,7 +35,8 @@ sp-std = { git = "https://github.com/paritytech/substrate", default-features = f
 serde = { version = '1.0.143', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.67', default-features = false, features = ['alloc'] }
 pallet-timestamp = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
-
+pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
+pallet-staking = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
 
 [features]
 default = ['std']
@@ -58,6 +59,8 @@ std = [
     'pallet-session/std',
     'sp-application-crypto/std',
     'sp-core/std',
+    'pallet-staking/std',
+#    'pallet-staking-reward-curve/std',
 ]
 try-runtime = ['frame-support/try-runtime']
 

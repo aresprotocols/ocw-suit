@@ -22,6 +22,12 @@ pub type SessionIndex = u32;
 
 pub type EraIndex = u32;
 
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo, Copy)]
+pub enum Releases {
+	V0,
+	V1,
+}
+
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum OcwPaymentResult<Balance, PID> {
 	InsufficientBalance(PID, Balance),

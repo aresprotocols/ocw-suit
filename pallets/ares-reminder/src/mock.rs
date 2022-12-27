@@ -253,7 +253,7 @@ pub fn new_test_ext(offchain: Option<TestOffchainExt>, pool: Option<TestTransact
 	crate::GenesisConfig::<Test> {
 		security_deposit: 1 * DOLLARS,
 		max_pending_keep_bn: 60,
-		max_waiting_keep_bn: 180,
+		max_waiting_keep_bn: 5,
 	}
 		.assimilate_storage(&mut t)
 		.unwrap();
@@ -311,7 +311,7 @@ pub fn payload_response(state: &mut testing::OffchainState, url: &str, body: Vec
 		uri: url.into(),
 		response: Some(br#"{"status": "OK"}"#.to_vec()),
 		sent: true,
-		headers: vec![("reminder-acc".to_string(), "".to_string()), ("reminder-sign".to_string(), "".to_string())],
+		headers: vec![("validator-acc".to_string(), "".to_string()), ("validator-sign".to_string(), "".to_string())],
 		body: body,
 		..Default::default()
 	});

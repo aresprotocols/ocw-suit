@@ -91,6 +91,14 @@ pub struct DispatchPayload<AuthorityId, Public, Bn> {
     pub public: Public,
 }
 
-
-
+// (ReminderCallBackUrl, ReminderCallBackSign, ReminderIden, T::BlockNumber, T::BlockNumber, T::AccountId)
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct HttpCallParams<AccountId, BlockNumber, CallBackUrl, CallBackSign, Iden> {
+    pub reminder_call_back_url: CallBackUrl, // 0
+    pub reminder_call_back_sign: CallBackSign, // 1
+    pub reminder_iden: Iden, // 2
+    pub reminder_bn: BlockNumber, // 3
+    pub link_bn: BlockNumber, // 4
+    pub trigger_owner: AccountId // 5
+}
 

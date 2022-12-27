@@ -1532,7 +1532,6 @@ pub mod pallet {
 	pub(super) type PurchasedRequestPool<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		// OrderIdEnum, // purchased_id
 		OrderIdEnum,
 		PurchasedRequestData<T::AccountId, BalanceOf<T, T::FinanceInstance>, T::BlockNumber>,
 		OptionQuery,

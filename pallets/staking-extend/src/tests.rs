@@ -4,6 +4,7 @@ use crate::mock::*;
 use crate::IStakingNpos;
 
 use frame_support::assert_ok;
+use pallet_staking::ConvertCurve;
 
 use sp_runtime::{
 	impl_opaque_keys,
@@ -69,6 +70,18 @@ fn test_get_pending_npos_listd() {
 
 		advance_session();
 		advance_session();
+	});
+}
+
+#[test]
+fn test_lines() {
+	use pallet_staking::EraPayout;
+	new_test_ext().execute_with(|| {
+		// 28994100000000
+		// let payout = ConvertCurve::<RewardCurve>::era_payout(28183518u64, 1040000000u64, 60*60*24*1000);
+		let payout = ConvertCurve::<RewardCurve>::era_payout(28183518u64, 1000000000u64, 60*60*24*1000);
+		println!("payout = {:?}", payout)
+		// <Staking as pallet_staking::Config>::EraPayout::era_payout(5000, 10000, 6000);
 	});
 }
 

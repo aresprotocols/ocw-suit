@@ -8,7 +8,7 @@ use oracle_finance::traits::IForPrice;
 use ares_oracle_provider_support::{ChainPrice, OrderIdEnum, PriceKey, IOracleAvgPriceEvents, IStashAndAuthority};
 use ares_oracle_provider_support::crypto::sr25519::AuthorityId;
 use sp_core::ed25519::Public;
-use crate::{MaxPendingKeepBn, MaxWaitingKeepBn, OwnerList, PendingSendList, ReminderCount, ReminderList, SymbolList, WaitingSendList};
+use crate::{MaxPendingKeepBn, MaxWaitingKeepBn, OffenceSender, OwnerList, PendingSendList, ReminderCount, ReminderList, SymbolList, WaitingSendList};
 use crate::types::{CompletePayload, PriceTrigger, ReminderCallBackUrl, ReminderCondition, ReminderIden, ReminderIdenList, ReminderReceiver, ReminderSendList, ReminderTriggerTip};
 use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
@@ -948,7 +948,7 @@ fn test_http_request() {
 		ReminderCount::<Test>::put(rid+1);
 		PendingSendList::<Test>::insert(validator_list[0], (rid, 10),10);
 
-		payload_response(&mut offchain_state.write(),"http://localhost/http_call/?_s_=abc&_rid_=0&_rbn_=10&_lbn_=10&_acc_=0606060606060606060606060606060606060606060606060606060606060606", vec![]);
+		payload_response(&mut offchain_state.write(),"http://localhost/http_call/?_s_=616263&_rid_=0&_rbn_=10&_lbn_=10&_acc_=0606060606060606060606060606060606060606060606060606060606060606", vec![]);
 
 		AresReminder::call_reminder(false);
 
@@ -967,3 +967,88 @@ fn test_http_request() {
 	});
 }
 
+
+#[test]
+fn test_pending_checker() {
+	new_test_ext(None, None).execute_with(|| {
+		// Make some Waiting list for test
+		let mut send_list = ReminderSendList::<ReminderIden, BlockNumber>::default();
+		send_list.try_push((0, 1));
+		send_list.try_push((1, 1));
+		send_list.try_push((2, 1));
+		send_list.try_push((3, 1));
+		send_list.try_push((4, 1));
+		send_list.try_push((5, 1));
+		send_list.try_push((6, 1));
+		WaitingSendList::<Test>::put(send_list.clone());
+		assert_eq!(WaitingSendList::<Test>::get().unwrap().len(), 7);
+
+		System::set_block_number(2);
+
+		assert_eq!(AresReminder::get_round(send_list.len(), TestAresAuthority::get_list_of_storage().len()), 3);
+
+		let validator_list: Vec<AccountId> = TestAresAuthority::get_list_of_storage().iter().map(|data|{
+			data.0
+		}).collect();
+
+		//
+		AresReminder::dispatch_waiting_list();
+
+		// &((0+2)%6 = &((idx+blocknumber)%length
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[0], &((0+2)%3+0*3, 1)), Some(2)); // Reminder(2,1) *
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[1], &((1+2)%3+0*3, 1)), Some(2)); // Reminder(0,1)
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[2], &((2+2)%3+0*3, 1)), Some(2)); // Reminder(1,1)
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[0], &((0+2)%3+1*3, 1)), Some(2)); // Reminder(5,1)
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[1], &((1+2)%3+1*3, 1)), Some(2)); // Reminder(3,1) *
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[2], &((2+2)%3+1*3, 1)), Some(2)); // Reminder(4,1) *
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[0], &((0+2)%3+2*3, 1)), None); // Reminder(8,1)
+		assert_eq!(PendingSendList::<Test>::get(&validator_list[1], &((1+2)%3+2*3, 1)), Some(2)); // Reminder(6,1)
+
+		assert_eq!(WaitingSendList::<Test>::get().unwrap().len(), 0);
+
+		// Check
+		assert_eq!(MaxWaitingKeepBn::<Test>::get(), Some(5));
+
+		System::set_block_number(2);
+		AresReminder::review_waiting_list();
+
+		assert_eq!(PendingSendList::<Test>::iter().count(), 7);
+		assert_eq!(WaitingSendList::<Test>::get().unwrap().len(), 0);
+
+		System::set_block_number(10);
+		AresReminder::review_waiting_list();
+
+		assert_eq!(PendingSendList::<Test>::iter().count(), 0);
+		assert_eq!(WaitingSendList::<Test>::get().unwrap().len(), 7);
+
+		//
+		AresReminder::dispatch_waiting_list();
+
+		PendingSendList::<Test>::iter().for_each(|x|{
+			println!("PendingSendList foreach iter B : {:?}", x);
+		});
+
+		let mut offence_sender_0 = ReminderSendList::default();
+		offence_sender_0.try_push((5,1));
+		offence_sender_0.try_push((2,1));
+		assert_eq!(OffenceSender::<Test>::get(&validator_list[0]), Some(
+			offence_sender_0
+		));
+
+		let mut offence_sender_1 = ReminderSendList::default();
+		offence_sender_1.try_push((3,1));
+		offence_sender_1.try_push((6,1));
+		offence_sender_1.try_push((0,1));
+		assert_eq!(OffenceSender::<Test>::get(&validator_list[1]), Some(
+			offence_sender_1
+		));
+
+		let mut offence_sender_2 = ReminderSendList::default();
+		offence_sender_2.try_push((4,1));
+		offence_sender_2.try_push((1,1));
+		assert_eq!(OffenceSender::<Test>::get(&validator_list[2]), Some(
+			offence_sender_2
+		));
+
+	});
+}

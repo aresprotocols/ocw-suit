@@ -10,6 +10,7 @@ use sp_runtime::testing::UintAuthorityId;
 use sp_runtime::traits::Convert;
 use sp_runtime::{ testing::Header, traits::{BlakeTwo256, IdentityLookup, Zero}};
 use sp_std::convert::TryFrom;
+use sp_runtime::curve::PiecewiseLinear;
 use ares_oracle_provider_support::{OrderIdEnum};
 use crate::test_tools::*;
 
@@ -89,6 +90,22 @@ impl Convert<AccountId, Option<AccountId>> for StashOf {
 	}
 }
 
+
+pallet_staking_reward_curve::build! {
+	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
+		// min_inflation: 0_025_000,
+		// max_inflation: 0_100_000,
+		min_inflation: 0_024_575,
+		max_inflation: 0_024_576,
+		// 3:2:1 staked : parachains : float.
+		// while there's no parachains, then this is 75% staked : 25% float.
+		ideal_stake: 0_750_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
+
 parameter_types! {
 	pub const AresFinancePalletId: PalletId = PalletId(*b"ocw/fund");
 	pub const BasicDollars: Balance = DOLLARS;
@@ -96,6 +113,8 @@ parameter_types! {
 	pub const AskPerEra: SessionIndex = 2;
 	pub const HistoryDepth: u32 = 2;
 	pub const TestFinanceLockIdentifier : LockIdentifier = *b"testing ";
+
+	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 }
 
 type OracleFinanceInstance = oracle_finance::Instance1;

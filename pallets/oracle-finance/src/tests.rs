@@ -1,10 +1,19 @@
-use crate::{mock::*, Error, PaymentTrace, AskEraPayment, RewardTrace, AskEraPoint, RewardEra};
-use frame_support::{assert_ok};
+use crate::{mock::*, Error, PaymentTrace, AccountLockedDeposit, AskEraPayment, RewardTrace, AskEraPoint, RewardEra, StorageVersion};
+use frame_support::{assert_ok, Blake2_128Concat};
 use crate::traits::*;
 use crate::types::*;
 // use crate::test_tools::{Balance, BlockNumber, DOLLARS, HistoryDepth};
 use crate::test_tools::*;
-
+use sp_core::hexdisplay::{HexDisplay};
+use codec::{Encode};
+use frame_support::instances::Instance1;
+use frame_support::pallet_prelude::ValueQuery;
+use sp_runtime::BoundedVec;
+use sp_std::convert::TryInto;
+use ares_oracle_provider_support::{OrderIdEnum, PurchaseId};
+use frame_support::storage::generator::*;
+use frame_support::traits::{OnRuntimeUpgrade, StorageInstance};
+use crate::migrations::{OldAskEraPaymentV0, OldAskEraPointV0, OldPaymentTraceV0, OldRewardEraV0, UpdateToV1};
 
 #[test]
 fn test_pay_half_to() {
@@ -1030,48 +1039,84 @@ fn test_ask_era_num() {
 	});
 }
 
-// use sp_core::Encode;
-// use sp_core::Decode;
-use sp_core::hexdisplay::{HexDisplay};
-use codec::{Encode};
-use frame_support::instances::Instance1;
-use sp_runtime::BoundedVec;
-use sp_std::convert::TryInto;
-use ares_oracle_provider_support::{OrderIdEnum, PurchaseId};
-
 
 #[test]
-fn test_aa () {
-	// let mut a = 0xdea0b564;
-	// let a = "are-ocw::local_host_key";
-	// let ss: u32 = 385329431u32;
-	let ss: u32 = 1689624798;
-	let aa: u32 = 0xdea0b564;
-	// let using_u8 = ss.using_encoded(|v| {
-	// 	// println!("--- a = {:?}", HexDisplay::from(&ss.encode().encode()));
-	// 	println!("--- a = {:?}", v);
-	// 	// HexDisplay::from(v);
-	// 	// println!("--- b = {:?}", HexDisplay::from(v));
-	// });
-	let using_u8 = ss.encode();
-	println!("--- a = {:?}", using_u8);
-	println!("--- b = {:?}", aa);
-	println!("--- c = {:?}", HexDisplay::from(&using_u8));
-	println!("--- d = {:?}", hex::decode("dea0b564".as_bytes()));
+fn test_migrate_of_UpdateToV1 () {
+	// use crate::migrations::OldPaymentTrace;
+	new_test_ext().execute_with(|| {
+		StorageVersion::<Test, Instance1>::put(Releases::V0);
 
-	// let number_to_str = sp_std::str::from_utf8(HexDisplay::from(&using_u8));
-	// println!("--- c = {:?}", number_to_str);
+		const ACCOUNT_ID: u64 = 3;
+		let old_purchase_id: PurchaseId = "aaa".as_bytes().to_vec().try_into().unwrap();
+		let paid_value = PaidValue::<BlockNumber, Balance, EraIndex> {
+			amount: 3000000000000,
+			create_bn: <frame_system::Pallet<Test>>::block_number(),
+			is_income: true,
+			paid_era: 1,
+		};
+		OldPaymentTraceV0::<Test, Instance1>::insert(old_purchase_id.clone(), ACCOUNT_ID, paid_value.clone());
+
+		assert_eq!(OldPaymentTraceV0::<Test, Instance1>::contains_key(&old_purchase_id, &ACCOUNT_ID), true);
+		assert_eq!(OldPaymentTraceV0::<Test, Instance1>::get(&old_purchase_id, &ACCOUNT_ID), paid_value);
+		assert_eq!(PaymentTrace::<Test, Instance1>::contains_key(&OrderIdEnum::String(old_purchase_id.clone()), &ACCOUNT_ID), false);
+
+		OldAskEraPaymentV0::<Test, Instance1>::insert(1, (ACCOUNT_ID, old_purchase_id.clone()), 100);
+		assert_eq!(OldAskEraPaymentV0::<Test, Instance1>::contains_key(1, &(ACCOUNT_ID, old_purchase_id.clone())), true);
+		assert_eq!(AskEraPayment::<Test, Instance1>::contains_key(1, &(ACCOUNT_ID, OrderIdEnum::String(old_purchase_id.clone()))), false);
+
+		OldAskEraPointV0::<Test>::insert(1, (ACCOUNT_ID, old_purchase_id.clone()), 6);
+		assert_eq!(OldAskEraPointV0::<Test>::contains_key(1, &(ACCOUNT_ID, old_purchase_id.clone())), true);
+		assert_eq!(AskEraPoint::<Test, Instance1>::contains_key(1, &(ACCOUNT_ID, OrderIdEnum::String(old_purchase_id.clone()))), false);
+
+		let mut old_reward_era: BoundedVec<(EraIndex, AskPointNum, PurchaseId), MaximumRewardEras> = Default::default();
+		old_reward_era.try_push((1,1,old_purchase_id.clone()));
+		OldRewardEraV0::<Test>::insert(1, old_reward_era.clone());
+		assert_eq!(OldRewardEraV0::<Test>::get(1), old_reward_era.clone());
+
+		UpdateToV1::<Test, Instance1>::on_runtime_upgrade();
+
+		assert_eq!(OldPaymentTraceV0::<Test, Instance1>::contains_key(&old_purchase_id, &ACCOUNT_ID), false);
+		assert_eq!(PaymentTrace::<Test, Instance1>::contains_key(&OrderIdEnum::String(old_purchase_id.clone()), &ACCOUNT_ID), true);
+
+		assert_eq!(OldAskEraPaymentV0::<Test, Instance1>::contains_key(1, &(ACCOUNT_ID, old_purchase_id.clone())), false);
+		assert_eq!(AskEraPayment::<Test, Instance1>::get(1, &(ACCOUNT_ID, OrderIdEnum::String(old_purchase_id.clone()))), 100);
+
+		assert_eq!(OldAskEraPointV0::<Test>::contains_key(1, &(ACCOUNT_ID, old_purchase_id.clone())), false);
+		assert_eq!(AskEraPoint::<Test, Instance1>::get(1, &(ACCOUNT_ID, OrderIdEnum::String(old_purchase_id.clone()))), 6);
+
+		let mut new_reward_era: BoundedVec<(EraIndex, AskPointNum, OrderIdEnum), MaximumRewardEras> = Default::default();
+		new_reward_era.try_push((1, 1,OrderIdEnum::String(old_purchase_id.clone())));
+		assert_eq!(RewardEra::<Test, Instance1>::get(1), new_reward_era.clone());
+
+		assert_eq!(StorageVersion::<Test, Instance1>::get(), Some(Releases::V1));
+	});
 }
+
+// #[test]
+// fn test_aa () {
+// 	// let mut a = 0xdea0b564;
+// 	// let a = "are-ocw::local_host_key";
+// 	// let ss: u32 = 385329431u32;
+// 	let ss: u32 = 1689624798;
+// 	let aa: u32 = 0xdea0b564;
+// 	// let using_u8 = ss.using_encoded(|v| {
+// 	// 	// println!("--- a = {:?}", HexDisplay::from(&ss.encode().encode()));
+// 	// 	println!("--- a = {:?}", v);
+// 	// 	// HexDisplay::from(v);
+// 	// 	// println!("--- b = {:?}", HexDisplay::from(v));
+// 	// });
+// 	let using_u8 = ss.encode();
+// 	println!("--- a = {:?}", using_u8);
+// 	println!("--- b = {:?}", aa);
+// 	println!("--- c = {:?}", HexDisplay::from(&using_u8));
+// 	println!("--- d = {:?}", hex::decode("dea0b564".as_bytes()));
+//
+// 	// let number_to_str = sp_std::str::from_utf8(HexDisplay::from(&using_u8));
+// 	// println!("--- c = {:?}", number_to_str);
+// }
 
 #[test]
 fn test_rpc_request() {
-	// "{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"offchain_localStorageSet\",
-	// \"params\":[\"PERSISTENT\", \ "0x746172652d6f63773a3a70726963655f726571756573745f646f6d61696e\",
-	// \"0x68687474703a2f2f3134312e3136342e35382e3234313a35353636\"]}"
-
-	// Try title : Vec<u8> encode 746172652d6f63773a3a70726963655f726571756573745f646f6d61696e
-	// Try body : Vec<u8> encode 68687474703a2f2f3134312e3136342e35382e3234313a35353636
-	//                             687474703a2f2f3134312e3136342e35382e3234313a35353838
 
 	let target_json = "are-ocw::price_request_domain";
 	let target_json_v8 = target_json.encode();

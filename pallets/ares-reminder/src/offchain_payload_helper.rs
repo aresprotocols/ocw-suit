@@ -14,7 +14,7 @@ use md5::{Md5, Digest};
 // use rustc_hex::ToHex;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::IdentifyAccount;
-use crate::types::{CompletePayload, DispatchPayload, ReminderCallBackSign, ReminderCallBackUrl, ReminderRequestOptions};
+use crate::types::{CompletePayload, DispatchPayload, HttpCallParams, ReminderCallBackSign, ReminderCallBackUrl, ReminderRequestOptions};
 
 impl<T: Config> Pallet<T>
     where <T as frame_system::offchain::SigningTypes>::Public: From<sp_application_crypto::sr25519::Public>,
@@ -50,7 +50,17 @@ impl<T: Config> Pallet<T>
             if let Some(trigger) = trigger_opt {
                 let http_call_opt = match trigger.trigger_receiver {
                     ReminderReceiver::HttpCallBack { url, sign } => {
-                        Some((url, sign, rid.clone(), rbn.clone(), lbn.clone(), trigger.owner))
+                        // Some((url, sign, rid.clone(), rbn.clone(), lbn.clone(), trigger.owner))
+                        Some(
+                            HttpCallParams {
+                                reminder_call_back_url: url,
+                                reminder_call_back_sign: sign,
+                                reminder_iden: rid.clone(),
+                                reminder_bn: rbn.clone(),
+                                link_bn: lbn.clone(),
+                                trigger_owner: trigger.owner
+                            }
+                        )
                     },
                     _ => {
                         None
@@ -83,21 +93,34 @@ impl<T: Config> Pallet<T>
 
     pub fn request_callback (
         authority: T::AuthorityAres,
-        http_call: (ReminderCallBackUrl, ReminderCallBackSign, ReminderIden, T::BlockNumber, T::BlockNumber, T::AccountId),
+        // http_call: (ReminderCallBackUrl, ReminderCallBackSign, ReminderIden, T::BlockNumber, T::BlockNumber, T::AccountId),
+        http_call: HttpCallParams<T::AccountId, T::BlockNumber, ReminderCallBackUrl, ReminderCallBackSign, ReminderIden>,
         signature_request: bool,
     ) -> Result<(Vec<u8>, Vec<u8>), http::Error> {
         // println!("request_callback = {:?} ", &http_call);
         let make_request_url = || -> Option<ReminderRequestOptions> {
             // let acc_param = arrform!(100, "{:?}", &http_call.5);
             // let acc_param = &acc_param.as_str()[10..65];
-            let acc_vec = http_call.5.encode();
-            let acc_hex = sp_core::hexdisplay::HexDisplay::from(&acc_vec);
-            let url_params = arrform!(512, "&_rid_={:?}&_rbn_={:?}&_lbn_={:?}&_acc_={:?}", &http_call.2, &http_call.3, &http_call.4, &acc_hex, );
+            // let acc_vec = http_call.5.encode();
+            let trigger_acc_vec = http_call.trigger_owner.encode();
+            let trigger_acc_hex = sp_core::hexdisplay::HexDisplay::from(&trigger_acc_vec);
+            // let back_sign = sp_std::str::from_utf8(&http_call.reminder_call_back_sign).unwrap_or("");
+            let back_sign = http_call.reminder_call_back_sign;
+
+            let url_params = arrform!(512, "_s_={:?}&_rid_={:?}&_rbn_={:?}&_lbn_={:?}&_acc_={:?}",
+                sp_core::hexdisplay::HexDisplay::from(&back_sign.to_vec()),
+                &http_call.reminder_iden,
+                &http_call.reminder_bn,
+                &http_call.link_bn,
+                &trigger_acc_hex,
+            );
+
+            log::info!( target: DEBUG_TARGET, "Signed url = {:?}", url_params.as_str());
+
             //
             let sign_data = Signer::<T, T::OffchainAppCrypto>::any_account()
                 .with_filter(Self::make_filter(authority.clone()) )
                 .sign_message(url_params.as_bytes());
-
 
             if sign_data.is_none() {
                 log::warn!("Sign failed on: {:?}", &authority);
@@ -114,48 +137,29 @@ impl<T: Config> Pallet<T>
                 let arr_sign_encode = sign_data.1.encode();
                 let arr_sign_hex = sp_core::hexdisplay::HexDisplay::from(&arr_sign_encode);
                 let arr_sign = arrform!(265, "{:?}", &arr_sign_hex);
-                // let sign_data_vec = &sign_data.clone().0.public.encode().to_hex();
-                // let test = sp_std::str::from_utf8(&sign_data_vec.to_vec()).unwrap();
-                // println!("test ==== {:?}", test);
-                // println!("url_params = {:?}, authority = {:?}, arr_acc = {:?}, arr_sign = {:?}", &url_params.as_str(), &authority, arr_acc.as_str(), arr_sign.as_str());
-                // (arr_acc.as_bytes().to_vec(), arr_sign.as_str().as_bytes().to_vec())
                 (arr_acc.as_bytes().to_vec(), arr_sign.as_bytes().to_vec())
             }else{
                 (Vec::new(), Vec::new())
             };
 
-            if http_call.0.contains(&"?".as_bytes()[0]) {
+            if http_call.reminder_call_back_url.contains(&"?".as_bytes()[0]) {
                 Some(ReminderRequestOptions{
                     request_url: [
-                        http_call.0.to_vec(),
-                        "&_s_=".as_bytes().to_vec(),
-                        http_call.1.to_vec(),
+                        http_call.reminder_call_back_url.to_vec(),
+                        "&".as_bytes().to_vec(),
                         url_params.as_str().as_bytes().to_vec(),
                     ].concat(),
                     sign_message: post_data
                 })
-                // Some(([
-                //     http_call.0.to_vec(),
-                //     "&_s_=".as_bytes().to_vec(),
-                //     http_call.1.to_vec(),
-                //     url_params.as_str().as_bytes().to_vec(),
-                // ].concat(), post_data))
             }else{
                 Some(ReminderRequestOptions{
                     request_url: [
-                        http_call.0.to_vec(),
-                        "?_s_=".as_bytes().to_vec(),
-                        http_call.1.to_vec(),
+                        http_call.reminder_call_back_url.to_vec(),
+                        "?".as_bytes().to_vec(),
                         url_params.as_str().as_bytes().to_vec(),
                     ].concat(),
                     sign_message: post_data
                 })
-                // Some(([
-                //     http_call.0.to_vec(),
-                //     "?_s_=".as_bytes().to_vec(),
-                //     http_call.1.to_vec(),
-                //     url_params.as_str().as_bytes().to_vec(),
-                // ].concat(), post_data))
             }
         };
 
@@ -168,16 +172,18 @@ impl<T: Config> Pallet<T>
 
         let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(4_000));
         let request_url = sp_std::str::from_utf8(&request_url_data.request_url).unwrap();
-        let reminder_acc = sp_std::str::from_utf8(&request_url_data.sign_message.0).unwrap();
-        let reminder_sign = sp_std::str::from_utf8(&request_url_data.sign_message.1).unwrap();
+        let validator_acc = sp_std::str::from_utf8(&request_url_data.sign_message.0).unwrap();
+        let validator_sign = sp_std::str::from_utf8(&request_url_data.sign_message.1).unwrap();
+
+        log::info!( target: DEBUG_TARGET, "Add header = {:?}, {:?}", validator_acc, validator_sign);
 
         let request =
             http::Request::get(request_url);
         // let request =
         //     http::Request::post(request_url, vec![post_data]); // vec![b"abc"]
         let pending = request.deadline(deadline)
-            .add_header("reminder-acc", reminder_acc)
-            .add_header("reminder-sign", reminder_sign)
+            .add_header("validator-acc", validator_acc)
+            .add_header("validator-sign", validator_sign)
             .send().map_err(|_| http::Error::IoError)?;
         let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
         if response.code != 200 {
@@ -197,7 +203,7 @@ impl<T: Config> Pallet<T>
         Ok((body, md5_vec))
     }
 
-    pub fn save_dispatch_action () -> Result<(), &'static str> {
+    pub fn execute_dispatch_action () -> Result<(), &'static str> {
         let current_bn = <frame_system::Pallet<T>>::block_number();
 
         let local_ares_authority_list = T::StashAndAuthorityPort::get_authority_list_of_local();

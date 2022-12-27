@@ -30,6 +30,7 @@ mod benchmarking;
 mod test_tools;
 
 pub mod weights;
+pub mod migrations;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -94,6 +95,9 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	// #[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(_);
+
+	#[pallet::storage]
+	pub type StorageVersion<T: Config<I>, I: 'static = ()> = StorageValue<_, Releases, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn order_locked_deposit)]
@@ -205,6 +209,7 @@ pub mod pallet {
 				log::info!("oracle-finance deposit creating, {:?}", T::Currency::minimum_balance());
 				T::Currency::deposit_creating(&finance_account, T::Currency::minimum_balance());
 			}
+			StorageVersion::<T,I>::put(Releases::V1);
 		}
 	}
 
@@ -262,6 +267,14 @@ pub mod pallet {
 			who: T::AccountId,
 			amount: BalanceOf<T, I>,
 		},
+		TraceLog {
+			order_id: OrderIdEnum,
+			who: T::AccountId,
+			paid_value: PaidValue<<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>, EraIndex>,
+		},
+		TraceCount {
+			count: u64,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -313,6 +326,25 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+
+		#[pallet::weight(0)]
+		pub fn trace_log(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			PaymentTrace::<T, I>::iter().for_each(|(k1,k2,v)|{
+				Self::deposit_event(Event::TraceLog {
+					order_id: k1,
+					who: k2,
+					paid_value: v
+				});
+			});
+
+			Self::deposit_event(Event::TraceCount {
+				count: PaymentTrace::<T, I>::iter().count() as u64
+			});
+
+			Ok(())
+		}
+
 		/// Validators get rewards corresponding to eras.
 		///
 		/// _Note_: An ear cannot be the current unfinished era, and rewards are not permanently stored.
