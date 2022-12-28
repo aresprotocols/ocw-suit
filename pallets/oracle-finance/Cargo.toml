@@ -16,6 +16,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
     "derive",
     "max-encoded-len",
 ] }
+bound-vec-helper = { default-features = false, path = "../../tools/bound-vec-helper" }
 ares-oracle-provider-support = { default-features = false, path = "../ares-oracle-provider-support" }
 frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-features = false, optional = true, branch = "polkadot-v0.9.28" }
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.28" }
@@ -47,6 +48,7 @@ runtime-benchmarks = [
 ]
 
 std = [
+    "bound-vec-helper/std",
     "ares-oracle-provider-support/std",
     "log/std",
     "scale-info/std",

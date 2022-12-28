@@ -28,6 +28,7 @@ use crate::{AskEraPayment, AskEraPoint, Pallet, PaymentTrace, RewardEra, Storage
 use crate::types::{AskPointNum, BalanceOf, EraIndex, MaximumRewardEras, PaidValue, Releases};
 use scale_info::prelude::vec::Vec;
 use sp_runtime::BoundedVec;
+use bound_vec_helper::BoundVecHelper;
 
 pub struct PrefixOfPaymentTrace;
 impl StorageInstance for PrefixOfPaymentTrace {
@@ -124,31 +125,56 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for UpdateToV1<T, I> {
 			// 	// PaymentTrace::<T, I>::insert(OrderIdEnum::String(k1), k2, v);
 			// });
 
+			log::info!("While, PaymentTrace");
+			let mut payment_trace = Vec::new();
 			OldPaymentTraceV0::<T, I>::translate::<
 				PaidValue<<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>, EraIndex>, _>(
 				|k1, k2, old_value| {
+					// let raw_key1 = PurchaseId::create_on_vec( k1.to_vec());
 					log::info!("Write, PaymentTrace::<T, I>::migration(), {:?}, {:?}, {:?}", &k1, &k2, &old_value);
-					PaymentTrace::<T, I>::insert(OrderIdEnum::String(k1), k2, old_value);
+					// PaymentTrace::<T, I>::insert(OrderIdEnum::String(raw_key1), k2, old_value);
+					payment_trace.push((OrderIdEnum::String(k1), k2, old_value));
 					None
 				}
 			);
+			payment_trace.iter().for_each(|x|{
+				PaymentTrace::<T, I>::insert(x.0.clone(), x.1.clone(), x.2.clone());
+			});
 
+
+			log::info!("While, AskEraPayment");
+			let mut ask_era_payment = Vec::new();
 			OldAskEraPaymentV0::<T, I>::translate::<BalanceOf<T, I>, _>(
 				|k1, k2, old_value| {
+					// let raw_key2_1 = PurchaseId::create_on_vec( k2.1.to_vec());
 					log::info!("Write, AskEraPayment::<T, I>::migration(), {:?}, {:?}, {:?}", &k1, &k2, &old_value);
-					AskEraPayment::<T, I>::insert(k1, (k2.0, OrderIdEnum::String(k2.1)), old_value);
+					// AskEraPayment::<T, I>::insert(k1, (k2.0, OrderIdEnum::String(raw_key2_1)), old_value);
+					ask_era_payment.push((k1, (k2.0, OrderIdEnum::String(k2.1)), old_value));
 					None
 				}
 			);
+			ask_era_payment.iter().for_each(|x|{
+				AskEraPayment::<T, I>::insert(x.0.clone(), x.1.clone(), x.2.clone());
+			});
 
+
+			log::info!("While, AskEraPoint");
+			let mut ask_era_point = Vec::new();
 			OldAskEraPointV0::<T>::translate::<AskPointNum, _>(
 				|k1, k2, old_value| {
+					// let raw_key2_1 = PurchaseId::create_on_vec( k2.1.to_vec());
 					log::info!("Write, AskEraPoint::<T, I>::migration(), {:?}, {:?}, {:?}", &k1, &k2, &old_value);
-					AskEraPoint::<T, I>::insert(k1, (k2.0, OrderIdEnum::String(k2.1)), old_value);
+					// AskEraPoint::<T, I>::insert(k1, (k2.0, OrderIdEnum::String(raw_key2_1)), old_value);
+					ask_era_point.push((k1, (k2.0, OrderIdEnum::String(k2.1)), old_value));
 					None
 				}
 			);
+			ask_era_point.iter().for_each(|x|{
+				AskEraPoint::<T, I>::insert(x.0.clone(), x.1.clone(), x.2.clone());
+			});
 
+
+			log::info!("While, RewardEra");
 			RewardEra::<T, I>::translate::<BoundedVec<(EraIndex, AskPointNum, PurchaseId), MaximumRewardEras>, _>(
 				|k, old_value| {
 					log::info!("Write, RewardEra::<T, I>::migration(), {:?}, {:?}", &k, &old_value);
