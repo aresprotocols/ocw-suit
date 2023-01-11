@@ -530,7 +530,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
-			//TODO 先要合适验证人身份，validator 必须是一个 Ares 验证人
 			let stash_id = T::StashAndAuthorityPort::get_stash_id(&complete_payload.auth);
 			ensure!(stash_id.is_some(), Error::<T>::CanNotFindStashAccount);
 			let stash_id = stash_id.unwrap();
@@ -539,7 +538,6 @@ pub mod pallet {
 			let reminder_create_bn = PendingSendList::<T>::get(&stash_id, &complete_payload.reminder);
 			ensure!(reminder_create_bn.is_some(), Error::<T>::PendingReminderNotExists);
 
-			//TODO 检查 rid 是否存在，并且提取对应的信息，这里会扣除费用，并启减少通知次数。
 			// Get trigger
 			let trigger = ReminderList::<T>::get(&complete_payload.reminder.0);
 			ensure!(trigger.is_some(), Error::<T>::ReminderIdNotExists);
