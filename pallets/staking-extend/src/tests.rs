@@ -82,7 +82,7 @@ fn test_lines() {
 		// 33_179_546_519_312_816_560 // Total Staking 667,236,934,061,941,152
 		// 1_048_493_465_618_773_098_527 // Total Issuance
 		// 33179546.51
-		let payout = ConvertCurve::<RewardCurve>::era_payout(33_179_546u64, 1_048_493_465u64, 60*60*24*1000);
+		let payout = ConvertCurve::<RewardCurve>::era_payout(35_284_146u64, 1_067_500_465u64, 60*60*24*1000);
 		println!("payout = {:?}", payout)
 		// <Staking as pallet_staking::Config>::EraPayout::era_payout(5000, 10000, 6000);
 	});
