@@ -43,7 +43,6 @@ pub type TokenList = BoundedVec<PriceToken, MaximumPoolSize>;
 pub type MaximumPIDLength = ConstU32<100>;
 pub type PurchaseId = BoundedVec<u8, MaximumPIDLength>;
 
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum OrderIdEnum {
 	Integer(u64),

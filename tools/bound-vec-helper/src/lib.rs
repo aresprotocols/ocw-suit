@@ -19,7 +19,7 @@ impl <T, S> BoundVecHelper<T, S> for BoundedVec<T, S>
         BoundedVec<T, S>: Debug,
         BoundedVec<T, S>: TryFrom<Vec<T>> + Default,
         <BoundedVec<T, S> as TryFrom<Vec<T>>>::Error: Debug,
-        T: std::fmt::Debug
+        T: Debug
 {
     type Error = <Self as TryFrom<Vec<T>>>::Error;
     fn create_on_vec(v: Vec<T>) -> Self {
